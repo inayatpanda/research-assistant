@@ -21,6 +21,7 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="reader" element={<ReaderPage />} />
+            <Route path="reader/:articleId" element={<ReaderPage />} />
             <Route path="compile" element={<CompilePage />} />
             <Route path="manuscript" element={<ManuscriptPage />} />
             <Route path="statistics" element={<StatisticsPage />} />

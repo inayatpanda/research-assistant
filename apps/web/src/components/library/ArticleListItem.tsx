@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { FileText, MoreVertical } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import {
@@ -31,13 +32,15 @@ export function ArticleListItem({
   onDelete: (a: Article) => void
 }) {
   const fileUrl = absoluteFileUrl(article.file_url ?? null)
+  const navigate = useNavigate()
 
   return (
     <motion.div
       variants={cardEnter(index)}
       initial="initial"
       animate="animate"
-      className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-white hover:shadow-sm transition-shadow"
+      onClick={() => navigate(`/reader/${article.id}`)}
+      className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-white hover:shadow-sm hover:border-accent/40 transition-all cursor-pointer"
     >
       <div className="shrink-0 h-10 w-10 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
         <FileText className="h-5 w-5" />
@@ -69,7 +72,7 @@ export function ArticleListItem({
           {[article.journal, article.year, article.doi].filter(Boolean).join(' · ')}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         {fileUrl && (
           <a
             href={fileUrl}
@@ -81,7 +84,10 @@ export function ArticleListItem({
           </a>
         )}
         <button
-          onClick={() => onEdit(article)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(article)
+          }}
           className="text-[12px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted"
         >
           Edit
@@ -90,6 +96,7 @@ export function ArticleListItem({
           <DropdownMenuTrigger
             className="h-7 w-7 rounded-md hover:bg-muted inline-flex items-center justify-center text-muted-foreground"
             aria-label="More actions"
+            onClick={(e) => e.stopPropagation()}
           >
             <MoreVertical className="h-4 w-4" />
           </DropdownMenuTrigger>
