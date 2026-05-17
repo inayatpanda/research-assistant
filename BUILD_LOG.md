@@ -192,3 +192,73 @@ Found 2 HIGH + 6 MED + 3 LOW. All HIGH and MED fixed inline in this phase:
 **Next:** Phase 4 — Compilation module. This is where the value lives: highlights + paraphrases + citations from every article in the project get aggregated by section colour, drag-reordered, and assembled into AI-drafted paragraphs grounded in the user's actual annotations.
 
 ---
+
+## 2026-05-18 · Phase 4 — Compilation Module ✅ COMPLETE
+
+**Tag:** `phase-4`
+**Commits:** ~10 atomic commits. Plan at `docs/superpowers/plans/2026-05-17-phase-4-compilation.md`.
+
+**What's running**
+
+- **Backend**:
+  - `citation_format` service: Vancouver/APA/Harvard inline formatting + `[CITE_aN]` token replacement (unknown tokens left visible)
+  - `ManuscriptSection` ORM + alembic 0004 + composite-unique upsert repo
+  - `CompilationRepository` (highlights JOIN articles, sorted)
+  - `AIProvider` extended: `generate_card_draft`, `generate_section_draft` (CardContext / SectionDraftContext)
+  - Routes: `GET /compilation/{colour}`, `POST /highlights/{id}/draft`, `POST /compilation/{colour}/draft`, `PATCH /compilation/{colour}/order`, `GET|PUT /sections/{name}`
+- **Frontend**:
+  - `compilationApi` + `manuscriptApi` with full zod schemas
+  - `AISuggestionBlock` reusable Accept/Edit/Reject (used in Phase 5 too)
+  - `ColourTabs` URL-synced (`?tab=intro|method|results|discussion`) with animated underline
+  - `SortableCardList` via dnd-kit
+  - `CompiledCard` (colour stripe, source quote in section fill, paraphrase, citation chip, Generate sentence button, Accept → append to manuscript_section)
+  - `SectionDraftPanel` (Generate paragraph from N cards, Accept → replace section content with confirmation if non-empty, used_citations list)
+  - Real `CompilePage` replacing the Phase 1 stub; optimistic reorder via TanStack Query
+
+**The citation safety contract** — the heart of this phase:
+
+1. Server builds a per-card token map (`a1`, `a2`, …) from the project-scoped compilation rows
+2. Gemini sees tokens like `[CITE_a1]` in the prompt; **never sees author names**
+3. Gemini emits text with those tokens
+4. Server replaces tokens with the formatted citation from the authoritative `articles` row (style chosen by `projects.citation_style`)
+5. Unknown tokens (hallucinated) are left visible — reviewers see them
+
+**Acceptance bar (live-verified)**
+
+- [x] 4 colour tabs (Introduction/Methodology/Results/Discussion) with correct counts
+- [x] Cards aggregate highlights of that colour **across all articles** in the project — verified with 2 articles
+- [x] Each card shows: source text · paraphrase · citation chip (e.g. `CHOUDHARY & JOHNSON, 2024`)
+- [x] Drag-to-reorder via dnd-kit; sort_order persists
+- [x] **Per-card live Gemini draft**: returned *"The optimal surgical approach for total hip arthroplasty (THA) continues to be debated **(Choudhary & Johnson, 2024)**."*
+- [x] **Section-level live Gemini paragraph**:
+
+> *"A total of 412 patients were prospectively enrolled at our institution between January 2021 and December 2023 **(Choudhary & Johnson, 2024)**. This cohort comprised 198 anterior cases and 214 posterior cases **(Choudhary & Johnson, 2024)**. The prospective enrolment methods were consistently applied throughout the study, ensuring comparability across all recruited participants **(Patel et al., 2022)**."*
+
+- [x] References row: `Choudhary & Johnson, 2024 · Patel et al., 2022`
+- [x] Accept on a card pushes the sentence into `manuscript_sections.{section}.content` (verified via direct GET roundtrip — word_count: 17)
+- [x] All citations in Gemini output came from the database, not the model
+
+**Security review (1 MED + 4 INFO)**
+
+- **MED → FIXED**: reorder route initially only filtered by `user_id`; could mutate sort_order on highlights in *other* projects/colours the same user owns. Fix: validate each item against the project+colour view's whitelist; silently skip out-of-scope IDs. Regression test added.
+- INFO: prompt-injection framing on both card and section prompts confirmed
+- INFO: AI error mapping (429/422/503) leaks no provider detail
+- INFO: user-isolation gated on every endpoint via project lookup
+- INFO: unknown CITE token behaviour (leave visible) is the intended contract
+
+**Test counts**
+
+- Backend: **139 pass** (was 106 after Phase 3, +33 in Phase 4)
+- Frontend: 7 vitest pass (unchanged)
+- New test files: test_citation_format (10), test_manuscript_section_repository (5), test_compilation_repository (4), test_compilation_route (8 incl. security regression), test_manuscript_sections_route (6)
+
+**Open items**
+
+- `POLISH.md`: unchanged
+- `DECISIONS.md`: CITE token contract is implicit in the citation_format docstring + commit messages — could promote to a formal ADR in DECISIONS later
+- `QUESTIONS.md`: still empty
+- `DEFERRED.md`: unchanged
+
+**Next:** Phase 5 — Manuscript editor. TipTap with floating AI toolbar (Improve/Shorten/Formalise/Add Transition), `@` citation insert with auto-numbering, abbreviation tracker, reference integrity checker.
+
+---
