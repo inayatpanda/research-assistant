@@ -6,6 +6,14 @@ from .article import (
     ReviewStatus,
     StorageRefSchema,
 )
+from .compilation import (
+    CardDraftResponse,
+    CompilationView,
+    CompiledCard,
+    ReorderItem,
+    ReorderRequest,
+    SectionDraftResponse,
+)
 from .health import HealthResponse, ProviderStatus
 from .highlight import (
     BoundingCoords,
@@ -47,6 +55,12 @@ __all__ = [
     "ManuscriptSectionName",
     "ManuscriptSectionRead",
     "ManuscriptSectionUpsert",
+    "CompiledCard",
+    "CompilationView",
+    "CardDraftResponse",
+    "SectionDraftResponse",
+    "ReorderRequest",
+    "ReorderItem",
     "HealthResponse",
     "ProviderStatus",
     "UploadResponse",

@@ -1,4 +1,9 @@
 from .articles import ArticleRepository, SqliteArticleRepository
+from .compilation import (
+    CompilationRepository,
+    CompiledCardRow,
+    SqliteCompilationRepository,
+)
 from .highlights import HighlightRepository, SqliteHighlightRepository
 from .manuscript_sections import (
     ManuscriptSectionRepository,
@@ -18,4 +23,7 @@ __all__ = [
     "SqliteArticleNoteRepository",
     "ManuscriptSectionRepository",
     "SqliteManuscriptSectionRepository",
+    "CompilationRepository",
+    "CompiledCardRow",
+    "SqliteCompilationRepository",
 ]
