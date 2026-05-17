@@ -1,11 +1,17 @@
 import { Node, mergeAttributes } from '@tiptap/core'
+import { ReactNodeViewRenderer } from '@tiptap/react'
+
+import { CitationNodeView } from './CitationNodeView'
 
 /**
  * Inline atomic node carrying a single `articleId` attribute.
  *
- * Rendered as `<sup data-citation data-article-id="…">[N]</sup>` where N comes
- * from `citationEngine`. The renderer in the editor (citationNumbersDecoration)
- * reads the engine's map and overlays the number.
+ * - Serialised HTML: `<sup data-citation data-article-id="…">[…]</sup>`
+ * - Rendered in editor: React NodeView reads the current number from
+ *   useCitationNumbers and shows `[N]`.
+ *
+ * The atom flag makes it behave like a single character — backspace deletes
+ * the whole citation, not its inner text.
  */
 export const Citation = Node.create({
   name: 'citation',
@@ -37,8 +43,12 @@ export const Citation = Node.create({
         { 'data-citation': 'true', class: 'citation' },
         HTMLAttributes,
       ),
-      // Placeholder text — the editor overlays the actual number via a node view.
+      // Placeholder text in saved HTML — the NodeView overlays the real number.
       `[${node.attrs.articleId ? '…' : '?'}]`,
     ]
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(CitationNodeView)
   },
 })
