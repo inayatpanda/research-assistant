@@ -38,6 +38,13 @@ Format:
 **Rejected:** Single pinned model string in env.
 **Reason:** Pinned model = brittle. Chain self-heals across deprecations. Same shape applied to Claude + OpenAI adapters.
 
+## 2026-05-17 — Defer Tremor install to Phase 6 (React 19 peer conflict)
+
+**Context:** `@tremor/react@3.18.7` pins peer `react@^18.0.0`. Vite scaffolded React 19.2.6. npm refuses install.
+**Choice:** Skip Tremor install in Phase 1. Revisit at Phase 6 (stats module) — install with `--legacy-peer-deps` (it works fine with React 19 in practice) or switch to a React-19-native chart lib (e.g. raw Recharts + custom table primitives).
+**Rejected:** (a) Downgrade React to 18 — drops React 19 features the rest of the stack benefits from; (b) install Tremor now with --legacy-peer-deps — unused dep risk, easier to defer.
+**Reason:** Tremor is unused until Phase 6. Delay = no immediate cost; gives Tremor team time to ship React 19 support; preserves option to swap lib.
+
 ## 2026-05-17 — Percentage coords for PDF highlights
 
 **Context:** React-PDF pixel coordinates change with zoom and page reflow. Need highlights that re-render in the same logical place across sessions.
