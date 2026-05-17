@@ -114,3 +114,34 @@ class Article(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ManuscriptSection(Base):
+    __tablename__ = "manuscript_sections"
+    __table_args__ = (
+        Index(
+            "uq_manuscript_section_project_user_section",
+            "project_id",
+            "user_id",
+            "section_name",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    # Phase 4: 'Introduction' | 'Methodology' | 'Results' | 'Discussion'
+    # Phase 5 extends to 'Abstract' | 'Conclusion'.
+    section_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Plain text in Phase 4. Phase 5 swaps to JSON (TipTap doc).
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    word_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

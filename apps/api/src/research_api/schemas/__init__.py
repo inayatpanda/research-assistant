@@ -16,6 +16,11 @@ from .highlight import (
     HighlightUpdate,
     SectionName,
 )
+from .manuscript_section import (
+    ManuscriptSectionName,
+    ManuscriptSectionRead,
+    ManuscriptSectionUpsert,
+)
 from .note import ArticleNoteRead, ArticleNoteUpsert
 from .project import ProjectCreate, ProjectRead, ProjectUpdate
 from .upload import ExtractionSource, UploadResponse
@@ -39,6 +44,9 @@ __all__ = [
     "BoundingRect",
     "ArticleNoteUpsert",
     "ArticleNoteRead",
+    "ManuscriptSectionName",
+    "ManuscriptSectionRead",
+    "ManuscriptSectionUpsert",
     "HealthResponse",
     "ProviderStatus",
     "UploadResponse",
