@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .container import get_container
 from .routes.articles import router as articles_router
+from .routes.compilation import router as compilation_router
 from .routes.files import router as files_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
@@ -26,3 +27,4 @@ app.include_router(projects_router, prefix="/api")
 app.include_router(articles_router, prefix="/api")
 app.include_router(highlights_router, prefix="/api")
 app.include_router(notes_router, prefix="/api")
+app.include_router(compilation_router, prefix="/api")

@@ -1,3 +1,11 @@
-from . import articles, files, health, highlights, notes, projects
+from . import articles, compilation, files, health, highlights, notes, projects
 
-__all__ = ["health", "projects", "files", "articles", "highlights", "notes"]
+__all__ = [
+    "health",
+    "projects",
+    "files",
+    "articles",
+    "highlights",
+    "notes",
+    "compilation",
+]
