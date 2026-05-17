@@ -5,6 +5,7 @@ Returns None on any failure (404, network, parse). Caller falls through to AI re
 from __future__ import annotations
 
 import re
+from urllib.parse import quote
 
 import httpx
 
@@ -37,9 +38,12 @@ async def lookup_doi(
 
     own_client = http_client is None
     client = http_client or httpx.AsyncClient(timeout=timeout)
+    # Percent-encode the DOI path segment so '?', '#', '&' can't inject
+    # query/fragment components into the CrossRef URL.
+    encoded = quote(clean, safe="/")
     try:
         r = await client.get(
-            f"{CROSSREF_BASE}/{clean}",
+            f"{CROSSREF_BASE}/{encoded}",
             headers={"User-Agent": "ResearchManuscriptAssistant/0.0.1 (mailto:noreply@local)"},
         )
         if r.status_code != 200:

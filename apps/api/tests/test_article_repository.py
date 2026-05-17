@@ -147,6 +147,28 @@ async def test_find_duplicate_returns_none_when_unrelated(session, project_id):
 
 
 @pytest.mark.asyncio
+async def test_find_duplicate_with_multiple_existing_dois(session, project_id):
+    """Regression: when 2+ existing rows share a DOI, find_duplicate must return one,
+    not raise MultipleResultsFound."""
+    repo = SqliteArticleRepository(session)
+    await repo.create(
+        project_id=project_id,
+        data=ArticleCreate(title="First", doi="10.1/dup"),
+        user_id="user-a",
+    )
+    await repo.create(
+        project_id=project_id,
+        data=ArticleCreate(title="Second", doi="10.1/dup"),
+        user_id="user-a",
+    )
+    dup = await repo.find_duplicate(
+        project_id=project_id, doi="10.1/dup", title="Whatever", user_id="user-a"
+    )
+    assert dup is not None
+    assert dup.doi == "10.1/dup"
+
+
+@pytest.mark.asyncio
 async def test_find_duplicate_scoped_to_user(session, project_id):
     """User A's article must not match against User B's lookup."""
     repo = SqliteArticleRepository(session)

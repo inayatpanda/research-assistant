@@ -27,11 +27,16 @@ class LocalFsStorage(FileStorage):
         (self.root / "files").mkdir(parents=True, exist_ok=True)
 
     def _abs_path(self, key: str) -> Path:
-        # Defensive: forbid traversal in keys themselves
+        # Defensive: forbid traversal in keys themselves. Use is_relative_to instead
+        # of str.startswith — startswith can be fooled on case-insensitive filesystems
+        # (macOS default) and when sibling dirs share a prefix (e.g. /files vs /files-evil).
         p = (self.root / "files" / key).resolve()
         base = (self.root / "files").resolve()
-        if not str(p).startswith(str(base)):
-            raise ValueError("path traversal detected in key")
+        try:
+            if not p.is_relative_to(base):
+                raise ValueError("path traversal detected in key")
+        except ValueError:
+            raise ValueError("path traversal detected in key") from None
         return p
 
     async def save(

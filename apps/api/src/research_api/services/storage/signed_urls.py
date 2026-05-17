@@ -63,6 +63,14 @@ def verify_token(token: str, *, secret: str) -> StorageRef:
         raw = json.loads(_b64u_decode(body).decode("utf-8"))
     except Exception as e:
         raise TokenInvalid("bad payload encoding") from e
-    if int(raw["e"]) < int(time.time()):
+    # Validate required keys explicitly — a signed-but-malformed payload should
+    # be a clean TokenInvalid, not a server-side KeyError.
+    try:
+        backend = str(raw["b"])
+        key = str(raw["k"])
+        exp = int(raw["e"])
+    except (KeyError, ValueError, TypeError) as e:
+        raise TokenInvalid("missing or invalid payload fields") from e
+    if exp < int(time.time()):
         raise TokenExpired("token expired")
-    return StorageRef(backend=raw["b"], key=raw["k"])
+    return StorageRef(backend=backend, key=key)

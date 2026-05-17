@@ -30,7 +30,23 @@ def detect_mime(data: bytes) -> str:
     return magic.from_buffer(data[:4096], mime=True)
 
 
+# Zip-bomb guard: cap total uncompressed size across all members. A clean .docx
+# rarely exceeds 20 MB uncompressed; 200 MB is generous and still safe.
+_MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+
+
+def _safe_zip_total_size_ok(data: bytes) -> bool:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            total = sum(info.file_size for info in z.infolist())
+            return total <= _MAX_UNCOMPRESSED_BYTES
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
 def _is_docx_zip(data: bytes) -> bool:
+    if not _safe_zip_total_size_ok(data):
+        return False
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             try:
@@ -68,6 +84,9 @@ def _from_pdf(data: bytes, n: int) -> str:
 
 
 def _from_docx(data: bytes) -> str:
+    # Same zip-bomb guard before python-docx parses
+    if not _safe_zip_total_size_ok(data):
+        return ""
     try:
         doc = DocxDocument(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs if p.text).strip()

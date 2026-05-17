@@ -41,3 +41,22 @@ def test_wrong_secret_rejected():
 def test_malformed_token_rejected():
     with pytest.raises(TokenInvalid):
         verify_token("not-a-token", secret="secret")
+
+
+def test_signed_payload_without_required_keys_is_invalid():
+    """Regression for security fix: a signed-but-malformed payload must raise
+    TokenInvalid (not KeyError or similar) so the route returns 403, not 500."""
+    import base64
+    import hmac
+    import json
+    from hashlib import sha256
+
+    secret = "secret"
+    # Sign a JSON payload that's missing the required b/k/e keys
+    raw = json.dumps({"hello": "world"}).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    sig = hmac.new(secret.encode(), body.encode("ascii"), sha256).digest()
+    sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode("ascii")
+    token = f"{body}.{sig_b64}"
+    with pytest.raises(TokenInvalid):
+        verify_token(token, secret=secret)

@@ -85,7 +85,15 @@ export function UploadZone({
             : 'border-border bg-white/40 hover:border-accent/40',
         )}
       >
-        <input {...getInputProps()} />
+        <input
+          {...getInputProps({
+            onClick: (e) => {
+              // Allow re-selecting the same file: clear value so the browser
+              // fires `change` even when filename matches the previous selection.
+              ;(e.target as HTMLInputElement).value = ''
+            },
+          })}
+        />
         <motion.div
           animate={isDragActive ? { scale: 1.05 } : { scale: 1 }}
           className="flex flex-col items-center gap-3 text-muted-foreground"

@@ -103,10 +103,14 @@ class SqliteArticleRepository:
     async def find_duplicate(
         self, *, project_id: str, doi: str | None, title: str, user_id: str
     ) -> Article | None:
-        # Fast path: DOI exact match scoped to this user
+        # Fast path: DOI exact match scoped to this user. Use .first() because the
+        # DB may already contain multiple rows for the same DOI — we just need ONE
+        # to report a duplicate.
         if doi:
-            stmt = select(Article).where(
-                Article.user_id == user_id, Article.doi == doi
+            stmt = (
+                select(Article)
+                .where(Article.user_id == user_id, Article.doi == doi)
+                .limit(1)
             )
             existing = (await self.session.execute(stmt)).scalar_one_or_none()
             if existing is not None:

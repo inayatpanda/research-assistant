@@ -137,9 +137,18 @@ async def upload_article(
     try:
         ai_meta = await container.ai.extract_citation(text)
     except (AIProviderUnavailable, AIRateLimited, AISourceInsufficient, AIError) as e:
-        extraction_error = f"{type(e).__name__}: {e}"
-    except Exception as e:  # never let a provider quirk break upload
-        extraction_error = f"unexpected: {e}"
+        # Return error CLASS only (e.g. "AIRateLimited"). The message may
+        # contain provider-internal details (endpoints, partial keys); keep
+        # those in server logs, not in the API response.
+        import logging
+        logging.getLogger("research_api.articles").warning(
+            "AI extraction failed: %s: %s", type(e).__name__, e
+        )
+        extraction_error = type(e).__name__
+    except Exception:
+        import logging
+        logging.getLogger("research_api.articles").exception("Unexpected AI error")
+        extraction_error = "UnexpectedAIError"
 
     # 5. CrossRef enrichment if DOI present
     cr_meta: CitationMetadata | None = None
