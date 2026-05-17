@@ -63,18 +63,18 @@ export function ManuscriptEditor({
     [projectId, section],
   )
 
-  // When the loaded HTML arrives (or section changes), push into the editor
+  // When the loaded HTML arrives (or section changes), push into the editor.
+  // Depends on `html` because cached query data means `loading` may never flip.
   useEffect(() => {
     if (!editor) return
     if (loading) return
     const current = editor.getHTML()
     if (current === html) return
-    // Replace content without firing an extra onUpdate
     editor.commands.setContent(html, { emitUpdate: false })
     setMap(numberCitationsFromHtml(html))
     onWordsChange?.(editor.storage.characterCount.words())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, editor])
+  }, [loading, editor, html])
 
   if (!editor) return null
 

@@ -262,3 +262,80 @@ Found 2 HIGH + 6 MED + 3 LOW. All HIGH and MED fixed inline in this phase:
 **Next:** Phase 5 — Manuscript editor. TipTap with floating AI toolbar (Improve/Shorten/Formalise/Add Transition), `@` citation insert with auto-numbering, abbreviation tracker, reference integrity checker.
 
 ---
+
+## 2026-05-18 · Phase 5 — Manuscript Editor ✅ COMPLETE
+
+**Goal**
+
+Turn the Compile drafts into a real prose authoring surface: TipTap-based rich text editor with section tabs, an AI floating toolbar (Improve / Shorten / Formalise / Add Transition), `@`-trigger citation picker with continuous auto-numbering across all sections, an abbreviation scanner, a reference-integrity panel, and a read-only Final view that concatenates all sections with a Vancouver bibliography.
+
+**What shipped**
+
+Backend (5 files, 1 migration):
+
+- `services/abbreviation_scanner.py` — regex pass over manuscript text, detects `Long Form (LF)` patterns
+- `db/models.py` + `alembic/versions/0005_abbreviations.py` — `Abbreviation` table, composite unique `(project_id, user_id, short_form)`, 200-item cap enforced at the schema layer
+- `repositories/abbreviations.py` — `list_for_project`, transactional `replace_all`, `delete`
+- `routes/abbreviations.py` — GET list / PUT replace / DELETE
+- `services/ai/gemini.py` — implemented `assist_writing` (was a NotImplementedError stub); new `prompts/writing_assist.py` carries the **"preserve every [CITE_xxx] token verbatim"** rule
+- `routes/writing.py` — `POST /api/writing/assist` with input cap 4_000 chars; classified errors (429/422/503)
+- `services/citation_format.py` — added `bibliography_entry()` (Vancouver style)
+
+Frontend (12 files):
+
+- `lib/tiptap/extensions/Citation.ts` — inline atomic Node with `articleId` attr, parses `sup[data-citation]`, renders via React NodeView
+- `lib/tiptap/extensions/CitationNodeView.tsx` — reads `useCitationNumbers` store, renders `[N]` (or `[?]`, `[…]`)
+- `lib/tiptap/citationEngine.ts` — `numberCitationsFromDoc/Html/Across` for per-section and continuous numbering
+- `lib/tiptap/citationNumbers.ts` — Zustand store: `articleId → number` map
+- `lib/citationSerialize.ts` — `htmlToAiSafeText` / `aiSafeTextToHtml`, the round-trip used at the AI boundary
+- `lib/bibliographyFormat.ts` — client-side Vancouver `bibliographyEntry`
+- `hooks/useManuscript.ts` — section CRUD with **1200 ms debounced autosave**
+- `components/manuscript/ManuscriptEditor.tsx` — TipTap + StarterKit + Placeholder + CharacterCount + Citation
+- `components/manuscript/BubbleAIMenu.tsx` — floating menu (Improve / Shorten / Formalise / Add Transition); position tracked via `editor.view.coordsAtPos`, **persists through the in-flight assist call and the suggestion review**
+- `components/manuscript/CitationSuggestions.tsx` — `@`-trigger article picker, inserts a Citation node and drops a trailing space
+- `components/manuscript/SectionTabs.tsx` — 7 tabs URL-synced via `?section=`
+- `components/manuscript/WordCountBar.tsx` — per-section + total + `Saved …` indicator
+- `components/manuscript/FinalManuscriptView.tsx` — read-only concat with **continuous citation numbering across sections** + Vancouver REFERENCES block
+- `components/manuscript/ReferenceIntegrityPanel.tsx` — flags uncited library articles + orphan inline citations
+- `components/manuscript/AbbreviationsPanel.tsx` — client-side scanner + save
+- `routes/ManuscriptPage.tsx` — real implementation with `ProjectSelectGate` + tabs + editor / FinalView + word-count bar + right rail
+
+**Citation safety contract (locked in)**
+
+Model never sees author/year. Outbound HTML is replaced with `[CITE_aN]` tokens; the model's system prompt requires preserving them verbatim. Server-side and client-side reverse paths reject any token whose `articleId` is not in the current project's article set — unknown tokens stay as literal text. ProseMirror's schema-based DOM parser filters anything beyond schema attrs when the AI-suggested HTML is inserted, so `<script>` / `onerror` etc. are dropped.
+
+**E2E verification (browser smoke test)**
+
+- Edit Introduction: typed, autosave fired at 1200 ms, GET returned the saved HTML, reload restored content correctly.
+- Select "remains debated" → BubbleAIMenu appeared → click Shorten → POST `/api/writing/assist 200` → AISuggestionBlock rendered `"However, it remains debated."` → Accept replaced the editor selection.
+- Typed `@` at end of paragraph → picker showed the project's one article → click inserted a Citation node → saved HTML contains `<sup data-citation="true" class="citation" data-article-id="…">[…]</sup>` → ReferenceIntegrityPanel updated to **"every citation points to a real article"**.
+- Final view: all six sections concatenated, citation displayed as `[1]`, REFERENCES section showed the Vancouver entry.
+- Abbreviations panel: detected `THA` + `HHS`, Save → PUT replace persisted both rows.
+
+**Incidents fixed during verification**
+
+- BubbleAIMenu used `assist.isPending` inside an effect's dependency array **before** `assist = useMutation(...)` was declared — temporal-dead-zone crash on every render. Re-ordered: `useMutation` first, then the selection-update effect that reads it. While at it, the selection-collapse path no longer tears down the bubble while a request is in flight or a suggestion is on screen.
+- `ManuscriptEditor`'s content-load `useEffect` watched `[loading, editor]` but not `html`. With cached query data, `loading` never flipped, so the effect ran once with empty `html` and the editor stayed blank after refresh. Added `html` to deps; the `current === html` guard prevents the typing path from re-`setContent`-ing on every keystroke.
+
+**Security review (3 polish items, 0 blockers)**
+
+- MED → polish: AI HTML output is inserted via TipTap `insertContent`. ProseMirror's schema-based parser already drops unknown attrs (no script/onerror execution), but defense-in-depth would add a DOMPurify pre-pass. Logged.
+- LOW → polish: Citation NodeView in-editor DOM omits `data-article-id` (only on serialized HTML). Storage round-trips correctly, but any future selector against in-editor DOM needs to use the React fiber.
+- LOW → polish: BubbleAIMenu position is cached at selection time — stale after window resize.
+
+**Test counts**
+
+- Backend: **142 pass** (was 139 after Phase 4; +3 in Phase 5 for abbreviations + writing route happy paths)
+- Frontend: 11 vitest pass (was 7; +4 for `citationSerialize` round-trip)
+- New test files: `test_abbreviations.py`, `test_abbreviation_scanner.py`, `test_writing_assist.py`, `citationSerialize.test.ts`
+
+**Open items**
+
+- `POLISH.md`: +3 phase-5 entries
+- `DECISIONS.md`: unchanged
+- `QUESTIONS.md`: still empty
+- `DEFERRED.md`: unchanged
+
+**Next:** Phase 6 — Data & Statistics module. Study-type-aware test recommendations (t-test, Mann-Whitney, χ², Fisher exact, Wilcoxon, ANOVA, Kruskal-Wallis, repeated-measures ANOVA, Pearson/Spearman, simple/multiple regression, logistic regression, Cox / Kaplan-Meier via lifelines, ICC, Cohen's κ); CSV/Excel upload + variable typing; assumption checks; results rendered into the Results section as prose with citations to the dataset.
+
+---
