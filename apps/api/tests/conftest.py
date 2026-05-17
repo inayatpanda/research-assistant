@@ -47,7 +47,8 @@ class FakeAIProvider(AIProvider):
         return "AI interpretation"
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:
-        return f"AI {action}: {text}"
+        # Preserve CITE tokens verbatim (mirrors the prompt's preservation rule)
+        return f"[{action}] {text}"
 
 
 @pytest_asyncio.fixture

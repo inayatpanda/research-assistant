@@ -95,6 +95,62 @@ def replace_cite_tokens(
     return _CITE_RE.sub(sub, text)
 
 
+def _author_list_vancouver(authors: list[str]) -> str:
+    """Vancouver: 'Last F, Last F, et al.' Authors as 'First Last' input."""
+    if not authors:
+        return "Anonymous"
+    formatted: list[str] = []
+    for a in authors[:6]:
+        parts = (a or "").strip().split()
+        if not parts:
+            continue
+        last = parts[-1]
+        initials = "".join(p[0].upper() for p in parts[:-1] if p)
+        formatted.append(f"{last} {initials}" if initials else last)
+    if len(authors) > 6:
+        formatted.append("et al.")
+    return ", ".join(formatted)
+
+
+def bibliography_entry(
+    article: _ArticleLike, *, number: int | None = None, style: CitationStyle = "vancouver"
+) -> str:
+    """Single reference-list entry.
+
+    Vancouver: '1. Doe J, Smith J. Anterior approach. J Orthop Res. 2024;42(3):100-110. doi:10.x'
+
+    For v1, APA/Harvard converge with Vancouver. Phase 8 polish adds full fidelity.
+    """
+    prefix = f"{number}. " if number is not None else ""
+    authors = _author_list_vancouver(list(article.authors or []))
+    title = (article.title or "Untitled").rstrip(".")
+    journal = article.journal or ""
+    year = str(article.year) if article.year else "n.d."
+    issue_block = ""
+    volume = getattr(article, "volume", None)
+    issue = getattr(article, "issue", None)
+    pages = getattr(article, "pages", None)
+    if volume:
+        issue_block = f"{volume}"
+        if issue:
+            issue_block += f"({issue})"
+        if pages:
+            issue_block += f":{pages}"
+    elif pages:
+        issue_block = pages
+    parts = [f"{prefix}{authors}.", f"{title}."]
+    if journal:
+        parts.append(f"{journal}.")
+    tail = year
+    if issue_block:
+        tail += f";{issue_block}"
+    parts.append(f"{tail}.")
+    if article.doi:
+        parts.append(f"doi:{article.doi}")
+    _ = style
+    return " ".join(parts)
+
+
 def extract_used_citations(
     text: str,
     articles_by_tag: Mapping[str, _ArticleLike],

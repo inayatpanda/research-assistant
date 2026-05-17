@@ -8,6 +8,7 @@ from . import (
     manuscript_sections,
     notes,
     projects,
+    writing,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "compilation",
     "manuscript_sections",
     "abbreviations",
+    "writing",
 ]

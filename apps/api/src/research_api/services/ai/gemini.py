@@ -24,6 +24,7 @@ from .prompts import (
     EXTRACTION_PROMPT,
     SECTION_DRAFT_PROMPT,
     SUMMARISE_PROMPT,
+    WRITING_ASSIST_PROMPT,
     format_card_for_prompt,
 )
 from .schemas import CitationMetadata
@@ -159,7 +160,10 @@ class GeminiProvider(AIProvider):
         raise NotImplementedError("interpret_result lands in Phase 6")
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:
-        raise NotImplementedError("assist_writing lands in Phase 5")
+        if not text or len(text.strip()) < 5:
+            raise AISourceInsufficient("text too short to assist", provider="gemini")
+        prompt = WRITING_ASSIST_PROMPT.format(action=action, text=text)
+        return (await self._generate_with_resilience(prompt)).strip()
 
 
 def _parse_citation_json(raw: str) -> CitationMetadata:
