@@ -195,3 +195,104 @@ export function absoluteFileUrl(relativeUrl: string | null | undefined): string 
   if (relativeUrl.startsWith('http')) return relativeUrl
   return `${API_URL}${relativeUrl}`
 }
+
+// --- Highlights ---
+
+export const HighlightColourSchema = z.enum(['intro', 'method', 'results', 'discussion'])
+export type HighlightColour = z.infer<typeof HighlightColourSchema>
+
+export const SectionNameSchema = z.enum([
+  'Introduction',
+  'Methodology',
+  'Results',
+  'Discussion',
+])
+export type SectionName = z.infer<typeof SectionNameSchema>
+
+export const BoundingRectSchema = z.object({
+  x0: z.number().min(0).max(1),
+  y0: z.number().min(0).max(1),
+  x1: z.number().min(0).max(1),
+  y1: z.number().min(0).max(1),
+})
+export const BoundingCoordsSchema = z.object({
+  rects: z.array(BoundingRectSchema).min(1),
+})
+export type BoundingRect = z.infer<typeof BoundingRectSchema>
+export type BoundingCoords = z.infer<typeof BoundingCoordsSchema>
+
+export const HighlightSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  article_id: z.string(),
+  page_number: z.number().int(),
+  selected_text: z.string(),
+  colour: HighlightColourSchema,
+  section: SectionNameSchema,
+  bounding_coords: BoundingCoordsSchema,
+  user_note: z.string().nullable(),
+  ai_summary: z.string().nullable(),
+  sort_order: z.number().int(),
+  created_at: z.string(),
+})
+export type Highlight = z.infer<typeof HighlightSchema>
+
+export type HighlightCreate = {
+  page_number: number
+  selected_text: string
+  colour: HighlightColour
+  section: SectionName
+  bounding_coords: BoundingCoords
+  user_note?: string | null
+  sort_order?: number
+}
+
+export type HighlightUpdate = {
+  user_note?: string | null
+  ai_summary?: string | null
+  sort_order?: number
+}
+
+export const highlightsApi = {
+  list: async (articleId: string): Promise<Highlight[]> => {
+    const r = await api.get(`/api/articles/${articleId}/highlights`)
+    return z.array(HighlightSchema).parse(r.data)
+  },
+  create: async (articleId: string, body: HighlightCreate): Promise<Highlight> => {
+    const r = await api.post(`/api/articles/${articleId}/highlights`, body)
+    return HighlightSchema.parse(r.data)
+  },
+  update: async (id: string, patch: HighlightUpdate): Promise<Highlight> => {
+    const r = await api.patch(`/api/highlights/${id}`, patch)
+    return HighlightSchema.parse(r.data)
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/highlights/${id}`)
+  },
+  summarise: async (id: string): Promise<Highlight> => {
+    const r = await api.post(`/api/highlights/${id}/summarise`)
+    return HighlightSchema.parse(r.data)
+  },
+}
+
+// --- Article general notes ---
+
+export const ArticleNoteSchema = z.object({
+  id: z.string().nullable(),
+  user_id: z.string(),
+  article_id: z.string(),
+  content: z.string(),
+  updated_at: z.string().nullable(),
+})
+export type ArticleNote = z.infer<typeof ArticleNoteSchema>
+
+export const notesApi = {
+  get: async (articleId: string): Promise<ArticleNote> => {
+    const r = await api.get(`/api/articles/${articleId}/notes`)
+    return ArticleNoteSchema.parse(r.data)
+  },
+  upsert: async (articleId: string, content: string): Promise<ArticleNote> => {
+    const r = await api.put(`/api/articles/${articleId}/notes`, { content })
+    return ArticleNoteSchema.parse(r.data)
+  },
+}
