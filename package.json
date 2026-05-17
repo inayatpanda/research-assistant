@@ -1,0 +1,21 @@
+{
+  "name": "research-assistant",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Research Manuscript Assistant — local-first writing tool for medical researchers.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:api": "bash -c 'cd apps/api && .venv/bin/uvicorn research_api.main:app --reload --host 127.0.0.1 --port 8787'",
+    "build:web": "npm --prefix apps/web run build",
+    "test:web": "npm --prefix apps/web run test --if-present",
+    "test:api": "bash -c 'cd apps/api && .venv/bin/pytest -q'",
+    "test": "npm run test:api && npm run test:web",
+    "init-db": "bash scripts/init-db.sh",
+    "lint:web": "npm --prefix apps/web run lint --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
