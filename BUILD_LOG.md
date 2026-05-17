@@ -135,3 +135,60 @@ Found 2 HIGH + 6 MED + 3 LOW. All HIGH and MED fixed inline in this phase:
 **Next:** Phase 3 — PDF reader & annotation engine. The hardest phase technically (React-PDF + canvas overlay + percentage-based coordinates).
 
 ---
+
+## 2026-05-17 · Phase 3 — PDF Reader & Annotation Engine ✅ COMPLETE
+
+**Tag:** `phase-3`
+**Commits:** ~12 atomic commits. Plan at `docs/superpowers/plans/2026-05-17-phase-3-pdf-reader.md`.
+
+**What's running**
+
+- **Backend**: `Highlight` + `ArticleNote` ORM with `(article_id, user_id)` unique composite for upsert; alembic 0003; CRUD + AI summarise endpoint with provider-error mapping to 429/422/503 (no detail leak); per-article notes upsert.
+- **Frontend**: react-pdf with Vite-bundled pdfjs worker. PDF bytes cached in IndexedDB. `pdfCoords` library (TDD) converts DOM selection rects ↔ page-relative percentages. `SelectionCapture` (window mouseup → percent payload → POST). `HighlightOverlay` recomputes pixel rects on every render so any zoom is exact. `HighlightNotePopover` is **anchored to the clicked highlight** via Radix Popover virtualRef and **auto-opens with focus on the paraphrase field** when a new highlight is created. `ArticleNotesRail` right column with 700ms debounced autosave and click-to-jump-to-page.
+
+**Acceptance bar (live in-browser verification)**
+
+- [x] Real text selection → highlight rect aligned **pixel-perfect** to the underlying text: highlight (446, 467, 322×12) vs text (446, 468, 322×10). Δx=0, Δw=0, Δy=−1, Δh=+2 (browser sub-pixel slop on selection rects). Visually identical.
+- [x] **Zoom invariance mathematically verified**: 100% → page 612×792, highlight w=516. 150% → page 918×1188 (×1.5 exact), highlight w=774 (×1.5 exact). Coords scale proportionally.
+- [x] **Popover anchored to highlight** at (447, 486) sitting just below highlight at (446, 467) — Δx=+1, Δy=+19 (6px sideOffset). Auto-focused textarea with placeholder "How do you want this to read in your manuscript?".
+- [x] AI Summarise: live Gemini returned *"Anterior approach offers measurable short-term advantages."* from `gemini-2.5-flash` (chain still resolving correctly).
+- [x] Right-rail Notes PUT + GET roundtrip; "Saved Xs ago" indicator live.
+- [x] 106 backend tests + 7 frontend (pdfCoords) tests pass.
+
+**Per the user's mid-build feedback (verified)**
+
+> "Make sure highlights accurately identify the text which is highlighted. Also the user should be able to paraphrase and make notes next to the highlights if needed, so that should also get compiled with citation in the final section."
+
+1. ✅ **Accuracy**: selection capture pulls real DOM rects (`range.getClientRects()`) — pixel-aligned to the actual text glyphs.
+2. ✅ **Inline paraphrase**: popover anchors directly below the highlight and auto-focuses the paraphrase textarea so the user can type immediately. Autosaves at 600ms.
+3. ✅ **Will compile in Phase 4**: each highlight row carries `{selected_text, user_note, ai_summary, page_number, section}` and joins to `articles` for `(Author, year, journal, DOI)` — the Compilation module will assemble these into cards (highlighted text + user paraphrase + citation) per section colour.
+
+**Security review (2 MED + 3 LOW all fixed inline)**
+
+- MED: SUMMARISE_PROMPT got the same "untrusted passage" framing as EXTRACTION_PROMPT.
+- MED: HighlightUpdate.user_note/ai_summary bounded (max_length).
+- LOW: BoundingCoords.rects capped at 64; ArticleNoteUpsert.content capped at 100k; BoundingRect rejects inverted rects via model_validator.
+
+**Incidents handled inline**
+
+1. shadcn popover install dropped file into a stray `@/...` literal folder until the Phase 2 tsconfig fix kicked in — re-confirmed.
+2. `unique=True` on ArticleNote.article_id would block multi-user upsert — switched to composite unique index at the model level so the migration is right first time.
+3. **Hardcoded test coordinates appeared below the actual text** — discovered the user feedback "make sure highlights accurately identify the text" was right because my E2E test data was synthetic. Switched to driving the real SelectionCapture path through DOM, verified pixel alignment, and added the anchored popover.
+4. **Rules of Hooks violation** in HighlightNotePopover (useRef after early return) caused the popover to crash on open. Fixed by hoisting all hook calls above the conditional return.
+
+**Test counts**
+
+- Backend: 106 pass (was 84 after Phase 2, +22 in Phase 3)
+- Frontend: 7 vitest pass (pdfCoords transforms + selection extractor)
+- New test files: test_highlight_repository, test_note_repository, test_highlights_route, test_notes_route, lib/__tests__/pdfCoords.test.ts
+
+**Open items**
+
+- `POLISH.md`: unchanged
+- `DECISIONS.md`: unchanged
+- `QUESTIONS.md`: still empty
+- `DEFERRED.md`: unchanged
+
+**Next:** Phase 4 — Compilation module. This is where the value lives: highlights + paraphrases + citations from every article in the project get aggregated by section colour, drag-reordered, and assembled into AI-drafted paragraphs grounded in the user's actual annotations.
+
+---
