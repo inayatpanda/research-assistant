@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "description": "Research Manuscript Assistant — local-first writing tool for medical researchers.",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -n web,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "npm --prefix apps/web run dev",
