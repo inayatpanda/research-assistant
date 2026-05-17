@@ -4,6 +4,8 @@ import { CircleDot } from 'lucide-react'
 import { metaApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
+import { MobileNav } from './MobileNav'
+
 export function Topbar() {
   const { data, isError } = useQuery({
     queryKey: ['health'],
@@ -15,8 +17,11 @@ export function Topbar() {
   const degraded = !isError && data?.status === 'degraded'
 
   return (
-    <header className="h-14 shrink-0 border-b border-border bg-white flex items-center justify-between px-5">
-      <div className="text-[13px] text-muted-foreground">Local · ./data</div>
+    <header className="h-14 shrink-0 border-b border-border bg-white flex items-center justify-between px-3 md:px-5">
+      <div className="flex items-center gap-2">
+        <MobileNav />
+        <div className="text-[13px] text-muted-foreground">Local · ./data</div>
+      </div>
       <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
         <CircleDot
           className={cn(
