@@ -296,3 +296,125 @@ export const notesApi = {
     return ArticleNoteSchema.parse(r.data)
   },
 }
+
+// --- Compilation ---
+
+export const CompiledCardSchema = z.object({
+  highlight_id: z.string(),
+  article_id: z.string(),
+  citation: z.string(),
+  article_title: z.string(),
+  article_authors: z.array(z.string()),
+  article_year: z.number().int().nullable(),
+  article_journal: z.string().nullable(),
+  article_doi: z.string().nullable(),
+  page_number: z.number().int(),
+  selected_text: z.string(),
+  user_note: z.string().nullable(),
+  ai_summary: z.string().nullable(),
+  section: SectionNameSchema,
+  colour: HighlightColourSchema,
+  sort_order: z.number().int(),
+})
+export type CompiledCard = z.infer<typeof CompiledCardSchema>
+
+export const CompilationViewSchema = z.object({
+  project_id: z.string(),
+  colour: HighlightColourSchema,
+  section: SectionNameSchema,
+  cards: z.array(CompiledCardSchema),
+})
+export type CompilationView = z.infer<typeof CompilationViewSchema>
+
+export const CardDraftResponseSchema = z.object({
+  highlight_id: z.string(),
+  draft: z.string(),
+  used_citation: z.string(),
+})
+export type CardDraftResponse = z.infer<typeof CardDraftResponseSchema>
+
+export const SectionDraftResponseSchema = z.object({
+  project_id: z.string(),
+  colour: HighlightColourSchema,
+  section: SectionNameSchema,
+  draft: z.string(),
+  used_citations: z.array(z.string()),
+})
+export type SectionDraftResponse = z.infer<typeof SectionDraftResponseSchema>
+
+export const compilationApi = {
+  view: async (projectId: string, colour: HighlightColour): Promise<CompilationView> => {
+    const r = await api.get(`/api/projects/${projectId}/compilation/${colour}`)
+    return CompilationViewSchema.parse(r.data)
+  },
+  cardDraft: async (highlightId: string): Promise<CardDraftResponse> => {
+    const r = await api.post(`/api/highlights/${highlightId}/draft`, {}, { timeout: 60_000 })
+    return CardDraftResponseSchema.parse(r.data)
+  },
+  sectionDraft: async (
+    projectId: string,
+    colour: HighlightColour,
+  ): Promise<SectionDraftResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/compilation/${colour}/draft`,
+      {},
+      { timeout: 90_000 },
+    )
+    return SectionDraftResponseSchema.parse(r.data)
+  },
+  reorder: async (
+    projectId: string,
+    colour: HighlightColour,
+    items: Array<{ highlight_id: string; sort_order: number }>,
+  ): Promise<CompilationView> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/compilation/${colour}/order`,
+      { items },
+    )
+    return CompilationViewSchema.parse(r.data)
+  },
+}
+
+// --- Manuscript sections ---
+
+export const ManuscriptSectionNameSchema = z.enum([
+  'Introduction',
+  'Methodology',
+  'Results',
+  'Discussion',
+  'Abstract',
+  'Conclusion',
+])
+export type ManuscriptSectionName = z.infer<typeof ManuscriptSectionNameSchema>
+
+export const ManuscriptSectionSchema = z.object({
+  id: z.string().nullable(),
+  user_id: z.string(),
+  project_id: z.string(),
+  section_name: ManuscriptSectionNameSchema,
+  content: z.string(),
+  word_count: z.number().int(),
+  updated_at: z.string().nullable(),
+})
+export type ManuscriptSection = z.infer<typeof ManuscriptSectionSchema>
+
+export const manuscriptApi = {
+  getSection: async (
+    projectId: string,
+    section: ManuscriptSectionName,
+  ): Promise<ManuscriptSection> => {
+    const r = await api.get(`/api/projects/${projectId}/sections/${section}`)
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+  upsertSection: async (
+    projectId: string,
+    section: ManuscriptSectionName,
+    content: string,
+  ): Promise<ManuscriptSection> => {
+    const r = await api.put(`/api/projects/${projectId}/sections/${section}`, {
+      section_name: section,
+      content,
+    })
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
