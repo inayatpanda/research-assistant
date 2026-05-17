@@ -3,6 +3,8 @@ from sqlalchemy import text
 
 from ..container import Container, get_container
 from ..schemas.health import HealthResponse, ProviderStatus
+from ..services.ai import AIProviderUnavailable
+from ..services.ai.unconfigured import UnconfiguredAIProvider
 
 router = APIRouter(tags=["meta"])
 
@@ -16,31 +18,45 @@ async def _check_db(container: Container) -> bool:
         return False
 
 
-def _check_providers(container: Container) -> dict[str, ProviderStatus]:
+async def _probe_active_provider(container: Container) -> ProviderStatus:
+    ai = container.ai
+    if isinstance(ai, UnconfiguredAIProvider):
+        return ProviderStatus(ok=False, reason="no key")
+    # Trigger lazy chain resolution if the provider supports it (Gemini does)
+    if hasattr(ai, "_ensure_chain"):
+        try:
+            await ai._ensure_chain()  # type: ignore[attr-defined]
+        except AIProviderUnavailable as e:
+            return ProviderStatus(ok=False, reason=str(e))
+        except Exception as e:
+            return ProviderStatus(ok=False, reason=f"probe failed: {e}")
+    return ProviderStatus(ok=True, active_model=ai.active_model)
+
+
+def _key_present(settings, name: str) -> bool:
+    return bool(getattr(settings, f"{name}_api_key", None))
+
+
+async def _check_providers(container: Container) -> dict[str, ProviderStatus]:
     s = container.settings
-    return {
-        "gemini": (
-            ProviderStatus(ok=True, active_model=None)
-            if s.gemini_api_key
-            else ProviderStatus(ok=False, reason="no key")
-        ),
-        "claude": (
-            ProviderStatus(ok=True)
-            if s.claude_api_key
-            else ProviderStatus(ok=False, reason="no key")
-        ),
-        "openai": (
-            ProviderStatus(ok=True)
-            if s.openai_api_key
-            else ProviderStatus(ok=False, reason="no key")
-        ),
-    }
+    default = s.ai_provider_default
+    active = await _probe_active_provider(container)
+
+    out: dict[str, ProviderStatus] = {}
+    for name in ("gemini", "claude", "openai"):
+        if name == default:
+            out[name] = active
+        elif _key_present(s, name):
+            out[name] = ProviderStatus(ok=True)
+        else:
+            out[name] = ProviderStatus(ok=False, reason="no key")
+    return out
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health(container: Container = Depends(get_container)) -> HealthResponse:
     db_ok = await _check_db(container)
-    providers = _check_providers(container)
+    providers = await _check_providers(container)
     any_ai_ok = any(p.ok for p in providers.values())
     if db_ok and any_ai_ok:
         status: str = "ok"

@@ -24,4 +24,4 @@ Format: `[date] description · phase it came up · why deferred`
 
 ## Discovered during build
 
-_(empty — entries appended as found)_
+- [2026-05-17] Migrate `google-generativeai` → `google.genai` SDK · phase 2 build · old SDK works but deprecated; tests pass and behaviour is identical. Migrating now would mean rewriting `real_gemini_client.py`. Scheduled for after Phase 8 polish. The provider boundary (GeminiClient port) means the migration is just swapping the client adapter.

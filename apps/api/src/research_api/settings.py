@@ -30,6 +30,13 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
 
+    file_size_cap_mb: int = 50
+    ai_timeout_s: int = 60
+    allowed_upload_mime: list[str] = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]
+
 
 def get_settings() -> Settings:
     return Settings()
