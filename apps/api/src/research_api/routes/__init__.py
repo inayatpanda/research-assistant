@@ -1,4 +1,5 @@
 from . import (
+    abbreviations,
     articles,
     compilation,
     files,
@@ -18,4 +19,5 @@ __all__ = [
     "notes",
     "compilation",
     "manuscript_sections",
+    "abbreviations",
 ]

@@ -1,3 +1,4 @@
+from .abbreviation import AbbreviationItem, AbbreviationRead, AbbreviationsReplace
 from .article import (
     ArticleCreate,
     ArticleFilters,
@@ -61,6 +62,9 @@ __all__ = [
     "SectionDraftResponse",
     "ReorderRequest",
     "ReorderItem",
+    "AbbreviationItem",
+    "AbbreviationRead",
+    "AbbreviationsReplace",
     "HealthResponse",
     "ProviderStatus",
     "UploadResponse",

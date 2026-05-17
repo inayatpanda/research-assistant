@@ -1,3 +1,4 @@
+from .abbreviations import AbbreviationRepository, SqliteAbbreviationRepository
 from .articles import ArticleRepository, SqliteArticleRepository
 from .compilation import (
     CompilationRepository,
@@ -26,4 +27,6 @@ __all__ = [
     "CompilationRepository",
     "CompiledCardRow",
     "SqliteCompilationRepository",
+    "AbbreviationRepository",
+    "SqliteAbbreviationRepository",
 ]
