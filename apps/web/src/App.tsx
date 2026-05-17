@@ -1,16 +1,34 @@
+import { QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { Toaster } from 'sonner'
+
+import { AppShell } from '@/components/layout/AppShell'
+import { queryClient } from '@/lib/query'
+import CompilePage from '@/routes/CompilePage'
+import DashboardPage from '@/routes/DashboardPage'
+import LibraryPage from '@/routes/LibraryPage'
+import ManuscriptPage from '@/routes/ManuscriptPage'
+import ReaderPage from '@/routes/ReaderPage'
+import SettingsPage from '@/routes/SettingsPage'
+import StatisticsPage from '@/routes/StatisticsPage'
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-workspace text-foreground">
-      <div className="p-8">
-        <h1 className="text-2xl font-semibold">Research Manuscript Assistant</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Phase 1 — scaffold check</p>
-        <div className="mt-4 flex gap-2">
-          <div className="h-6 w-6 rounded bg-highlight-intro" />
-          <div className="h-6 w-6 rounded bg-highlight-method" />
-          <div className="h-6 w-6 rounded bg-highlight-results" />
-          <div className="h-6 w-6 rounded bg-highlight-discussion" />
-        </div>
-      </div>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<AppShell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="library" element={<LibraryPage />} />
+            <Route path="reader" element={<ReaderPage />} />
+            <Route path="compile" element={<CompilePage />} />
+            <Route path="manuscript" element={<ManuscriptPage />} />
+            <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster richColors position="top-right" />
+    </QueryClientProvider>
   )
 }
