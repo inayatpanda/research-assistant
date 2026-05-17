@@ -36,6 +36,51 @@ class Project(Base):
     )
 
 
+class Highlight(Base):
+    __tablename__ = "highlights"
+    __table_args__ = (
+        Index("ix_highlights_article_page", "article_id", "page_number"),
+        Index("ix_highlights_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    selected_text: Mapped[str] = mapped_column(Text, nullable=False)
+    colour: Mapped[str] = mapped_column(String(16), nullable=False)  # intro|method|results|discussion
+    section: Mapped[str] = mapped_column(String(32), nullable=False)
+    bounding_coords: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    user_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ArticleNote(Base):
+    __tablename__ = "article_notes"
+    __table_args__ = (
+        Index("uq_article_notes_article_user", "article_id", "user_id", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class Article(Base):
     __tablename__ = "articles"
     __table_args__ = (
