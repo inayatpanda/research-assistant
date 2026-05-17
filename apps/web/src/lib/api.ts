@@ -418,3 +418,49 @@ export const manuscriptApi = {
     return ManuscriptSectionSchema.parse(r.data)
   },
 }
+
+// --- Writing assist ---
+
+export const WritingActionSchema = z.enum(['improve', 'shorten', 'formalise', 'add_transition'])
+export type WritingAction = z.infer<typeof WritingActionSchema>
+
+export const WritingAssistResponseSchema = z.object({ revised: z.string() })
+
+export const writingApi = {
+  assist: async (action: WritingAction, text: string): Promise<string> => {
+    const r = await api.post('/api/writing/assist', { action, text }, { timeout: 60_000 })
+    return WritingAssistResponseSchema.parse(r.data).revised
+  },
+}
+
+// --- Abbreviations ---
+
+export const AbbreviationItemSchema = z.object({
+  short_form: z.string().min(1).max(32),
+  long_form: z.string().min(1).max(500),
+})
+export type AbbreviationItem = z.infer<typeof AbbreviationItemSchema>
+
+export const AbbreviationSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  project_id: z.string(),
+  short_form: z.string(),
+  long_form: z.string(),
+  created_at: z.string(),
+})
+export type Abbreviation = z.infer<typeof AbbreviationSchema>
+
+export const abbreviationsApi = {
+  list: async (projectId: string): Promise<Abbreviation[]> => {
+    const r = await api.get(`/api/projects/${projectId}/abbreviations`)
+    return z.array(AbbreviationSchema).parse(r.data)
+  },
+  replace: async (projectId: string, items: AbbreviationItem[]): Promise<Abbreviation[]> => {
+    const r = await api.put(`/api/projects/${projectId}/abbreviations`, { items })
+    return z.array(AbbreviationSchema).parse(r.data)
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/abbreviations/${id}`)
+  },
+}
