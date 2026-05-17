@@ -77,6 +77,10 @@ function HighlightRects({
                 ['--hl-ring' as string]: palette.ring,
                 border: 'none',
                 padding: 0,
+                // Sit above the react-pdf text layer (z-index: 2) so clicks land on us,
+                // not the transparent selection-layer span. Text selection still works
+                // because mousedown on empty space passes through to the text layer.
+                zIndex: 3,
               } as React.CSSProperties
             }
             aria-label={`Highlight: ${highlight.section} — ${highlight.selected_text.slice(0, 80)}`}
