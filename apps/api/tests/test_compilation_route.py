@@ -151,3 +151,56 @@ async def test_unknown_colour_422(client):
     project_id, _, _ = await _setup_two_articles(client)
     r = await client.get(f"/api/projects/{project_id}/compilation/purple")
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_reorder_ignores_out_of_scope_highlights(client):
+    """Security regression: passing a highlight_id from a different project/colour
+    must NOT mutate that highlight's sort_order."""
+    project_a, a1, _ = await _setup_two_articles(client)
+    # Create a separate project + article + highlight
+    proj_b = (
+        await client.post(
+            "/api/projects", json={"title": "OtherProject", "study_type": "Outcome Study"}
+        )
+    ).json()
+    pdf = (FIXTURES / "sample.pdf").read_bytes()
+    a3 = (
+        await client.post(
+            f"/api/projects/{proj_b['id']}/articles/upload",
+            files={"file": ("c.pdf", pdf, "application/pdf")},
+        )
+    ).json()["article"]
+    foreign_h = (
+        await client.post(
+            f"/api/articles/{a3['id']}/highlights",
+            json=_payload("foreign", colour="intro", section="Introduction"),
+        )
+    ).json()
+
+    home_h = (
+        await client.post(
+            f"/api/articles/{a1['id']}/highlights", json=_payload("home")
+        )
+    ).json()
+
+    # Try to mutate the foreign highlight's sort_order via project A's results reorder
+    await client.patch(
+        f"/api/projects/{project_a}/compilation/results/order",
+        json={
+            "items": [
+                {"highlight_id": foreign_h["id"], "sort_order": 999},
+                {"highlight_id": home_h["id"], "sort_order": 7},
+            ]
+        },
+    )
+    # Foreign highlight unchanged
+    foreign_now = (
+        await client.get(f"/api/projects/{proj_b['id']}/compilation/intro")
+    ).json()["cards"][0]
+    assert foreign_now["sort_order"] != 999
+    # Home highlight got its update
+    home_now = (
+        await client.get(f"/api/projects/{project_a}/compilation/results")
+    ).json()["cards"][0]
+    assert home_now["sort_order"] == 7

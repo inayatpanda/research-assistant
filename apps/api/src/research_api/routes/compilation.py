@@ -264,18 +264,30 @@ async def reorder_cards(
     session: AsyncSession = Depends(_session),
     user_id: str = Depends(_user_id),
 ) -> CompilationView:
-    """Update sort_order for a batch of highlights, then return the new view."""
+    """Update sort_order for a batch of highlights, then return the new view.
+
+    Security: each highlight ID in the request body must already be visible in
+    this (project, colour) view. Otherwise a caller could pass IDs of highlights
+    they own in OTHER projects/colours and silently mutate their sort_order.
+    """
     project = await SqliteProjectRepository(session).get(project_id, user_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    comp = SqliteCompilationRepository(session)
+    rows = await comp.list_cards(project_id, colour, user_id)
+    valid_ids = {r.highlight_id for r in rows}
+
     hl_repo = SqliteHighlightRepository(session)
     for item in body.items:
+        if item.highlight_id not in valid_ids:
+            # Silently skip out-of-scope IDs rather than 400 — leaking which IDs
+            # are valid is itself a small probing signal.
+            continue
         await hl_repo.update(
             item.highlight_id, HighlightUpdate(sort_order=item.sort_order), user_id
         )
 
-    comp = SqliteCompilationRepository(session)
     rows = await comp.list_cards(project_id, colour, user_id)
     cards = [_to_compiled_card(r, project.citation_style) for r in rows]
     return CompilationView(
