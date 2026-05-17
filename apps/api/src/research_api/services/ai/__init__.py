@@ -1,4 +1,4 @@
-from .base import AIProvider, WritingAction
+from .base import AIProvider, CardContext, SectionDraftContext, WritingAction
 from .errors import (
     AIError,
     AIProviderUnavailable,
@@ -14,6 +14,8 @@ from .unconfigured import UnconfiguredAIProvider
 __all__ = [
     "AIProvider",
     "WritingAction",
+    "CardContext",
+    "SectionDraftContext",
     "AIError",
     "AIProviderUnavailable",
     "AIRateLimited",

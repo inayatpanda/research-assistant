@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from .schemas import CitationMetadata
 
 WritingAction = Literal["improve", "shorten", "formalise", "add_transition"]
+
+
+@dataclass(frozen=True)
+class CardContext:
+    """Inputs the AI provider needs to draft a single-sentence card."""
+
+    cite_tag: str           # bare tag, e.g. "a1" — the provider wraps it as [CITE_a1]
+    section: str            # 'Introduction' / 'Methodology' / 'Results' / 'Discussion'
+    selected_text: str      # the highlighted passage
+    user_note: str | None   # the user's paraphrase, may be empty
+
+
+@dataclass(frozen=True)
+class SectionDraftContext:
+    """Inputs the AI provider needs to draft a multi-card paragraph."""
+
+    section: str
+    cards: list[CardContext]
 
 
 class AIProvider(Protocol):
@@ -20,8 +39,10 @@ class AIProvider(Protocol):
 
     async def summarise(self, text: str, max_sentences: int = 2) -> str: ...
 
-    # The remaining methods land in their respective phases (4, 5, 6, 8).
-    # Included here so swap-time signature is stable.
-    async def generate_draft(self, ctx: dict) -> str: ...
-    async def interpret_result(self, test: str, output: dict) -> str: ...
+    async def generate_card_draft(self, ctx: CardContext) -> str: ...
+
+    async def generate_section_draft(self, ctx: SectionDraftContext) -> str: ...
+
+    # Phase 5/6 stubs
     async def assist_writing(self, text: str, action: WritingAction) -> str: ...
+    async def interpret_result(self, test: str, output: dict) -> str: ...

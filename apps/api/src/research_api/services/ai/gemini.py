@@ -12,14 +12,20 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from .base import AIProvider, WritingAction
+from .base import AIProvider, CardContext, SectionDraftContext, WritingAction
 from .errors import (
     AIProviderUnavailable,
     AIRateLimited,
     AISourceInsufficient,
 )
 from .model_chain import ModelChain
-from .prompts import EXTRACTION_PROMPT, SUMMARISE_PROMPT
+from .prompts import (
+    CARD_DRAFT_PROMPT,
+    EXTRACTION_PROMPT,
+    SECTION_DRAFT_PROMPT,
+    SUMMARISE_PROMPT,
+    format_card_for_prompt,
+)
 from .schemas import CitationMetadata
 
 GEMINI_MODEL_CHAIN: tuple[str, ...] = (
@@ -121,10 +127,34 @@ class GeminiProvider(AIProvider):
             raise AISourceInsufficient("model rejected the passage", provider="gemini")
         return raw
 
-    # Phase-deferred methods raise NotImplementedError until their phase ships.
-    async def generate_draft(self, ctx: dict) -> str:
-        raise NotImplementedError("generate_draft lands in Phase 4")
+    async def generate_card_draft(self, ctx: CardContext) -> str:
+        if not ctx.selected_text or len(ctx.selected_text.strip()) < 5:
+            raise AISourceInsufficient("source passage too short to draft", provider="gemini")
+        prompt = CARD_DRAFT_PROMPT.format(
+            section=ctx.section,
+            cite_tag=f"[CITE_{ctx.cite_tag}]",
+            selected_text=ctx.selected_text,
+            user_note=(ctx.user_note or "").strip() or "(no paraphrase)",
+        )
+        raw = (await self._generate_with_resilience(prompt)).strip()
+        return raw
 
+    async def generate_section_draft(self, ctx: SectionDraftContext) -> str:
+        if not ctx.cards:
+            raise AISourceInsufficient("no cards to draft from", provider="gemini")
+        cards_block = "\n\n".join(
+            format_card_for_prompt(
+                tag=f"[CITE_{c.cite_tag}]",
+                selected_text=c.selected_text,
+                user_note=c.user_note,
+            )
+            for c in ctx.cards
+        )
+        prompt = SECTION_DRAFT_PROMPT.format(section=ctx.section, cards_block=cards_block)
+        raw = (await self._generate_with_resilience(prompt)).strip()
+        return raw
+
+    # Phase-deferred methods raise NotImplementedError until their phase ships.
     async def interpret_result(self, test: str, output: dict) -> str:
         raise NotImplementedError("interpret_result lands in Phase 6")
 

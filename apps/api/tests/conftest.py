@@ -6,7 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from research_api.db.base import Base, make_engine, make_session_factory
-from research_api.services.ai import AIProvider, CitationMetadata
+from research_api.services.ai import AIProvider, CardContext, CitationMetadata, SectionDraftContext
 from research_api.services.ai.base import WritingAction
 
 
@@ -37,8 +37,11 @@ class FakeAIProvider(AIProvider):
     async def summarise(self, text: str, max_sentences: int = 2) -> str:
         return f"Summary of: {text[:30]}"
 
-    async def generate_draft(self, ctx: dict) -> str:
-        return "AI draft"
+    async def generate_card_draft(self, ctx: CardContext) -> str:
+        return f"This study reported on the topic [CITE_{ctx.cite_tag}]."
+
+    async def generate_section_draft(self, ctx: SectionDraftContext) -> str:
+        return " ".join(f"Finding [CITE_{c.cite_tag}]." for c in ctx.cards)
 
     async def interpret_result(self, test: str, output: dict) -> str:
         return "AI interpretation"
