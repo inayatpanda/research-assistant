@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 HighlightColour = Literal["intro", "method", "results", "discussion"]
 SectionName = Literal["Introduction", "Methodology", "Results", "Discussion"]
@@ -15,9 +15,18 @@ class BoundingRect(BaseModel):
     x1: float = Field(ge=0, le=1)
     y1: float = Field(ge=0, le=1)
 
+    @model_validator(mode="after")
+    def _reject_inverted(self) -> "BoundingRect":
+        if self.x1 < self.x0:
+            raise ValueError("x1 must be >= x0")
+        if self.y1 < self.y0:
+            raise ValueError("y1 must be >= y0")
+        return self
+
 
 class BoundingCoords(BaseModel):
-    rects: list[BoundingRect] = Field(min_length=1)
+    # Cap rect count so a malicious client cannot push a huge JSON into the column.
+    rects: list[BoundingRect] = Field(min_length=1, max_length=64)
 
 
 class HighlightCreate(BaseModel):
@@ -26,13 +35,13 @@ class HighlightCreate(BaseModel):
     colour: HighlightColour
     section: SectionName
     bounding_coords: BoundingCoords
-    user_note: str | None = None
+    user_note: str | None = Field(default=None, max_length=4_000)
     sort_order: int = 0
 
 
 class HighlightUpdate(BaseModel):
-    user_note: str | None = None
-    ai_summary: str | None = None
+    user_note: str | None = Field(default=None, max_length=4_000)
+    ai_summary: str | None = Field(default=None, max_length=2_000)
     sort_order: int | None = None
 
 
