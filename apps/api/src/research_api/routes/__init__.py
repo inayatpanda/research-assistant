@@ -1,4 +1,13 @@
-from . import articles, compilation, files, health, highlights, notes, projects
+from . import (
+    articles,
+    compilation,
+    files,
+    health,
+    highlights,
+    manuscript_sections,
+    notes,
+    projects,
+)
 
 __all__ = [
     "health",
@@ -8,4 +17,5 @@ __all__ = [
     "highlights",
     "notes",
     "compilation",
+    "manuscript_sections",
 ]
