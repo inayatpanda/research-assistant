@@ -38,8 +38,8 @@ export function ColorPicker() {
             key={c}
             role="radio"
             aria-checked={isActive}
-            aria-label={`Highlight ${sectionLabels[c]} (key: ${ORDER.indexOf(c) + 1})`}
-            title={`${sectionLabels[c]} — ${ORDER.indexOf(c) + 1}`}
+            aria-label={`Highlight ${sectionLabels[c]} (key ${ORDER.indexOf(c) + 1} or Cmd+${ORDER.indexOf(c) + 1} for current selection)`}
+            title={`${sectionLabels[c]}\n${ORDER.indexOf(c) + 1} — pick first, then select\nCmd+${ORDER.indexOf(c) + 1} — highlight current selection`}
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.94 }}
             onClick={() => setActive(isActive ? null : c)}
@@ -62,8 +62,12 @@ export function ColorPicker() {
           </motion.button>
         )
       })}
-      <div className="ml-2 text-[11px] text-muted-foreground min-w-[100px]">
-        {active ? `Selecting → ${sectionLabels[active]}` : 'Press 1–4 to highlight'}
+      <div className="ml-2 text-[11px] text-muted-foreground min-w-[180px]">
+        {active ? (
+          `Selecting → ${sectionLabels[active]}`
+        ) : (
+          <>Select text, then pick a colour · or <kbd className="px-1 py-px text-[10px] rounded bg-muted">⌘ 1–4</kbd></>
+        )}
       </div>
     </div>
   )

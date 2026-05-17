@@ -190,6 +190,11 @@ export function HighlightNotePopover({
                   <span>{update.isPending ? 'Saving…' : note ? 'Autosaves as you type' : ''}</span>
                   <span>{note.length} chars</span>
                 </div>
+                {!note && (
+                  <div className="mt-1.5 text-[11px] text-muted-foreground leading-[15px]">
+                    Tip: your paraphrase appears next to the citation when this highlight is compiled into the manuscript.
+                  </div>
+                )}
               </div>
 
               {aiState !== 'idle' && (
@@ -211,7 +216,7 @@ export function HighlightNotePopover({
                     )}
                   </div>
                   {aiState === 'pending' && (
-                    <div className="text-[12px] text-muted-foreground italic">Summarising…</div>
+                    <div className="text-[12px] text-muted-foreground italic">Paraphrasing…</div>
                   )}
                   {(aiState === 'review' || aiState === 'accepted') && aiSummary && (
                     <>
@@ -244,7 +249,7 @@ export function HighlightNotePopover({
                   className="h-8 text-[12px] border-ai/30 text-ai hover:bg-ai-tint hover:text-ai"
                 >
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                  {summarise.isPending ? 'Summarising…' : 'AI Summarise'}
+                  {summarise.isPending ? 'Paraphrasing…' : 'AI Paraphrase'}
                 </Button>
                 <Button
                   variant="ghost"
