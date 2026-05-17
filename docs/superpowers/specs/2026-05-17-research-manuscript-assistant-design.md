@@ -197,13 +197,62 @@ Every query is scoped by `user_id`. Even though only `local-user` exists in v1, 
 
 ## 6. AI integration & anti-hallucination
 
+### 6.1 Adapter rules
+
 - Every AI call goes through `AIProvider` — no direct SDK access from routes or services.
 - All prompt templates live in `apps/api/services/ai/prompts/` as named, versioned files.
 - **Source-grounding rule:** every generation method requires the user's actual highlighted text + paraphrase as input. Prompts include the instruction: *"Use only the provided source text. Do not invent facts, citations, or numerical values. If the source is insufficient, respond with 'INSUFFICIENT_SOURCE'."*
 - AI outputs are wrapped in an `<AISuggestionBlock state="pending|accepted|edited|rejected" />` with Accept / Edit / Reject controls. Until accepted, the content is visually marked (violet ring, "AI Suggested" badge) and cannot be exported.
-- Every AI call wrapped in try/except with user-facing fallback toast and a retry button. Network and rate-limit errors are distinguished from model errors.
-- Per-call telemetry (provider, tokens, latency, success/error) logged to `apps/api/logs/ai_calls.jsonl` (append-only file, gitignored). DB table added in a future phase if needed; file-based is sufficient for v1.
+- Per-call telemetry (provider, tokens, latency, success/error) logged to `apps/api/logs/ai_calls.jsonl` (append-only file, gitignored).
 - API keys: stored in `.env` only, never in DB, never echoed in UI. Settings page can read from `.env` (via API) and write back. Keys never leave the machine except to the chosen provider.
+
+### 6.2 Robustness — handling Gemini (and any provider) flakiness
+
+Gemini specifically has a track record of: model-name deprecations (`gemini-1.5-flash` → `-002` → `-latest`), free-tier rate limits (15 RPM / 1500 RPD), 503 overloads, and safety-filter false-positives on medical content. The adapter handles all four cases.
+
+**Model resolution chain.** No hardcoded single model. The provider holds an ordered list:
+
+```python
+GEMINI_MODEL_CHAIN = [
+    "gemini-2.5-flash",          # newest, fastest, free tier
+    "gemini-2.0-flash",          # stable fallback
+    "gemini-1.5-flash-latest",   # legacy alias
+    "gemini-1.5-flash-002",      # legacy pinned
+]
+```
+
+On startup, `genai.list_models()` filters this to models the current API key can actually call. The first survivor becomes `active_model`; the rest stay as a queue.
+
+**Per-call retry policy.** For 429 / 503 / transient network errors: 3× exponential backoff with jitter (≈1s, 2s, 4s). For persistent 404 on `active_model`: demote it, promote the next chain member, retry once. If the chain is exhausted, return a structured `AIProviderUnavailable` error.
+
+**UI behaviour on exhaustion.** A clean toast: *"Gemini is temporarily unavailable. Retry in a few minutes, or switch provider in Settings."* The retry button on every AI block lets the user try again without losing context.
+
+**Safety filters tuned for medical content.** Default Gemini safety thresholds frequently block medical text (drug names, anatomy, symptoms). The adapter sets `safety_settings = BLOCK_NONE` for all four categories on summarisation/drafting calls. Citation extraction stays at default thresholds.
+
+**Optional cross-provider failover.** A Settings toggle, off by default: when Gemini's chain is exhausted, auto-failover to Claude (if key present) or OpenAI (if key present). Off by default because users care about cost surprise.
+
+**Startup health check.** `GET /health` returns per-provider status:
+
+```json
+{
+  "ai_providers": {
+    "gemini": { "ok": true, "active_model": "gemini-2.5-flash" },
+    "claude": { "ok": false, "reason": "no key" },
+    "openai": { "ok": false, "reason": "no key" }
+  }
+}
+```
+
+The topbar shows a red dot if the active provider is down — the user knows before wasting time annotating.
+
+### 6.3 Same robustness shape for other providers
+
+The Claude and OpenAI adapters get the same treatment in miniature: model chain + retry + failure surface. Pinned defaults:
+
+- Claude: `claude-opus-4-7` → `claude-sonnet-4-6` → `claude-haiku-4-5`
+- OpenAI: `gpt-4o` → `gpt-4o-mini`
+
+This means **a model deprecation never breaks the app** — the chain just demotes the broken entry.
 
 ---
 
