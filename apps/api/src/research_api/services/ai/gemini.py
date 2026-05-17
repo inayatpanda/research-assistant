@@ -1,0 +1,155 @@
+"""Gemini AI provider with the §6.2 robustness layer.
+
+Architecture: a GeminiClient port (Protocol) handles the SDK boundary so the provider
+can be tested with a fake. The real client adapter is RealGeminiClient.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import random
+from typing import Protocol
+
+from pydantic import ValidationError
+
+from .base import AIProvider, WritingAction
+from .errors import (
+    AIProviderUnavailable,
+    AIRateLimited,
+    AISourceInsufficient,
+)
+from .model_chain import ModelChain
+from .prompts import EXTRACTION_PROMPT, SUMMARISE_PROMPT
+from .schemas import CitationMetadata
+
+GEMINI_MODEL_CHAIN: tuple[str, ...] = (
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-002",
+)
+
+
+class TransientError(Exception):
+    """Marker for retryable errors (429, 503, network)."""
+
+
+class ModelNotFoundError(Exception):
+    """Marker for 'model name is dead' — triggers chain demotion."""
+
+
+class GeminiClient(Protocol):
+    """SDK boundary. Tests substitute a FakeGeminiClient."""
+
+    async def list_models(self) -> list[str]: ...
+
+    async def generate(self, model: str, prompt: str) -> str: ...
+
+
+class GeminiProvider(AIProvider):
+    name = "gemini"
+
+    def __init__(
+        self,
+        client: GeminiClient,
+        *,
+        chain: tuple[str, ...] = GEMINI_MODEL_CHAIN,
+        max_retries: int = 3,
+        backoff_base: float = 1.0,
+        jitter: float = 0.25,
+    ) -> None:
+        self._client = client
+        self._initial_chain = chain
+        self._chain: ModelChain | None = None
+        self._max_retries = max_retries
+        self._backoff_base = backoff_base
+        self._jitter = jitter
+
+    @property
+    def active_model(self) -> str | None:
+        return self._chain.active if self._chain else None
+
+    async def _ensure_chain(self) -> ModelChain:
+        if self._chain is None:
+            available = set(await self._client.list_models())
+            self._chain = ModelChain.resolve(available, self._initial_chain, provider="gemini")
+        return self._chain
+
+    async def _generate_with_resilience(self, prompt: str) -> str:
+        chain = await self._ensure_chain()
+        while True:
+            try:
+                return await self._call_with_retries(chain.active, prompt)
+            except ModelNotFoundError:
+                # Persistent 404 — demote this model and try the next chain member.
+                chain = chain.demote()
+                self._chain = chain
+                continue
+
+    async def _call_with_retries(self, model: str, prompt: str) -> str:
+        last_err: Exception | None = None
+        for attempt in range(1, self._max_retries + 1):
+            try:
+                return await self._client.generate(model, prompt)
+            except ModelNotFoundError:
+                raise
+            except TransientError as e:
+                last_err = e
+                if attempt == self._max_retries:
+                    raise AIRateLimited(
+                        f"transient errors exhausted on {model}: {e}", provider="gemini"
+                    ) from e
+                backoff = self._backoff_base * (2 ** (attempt - 1))
+                jitter = random.uniform(0, self._jitter)
+                await asyncio.sleep(backoff + jitter)
+        # Unreachable, but keeps type-checker calm
+        raise AIRateLimited("retries exhausted", provider="gemini") from last_err
+
+    async def extract_citation(self, pdf_text: str) -> CitationMetadata:
+        if not pdf_text or len(pdf_text.strip()) < 50:
+            raise AISourceInsufficient("text too short to extract", provider="gemini")
+        prompt = EXTRACTION_PROMPT.format(text=pdf_text[:6000])
+        raw = await self._generate_with_resilience(prompt)
+        return _parse_citation_json(raw)
+
+    async def summarise(self, text: str, max_sentences: int = 2) -> str:
+        if not text or len(text.strip()) < 20:
+            raise AISourceInsufficient("text too short to summarise", provider="gemini")
+        prompt = SUMMARISE_PROMPT.format(text=text, max_sentences=max_sentences)
+        raw = (await self._generate_with_resilience(prompt)).strip()
+        if raw == "INSUFFICIENT_SOURCE":
+            raise AISourceInsufficient("model rejected the passage", provider="gemini")
+        return raw
+
+    # Phase-deferred methods raise NotImplementedError until their phase ships.
+    async def generate_draft(self, ctx: dict) -> str:
+        raise NotImplementedError("generate_draft lands in Phase 4")
+
+    async def interpret_result(self, test: str, output: dict) -> str:
+        raise NotImplementedError("interpret_result lands in Phase 6")
+
+    async def assist_writing(self, text: str, action: WritingAction) -> str:
+        raise NotImplementedError("assist_writing lands in Phase 5")
+
+
+def _parse_citation_json(raw: str) -> CitationMetadata:
+    # Tolerate ```json ... ``` fences or stray prose
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        # Find first { and last }
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            stripped = stripped[start : end + 1]
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise AIProviderUnavailable(
+            f"could not parse JSON from model: {e}; raw[:200]={raw[:200]!r}", provider="gemini"
+        ) from e
+    try:
+        return CitationMetadata(**data)
+    except ValidationError as e:
+        raise AIProviderUnavailable(
+            f"model JSON did not match CitationMetadata schema: {e}", provider="gemini"
+        ) from e

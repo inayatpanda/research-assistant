@@ -1,0 +1,38 @@
+"""Stub AIProvider used when no key is configured.
+
+Every call raises AIProviderUnavailable so the rest of the stack treats it
+exactly like an outage. The /health endpoint reports `ok=False, reason="no key"`.
+"""
+from __future__ import annotations
+
+from .base import AIProvider, WritingAction
+from .errors import AIProviderUnavailable
+from .schemas import CitationMetadata
+
+
+class UnconfiguredAIProvider(AIProvider):
+    def __init__(self, name: str = "gemini") -> None:
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def active_model(self) -> str | None:
+        return None
+
+    async def extract_citation(self, pdf_text: str) -> CitationMetadata:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def summarise(self, text: str, max_sentences: int = 2) -> str:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def generate_draft(self, ctx: dict) -> str:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def interpret_result(self, test: str, output: dict) -> str:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def assist_writing(self, text: str, action: WritingAction) -> str:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
