@@ -2,21 +2,22 @@ import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 
 import { useCreateHighlight } from '@/hooks/useHighlights'
-import type { HighlightCreate } from '@/lib/api'
+import type { Highlight, HighlightCreate } from '@/lib/api'
 import { pixelRectToPct, rectsFromSelectionInPage } from '@/lib/pdfCoords'
 import { SECTION_FOR_COLOUR, useReader } from '@/lib/readerStore'
 
 /**
  * Listens for text selections inside a PDF page container.
  * When the user releases the mouse with a non-empty selection AND an active colour is set,
- * convert the selection into a Highlight payload and persist.
+ * convert the selection into a Highlight payload, persist it, and call onCreated so the
+ * viewer can auto-open the paraphrase popover anchored to the new highlight.
  */
 export function SelectionCapture({
   articleId,
-  currentPage,
+  onCreated,
 }: {
   articleId: string
-  currentPage: number
+  onCreated?: (highlight: Highlight, anchorRect: DOMRect) => void
 }) {
   const create = useCreateHighlight(articleId)
   const activeColour = useReader((s) => s.activeColour)
@@ -31,7 +32,6 @@ export function SelectionCapture({
     const text = range.toString().trim()
     if (text.length === 0) return
 
-    // Find the page DOM element via the data attribute react-pdf injects
     const node =
       range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
         ? (range.commonAncestorContainer as Element)
@@ -48,6 +48,9 @@ export function SelectionCapture({
     const pixelRects = rectsFromSelectionInPage(range, pageEl)
     if (pixelRects.length === 0) return
 
+    // Capture the FIRST rect in viewport coords so the popover can anchor there
+    const firstViewportRect = range.getClientRects()[0]
+
     const rects = pixelRects.map((r) => pixelRectToPct(r, pageBox.width, pageBox.height))
 
     const payload: HighlightCreate = {
@@ -59,19 +62,18 @@ export function SelectionCapture({
     }
 
     create.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (highlight) => {
         sel.removeAllRanges()
+        if (firstViewportRect && onCreated) onCreated(highlight, firstViewportRect)
       },
       onError: (e: Error) => toast.error(e.message),
     })
-  }, [activeColour, create])
+  }, [activeColour, create, onCreated])
 
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp)
     return () => document.removeEventListener('mouseup', handleMouseUp)
   }, [handleMouseUp])
 
-  // unused but kept in signature in case we add page-level scoping later
-  void currentPage
   return null
 }

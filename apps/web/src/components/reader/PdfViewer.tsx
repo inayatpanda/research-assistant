@@ -13,6 +13,7 @@ import { HighlightOverlay } from './HighlightOverlay'
 import { SelectionCapture } from './SelectionCapture'
 
 type PageSize = { width: number; height: number }
+type OpenHighlight = { highlight: Highlight; anchorRect: DOMRect } | null
 
 export function PdfViewer({
   articleId,
@@ -26,7 +27,7 @@ export function PdfViewer({
   const currentPage = useReader((s) => s.currentPage)
   const scale = useReader((s) => s.scale)
   const [pageSize, setPageSize] = useState<PageSize>({ width: 0, height: 0 })
-  const [openHighlight, setOpenHighlight] = useState<Highlight | null>(null)
+  const [open, setOpen] = useState<OpenHighlight>(null)
 
   const pageHighlights = useMemo(
     () => highlights.filter((h) => h.page_number === currentPage),
@@ -77,16 +78,20 @@ export function PdfViewer({
               highlights={pageHighlights}
               pageWidth={pageSize.width}
               pageHeight={pageSize.height}
-              onClickHighlight={setOpenHighlight}
+              onClickHighlight={(h, rect) => setOpen({ highlight: h, anchorRect: rect })}
             />
           </div>
         </Document>
       </div>
-      <SelectionCapture articleId={articleId} currentPage={currentPage} />
+      <SelectionCapture
+        articleId={articleId}
+        onCreated={(h, rect) => setOpen({ highlight: h, anchorRect: rect })}
+      />
       <HighlightNotePopover
         articleId={articleId}
-        highlight={openHighlight}
-        onClose={() => setOpenHighlight(null)}
+        highlight={open?.highlight ?? null}
+        anchorRect={open?.anchorRect ?? null}
+        onClose={() => setOpen(null)}
       />
     </div>
   )

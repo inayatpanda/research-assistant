@@ -9,6 +9,9 @@ import { highlightColors } from '@/lib/tokens'
  * Renders all highlights for a given page as absolute-positioned divs over the
  * react-pdf page element. Pixel positions are recomputed from percentage coords
  * on every render — so any zoom or page-size change just works.
+ *
+ * Click handler returns the highlight's DOMRect so a popover can anchor itself
+ * next to the highlighted text.
  */
 export function HighlightOverlay({
   highlights,
@@ -19,7 +22,7 @@ export function HighlightOverlay({
   highlights: Highlight[]
   pageWidth: number
   pageHeight: number
-  onClickHighlight: (h: Highlight) => void
+  onClickHighlight: (h: Highlight, anchorRect: DOMRect) => void
 }) {
   if (pageWidth === 0 || pageHeight === 0) return null
   return (
@@ -43,7 +46,7 @@ function HighlightRects({
   highlight: Highlight
   pageWidth: number
   pageHeight: number
-  onClick: (h: Highlight) => void
+  onClick: (h: Highlight, anchorRect: DOMRect) => void
 }) {
   const palette = highlightColors[highlight.colour]
   return (
@@ -58,7 +61,9 @@ function HighlightRects({
             animate="animate"
             onClick={(e) => {
               e.stopPropagation()
-              onClick(highlight)
+              const target = e.currentTarget as HTMLElement
+              // Anchor to the first rect of the highlight (so popover sits next to the start)
+              onClick(highlight, target.getBoundingClientRect())
             }}
             className="absolute rounded-[2px] cursor-pointer pointer-events-auto transition-shadow hover:shadow-[0_0_0_2px_var(--hl-ring)]"
             style={
