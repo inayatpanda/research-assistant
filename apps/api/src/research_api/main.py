@@ -1,8 +1,20 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Research Manuscript Assistant API")
+from .container import get_container
+from .routes.health import router as health_router
+from .routes.projects import router as projects_router
 
+app = FastAPI(title="Research Manuscript Assistant API", version="0.0.1")
 
-@app.get("/ping")
-async def ping() -> dict[str, str]:
-    return {"status": "ok"}
+_settings = get_container().settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health_router)
+app.include_router(projects_router, prefix="/api")
