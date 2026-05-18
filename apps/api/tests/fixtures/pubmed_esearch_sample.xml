@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE eSearchResult PUBLIC "-//NLM//DTD esearch 20060628//EN" "https://eutils.ncbi.nlm.nih.gov/eutils/dtd/20060628/esearch.dtd">
+<eSearchResult>
+  <Count>2</Count>
+  <RetMax>2</RetMax>
+  <RetStart>0</RetStart>
+  <IdList>
+    <Id>37251234</Id>
+    <Id>36789012</Id>
+  </IdList>
+  <TranslationSet/>
+  <QueryTranslation>anterior approach total hip arthroplasty</QueryTranslation>
+</eSearchResult>

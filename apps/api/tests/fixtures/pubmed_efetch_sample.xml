@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE PubmedArticleSet PUBLIC "-//NLM//DTD PubMedArticle, 1st January 2024//EN" "https://dtd.nlm.nih.gov/ncbi/pubmed/out/pubmed_240101.dtd">
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">37251234</PMID>
+      <Article PubModel="Print">
+        <Journal>
+          <ISSN IssnType="Electronic">1538-3598</ISSN>
+          <JournalIssue CitedMedium="Internet">
+            <Volume>329</Volume>
+            <Issue>21</Issue>
+            <PubDate>
+              <Year>2023</Year>
+              <Month>Jun</Month>
+            </PubDate>
+          </JournalIssue>
+          <Title>JAMA</Title>
+          <ISOAbbreviation>JAMA</ISOAbbreviation>
+        </Journal>
+        <ArticleTitle>Anterior versus posterior surgical approach in primary total hip arthroplasty: a randomised trial.</ArticleTitle>
+        <Pagination>
+          <MedlinePgn>1843-1852</MedlinePgn>
+        </Pagination>
+        <Abstract>
+          <AbstractText Label="BACKGROUND" NlmCategory="BACKGROUND">Surgical approach impacts recovery after total hip arthroplasty.</AbstractText>
+          <AbstractText Label="METHODS" NlmCategory="METHODS">We randomised 600 patients to anterior vs posterior approach.</AbstractText>
+          <AbstractText Label="RESULTS" NlmCategory="RESULTS">Anterior approach reduced six-week opioid use.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <LastName>Chen</LastName>
+            <ForeName>Wei</ForeName>
+            <Initials>W</Initials>
+          </Author>
+          <Author ValidYN="Y">
+            <LastName>Nguyen</LastName>
+            <ForeName>Linh</ForeName>
+            <Initials>L</Initials>
+          </Author>
+          <Author ValidYN="Y">
+            <CollectiveName>THA Investigators Group</CollectiveName>
+          </Author>
+        </AuthorList>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">37251234</ArticleId>
+        <ArticleId IdType="doi">10.1001/jama.2023.7770</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">36789012</PMID>
+      <Article PubModel="Print">
+        <Journal>
+          <JournalIssue CitedMedium="Internet">
+            <Volume>105</Volume>
+            <Issue>4</Issue>
+            <PubDate>
+              <MedlineDate>2023 Spring</MedlineDate>
+            </PubDate>
+          </JournalIssue>
+          <Title>The Journal of Bone and Joint Surgery</Title>
+        </Journal>
+        <ArticleTitle>Direct anterior approach: long-term outcomes.</ArticleTitle>
+        <Abstract>
+          <AbstractText>Single-segment abstract content.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <LastName>Schmidt</LastName>
+            <ForeName>Eva M.</ForeName>
+          </Author>
+        </AuthorList>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">36789012</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>
