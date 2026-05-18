@@ -1,0 +1,114 @@
+"""Project bundle export: pure transform from ORM rows to a JSON-serialisable dict.
+
+The bundle is the wire format for full-project portability — used by both the
+JSON export endpoint and (via `bundle_import`) the matching import endpoint.
+
+Design rules:
+  - Pure: no DB / FS / network. Callers pass already-scoped lists.
+  - JSON-only output: datetimes serialised to ISO-8601, no Decimals.
+  - All FK fields retained verbatim so the import can rewrite them via an old→
+    new id map.
+  - `user_id` IS present in the bundle (round-trip needs to survive json) but
+    the import service is mandated to ignore it and stamp the importing user.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
+
+from ...db.models import (
+    Abbreviation,
+    Analysis,
+    AnalysisResult,
+    Article,
+    ArticleNote,
+    Dataset,
+    DatasetVariable,
+    ExtractionRecord,
+    Highlight,
+    ManuscriptSection,
+    Project,
+    Review,
+    RobAssessment,
+    ScreeningRecord,
+    SearchRecord,
+)
+
+SCHEMA_VERSION = 1
+EXPORTED_FROM = "Research Manuscript Assistant v0.0.1"
+
+
+@dataclass
+class BundleInputs:
+    project: Project
+    articles: list[Article] = field(default_factory=list)
+    highlights: list[Highlight] = field(default_factory=list)
+    article_notes: list[ArticleNote] = field(default_factory=list)
+    manuscript_sections: list[ManuscriptSection] = field(default_factory=list)
+    abbreviations: list[Abbreviation] = field(default_factory=list)
+    datasets: list[Dataset] = field(default_factory=list)
+    dataset_variables: list[DatasetVariable] = field(default_factory=list)
+    analyses: list[Analysis] = field(default_factory=list)
+    analysis_results: list[AnalysisResult] = field(default_factory=list)
+    review: Review | None = None
+    search_records: list[SearchRecord] = field(default_factory=list)
+    screening_records: list[ScreeningRecord] = field(default_factory=list)
+    rob_assessments: list[RobAssessment] = field(default_factory=list)
+    extraction_records: list[ExtractionRecord] = field(default_factory=list)
+
+
+def _serialise(value: Any) -> Any:
+    if isinstance(value, datetime):
+        # Always ISO-8601; preserve tz info if present, otherwise mark naive as UTC.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _serialise(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialise(v) for v in value]
+    return value
+
+
+def _row_to_dict(row: Any) -> dict[str, Any]:
+    """Map an ORM row to a JSON-friendly dict.
+
+    We deliberately read columns from `__table__.columns` rather than
+    `__dict__` so we never accidentally surface lazy-loaded relationships or
+    internal `_sa_instance_state`.
+    """
+    out: dict[str, Any] = {}
+    for col in row.__table__.columns:
+        name = col.name
+        out[name] = _serialise(getattr(row, name))
+    return out
+
+
+def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
+    """Compose a full JSON-serialisable project bundle.
+
+    Returns a `dict` (not bytes); the route layer is responsible for
+    `json.dumps(..., indent=2)`-style serialisation and Content-Disposition.
+    """
+    project_dict = _row_to_dict(inputs.project)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_from": EXPORTED_FROM,
+        "project": project_dict,
+        "articles": [_row_to_dict(a) for a in inputs.articles],
+        "highlights": [_row_to_dict(h) for h in inputs.highlights],
+        "article_notes": [_row_to_dict(n) for n in inputs.article_notes],
+        "manuscript_sections": [_row_to_dict(s) for s in inputs.manuscript_sections],
+        "abbreviations": [_row_to_dict(a) for a in inputs.abbreviations],
+        "datasets": [_row_to_dict(d) for d in inputs.datasets],
+        "dataset_variables": [_row_to_dict(v) for v in inputs.dataset_variables],
+        "analyses": [_row_to_dict(a) for a in inputs.analyses],
+        "analysis_results": [_row_to_dict(r) for r in inputs.analysis_results],
+        "review": _row_to_dict(inputs.review) if inputs.review is not None else None,
+        "search_records": [_row_to_dict(r) for r in inputs.search_records],
+        "screening_records": [_row_to_dict(r) for r in inputs.screening_records],
+        "rob_assessments": [_row_to_dict(r) for r in inputs.rob_assessments],
+        "extraction_records": [_row_to_dict(r) for r in inputs.extraction_records],
+    }
