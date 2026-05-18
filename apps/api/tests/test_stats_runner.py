@@ -262,7 +262,10 @@ def test_kaplan_meier_known_answer():
     assert out.statistic == pytest.approx(5.7604, rel=1e-2)
     assert out.p_value == pytest.approx(0.01639, rel=1e-2)
     assert out.chart is not None
-    assert out.chart["type"] == "kaplan_meier"
+    # Phase 8.5: chart is a server-rendered PNG data URI dict; older 'type'/
+    # 'series' shape was superseded by the chart dispatcher.
+    assert out.chart["format"] == "png"
+    assert out.chart["data_uri"].startswith("data:image/png;base64,")
 
 
 def test_cox_ph_known_answer():

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
+from research_api.services.stats.charts import select_and_render
 from research_api.services.stats.registry import CATALOGUE
 
 _COL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -66,7 +67,11 @@ def run(
         _check_column_name(v)
 
     handler = _DISPATCH[test_key]
-    return handler(df, variables)
+    result = handler(df, variables)
+    chart = select_and_render(test_key=test_key, df=df, variables=variables)
+    if chart is not None:
+        result = replace(result, chart=chart)
+    return result
 
 
 def _iter_column_refs(variables: dict[str, Any]) -> list[str]:

@@ -5,6 +5,55 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Phase 8.5 — Stats visualisation ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-phase-8p5-stats-visualisation.md`
+
+**Backend additions**
+
+- New service subtree `services/stats/charts/` with shared `_base.py` pinning `matplotlib.use('Agg')` (server-side, headless) plus `fig_context`/`fig_to_png_bytes`/`fig_to_data_uri` helpers. Storage shape is the documented contract `{"format": "png", "data_uri": "data:image/png;base64,...", "byte_size": N}`.
+- Five pure-function chart renderers — every one a `(df, var_spec) -> dict` and every one wrapped in a `fig_context` so figures close on exception:
+  - `box_plot.py` — boxplot + strip overlay for `independent_t`, `mann_whitney`, `one_way_anova`, `kruskal_wallis`, `rm_anova` (long-form melt).
+  - `histogram.py` — single-variable histogram + KDE for the difference distribution of `paired_t` / `wilcoxon_signed`. Bonus `render_categorical_counts` for `chi_squared` / `fisher_exact` side-by-side bars.
+  - `qq_plot.py` — scipy.probplot Q-Q normality diagnostic.
+  - `scatter_plot.py` — seaborn `regplot` for `pearson` (linear), `spearman` (lowess), `linear_regression` / `multiple_linear` (first predictor) and `logistic` (first predictor). Constant-x falls back to plain scatter.
+  - `km_curve.py` — Kaplan-Meier survival curves with `add_at_risk_counts` band; reused for `cox_ph` against the first covariate.
+- Single dispatcher `select_and_render(test_key, df, variables)` in `charts/__init__.py` with a per-test_key callable map; every renderer call is wrapped in `try/except Exception` returning `None` on failure. Failures log a WARNING.
+- One-line wire-up in `services/stats/runner.run` — after the existing handler returns its `TestResult`, the dispatcher's chart dict replaces the (frozen) result via `dataclasses.replace(result, chart=...)`. Pre-Phase-6 KM "series" chart shape is fully replaced (one regression test in `test_stats_runner.py` updated to assert the new PNG shape; numerics path unchanged).
+- No new pip deps (matplotlib + seaborn already installed by pingouin in Phase 6), no migration, no schema change.
+
+**Frontend additions**
+
+- New `ChartImage.tsx` component (img + shadcn Dialog zoom + Download PNG anchor against the `data:image/png;base64,...` URI). Pure presentation, no network.
+- `AnalysisResultCard.tsx` now renders `<ChartImage>` between the numbers grid and the assumption pills. A defensive `isChartDict` type-guard ignores any malformed older chart payloads (the Phase 6 `{type, series}` shape is silently skipped at the UI boundary).
+
+**Test deltas**
+
+- Backend: **765 → 849 (+84 tests)** across `test_stats_chart_base.py` (5), `test_stats_chart_box_plot.py` (7), `test_stats_chart_histogram.py` (7), `test_stats_chart_qq_plot.py` (6), `test_stats_chart_scatter_plot.py` (5), `test_stats_chart_km_curve.py` (6), `test_stats_chart_dispatch.py` (41 — parametrised over every test_key + numerics-parity regression + monkeypatched-failure path + helper unit tests), `test_stats_chart_resilience.py` (7 — single-level group, all-NaN, constant predictor, end-to-end route persists chart, end-to-end route persists `chart=None` on simulated failure).
+- Frontend: **74 → 81 (+7 vitest)** — `ChartImage.test.tsx` (4) and `AnalysisResultCard.test.tsx` (3, covering present-chart / null-chart / malformed-chart slots).
+- All 488+ pre-existing stats route tests stay green. The single `test_kaplan_meier_known_answer` assertion was migrated from `chart["type"]` to `chart["format"]`/`chart["data_uri"]`.
+
+**Acceptance bar**
+
+- [x] Box / histogram / Q-Q / scatter / KM (Tasks 2–6) — PNG magic bytes + state-leak checks + dispatcher parametric across all 18 test keys.
+- [x] Server-side `Agg` rendering (Task 1) — pinned at the top of `_base.py`; figures closed on exception.
+- [x] Storage shape `{format, data_uri, byte_size}` (Task 7) — end-to-end verified via `/analyses/{id}/run` route test that base64-decodes the PNG header.
+- [x] Failure path (Task 8) — monkeypatched renderer raises → `result.chart is None`, numerics intact, HTTP 200, WARNING logged.
+- [x] FE renders the chart with zoom + download (Tasks 9–10) — defensive type guard at the UI boundary keeps old-shape chart payloads invisible.
+
+**Decisions / out-of-scope**
+
+- PNG-only in v1 (SVG would require ProseMirror schema work — deferred).
+- Partial regression plots for `multiple_linear` / `logistic` substituted with first-predictor scatter — deferred.
+- `icc` / `cohen_kappa` deliberately produce no chart (agreement tables work poorly as plots).
+- Task 11 (chrome-devtools-mcp E2E smoke) and Task 12's `/security-review` + tag deferred to the bundled E2E phase at the end of the autonomous run.
+
+**Seaborn quirk:** seaborn 0.13.2 emits a `PendingDeprecationWarning` from `categorical.py` about `vert: bool` deprecation in `ax.bxp`. Harmless and originates inside seaborn, not our code — surfaced in the test summary but no action needed.
+
+**Next:** Phase 8.6 — ingestion (PubMed / Crossref / RIS / BibTeX / dedup).
+
+---
+
 ## 2026-05-18 · Phase 7.5 — Meta-analysis ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-phase-7p5-meta-analysis.md`

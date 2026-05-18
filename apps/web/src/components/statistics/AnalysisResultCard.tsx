@@ -24,6 +24,7 @@ import {
 } from '@/hooks/useAnalyses'
 
 import { AssumptionPills } from './AssumptionPills'
+import { ChartImage } from './ChartImage'
 
 export function AnalysisResultCard({
   projectId,
@@ -91,6 +92,14 @@ export function AnalysisResultCard({
       {hasResult && (
         <>
           <NumbersGrid summary={summary} />
+
+          {isChartDict(result?.chart) && (
+            <ChartImage
+              chart={result!.chart as { format: 'png'; data_uri: string; byte_size: number }}
+              alt={`${TEST_LABELS[analysis.chosen_test]} chart`}
+              downloadName={`analysis-${analysis.id}-chart`}
+            />
+          )}
 
           {result?.assumptions && (
             <div className="space-y-1.5">
@@ -283,6 +292,18 @@ function variableSummary(vars: Record<string, unknown>): string {
     })
     .filter(Boolean)
     .join(' · ')
+}
+
+function isChartDict(
+  chart: unknown,
+): chart is { format: 'png'; data_uri: string; byte_size: number } {
+  if (!chart || typeof chart !== 'object') return false
+  const c = chart as Record<string, unknown>
+  return (
+    c.format === 'png' &&
+    typeof c.data_uri === 'string' &&
+    c.data_uri.startsWith('data:image/png;base64,')
+  )
 }
 
 function asNumber(v: unknown): number | null {
