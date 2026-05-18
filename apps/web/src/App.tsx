@@ -5,6 +5,7 @@ import { Toaster } from 'sonner'
 import { AppShell } from '@/components/layout/AppShell'
 import { queryClient } from '@/lib/query'
 import CompilePage from '@/routes/CompilePage'
+import ConsortPage from '@/routes/ConsortPage'
 import DashboardPage from '@/routes/DashboardPage'
 import HealthPage from '@/routes/HealthPage'
 import LibraryPage from '@/routes/LibraryPage'
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="compile" element={<CompilePage />} />
             <Route path="manuscript" element={<ManuscriptPage />} />
             <Route path="review" element={<SystematicReviewPage />} />
+            <Route path="consort" element={<ConsortPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="health" element={<HealthPage />} />

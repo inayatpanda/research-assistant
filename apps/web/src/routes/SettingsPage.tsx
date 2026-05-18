@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ExportCard } from '@/components/settings/ExportCard'
 import { HealthLink } from '@/components/settings/HealthLink'
 import { ImportDropzone } from '@/components/settings/ImportDropzone'
+import { JournalTemplateCard } from '@/components/settings/JournalTemplateCard'
 import { StorageCard } from '@/components/settings/StorageCard'
 import { metaApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -72,6 +73,8 @@ export default function SettingsPage() {
       </Card>
 
       <StorageCard health={data} />
+
+      {projectId && <JournalTemplateCard projectId={projectId} />}
 
       {projectId ? (
         <ExportCard projectId={projectId} />

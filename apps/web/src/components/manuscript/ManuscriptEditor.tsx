@@ -1,5 +1,9 @@
 import CharacterCount from '@tiptap/extension-character-count'
 import Placeholder from '@tiptap/extension-placeholder'
+import { Table } from '@tiptap/extension-table'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableRow } from '@tiptap/extension-table-row'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useMemo } from 'react'
@@ -10,6 +14,7 @@ import { articlesApi, type ManuscriptSectionName } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 
 import { Citation } from '@/lib/tiptap/extensions/Citation'
+import { Figure } from '@/lib/tiptap/extensions/Figure'
 import { numberCitationsFromHtml } from '@/lib/tiptap/citationEngine'
 import { useCitationNumbers } from '@/lib/tiptap/citationNumbers'
 
@@ -20,10 +25,12 @@ export function ManuscriptEditor({
   projectId,
   section,
   onWordsChange,
+  onEditorReady,
 }: {
   projectId: string
   section: ManuscriptSectionName
   onWordsChange?: (n: number) => void
+  onEditorReady?: (editor: ReturnType<typeof useEditor>) => void
 }) {
   const { html, setHtml, loading } = useManuscript(projectId, section)
   const setMap = useCitationNumbers((s) => s.setMap)
@@ -45,6 +52,11 @@ export function ManuscriptEditor({
         }),
         CharacterCount.configure({ limit: 200_000 }),
         Citation,
+        Figure,
+        Table.configure({ resizable: true, HTMLAttributes: { class: 'rma-table' } }),
+        TableRow,
+        TableHeader,
+        TableCell,
       ],
       content: html,
       onUpdate: ({ editor: ed }) => {
@@ -64,6 +76,12 @@ export function ManuscriptEditor({
     },
     [projectId, section],
   )
+
+  // Surface the editor to parent for figure-insert / table-insert toolbars.
+  useEffect(() => {
+    if (!editor) return
+    onEditorReady?.(editor)
+  }, [editor, onEditorReady])
 
   // When the loaded HTML arrives (or section changes), push into the editor.
   // Depends on `html` because cached query data means `loading` may never flip.

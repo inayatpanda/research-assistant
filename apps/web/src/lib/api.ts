@@ -40,6 +40,7 @@ export const ProjectSchema = z.object({
   target_journal: z.string().nullable(),
   prospero_number: z.string().nullable(),
   clinicaltrials_number: z.string().nullable(),
+  template_journal: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -55,6 +56,7 @@ export const ProjectCreateSchema = z.object({
     'Prospective Cohort',
     'Retrospective Case Series',
     'Systematic Review',
+    'Randomised Controlled Trial',
   ]),
   citation_style: PersistedCitationStyleSchema.optional(),
   ai_provider: z.enum(['gemini', 'claude', 'openai']).optional(),
@@ -71,6 +73,7 @@ export const ProjectUpdateSchema = z.object({
   target_journal: z.string().nullable().optional(),
   prospero_number: z.string().nullable().optional(),
   clinicaltrials_number: z.string().nullable().optional(),
+  template_journal: z.string().nullable().optional(),
 })
 export type ProjectUpdate = z.infer<typeof ProjectUpdateSchema>
 
@@ -1669,4 +1672,130 @@ export const ingestApi = {
 export const __internal = {
   parseContentDispositionFilename,
   triggerBlobDownload,
+}
+
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 8.7 — Figures, CONSORT, Journal templates
+// ──────────────────────────────────────────────────────────────────────
+
+export const ImageMimeSchema = z.enum(['image/png', 'image/jpeg', 'image/svg+xml'])
+export type ImageMime = z.infer<typeof ImageMimeSchema>
+
+export const FigureSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  figure_number: z.number().int(),
+  caption: z.string(),
+  alt_text: z.string(),
+  file_type: ImageMimeSchema,
+  width_px: z.number().int().nullable(),
+  height_px: z.number().int().nullable(),
+  byte_size: z.number().int(),
+  file_url: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type Figure = z.infer<typeof FigureSchema>
+
+export const figuresApi = {
+  list: async (projectId: string): Promise<Figure[]> => {
+    const r = await api.get(`/api/projects/${projectId}/figures`)
+    return z.array(FigureSchema).parse(r.data)
+  },
+  upload: async (projectId: string, file: File): Promise<Figure> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const r = await api.post(`/api/projects/${projectId}/figures`, fd)
+    return FigureSchema.parse(r.data)
+  },
+  get: async (figureId: string): Promise<Figure> => {
+    const r = await api.get(`/api/figures/${figureId}`)
+    return FigureSchema.parse(r.data)
+  },
+  patch: async (
+    figureId: string,
+    body: { caption?: string; alt_text?: string },
+  ): Promise<Figure> => {
+    const r = await api.patch(`/api/figures/${figureId}`, body)
+    return FigureSchema.parse(r.data)
+  },
+  reorder: async (projectId: string, orderedIds: string[]): Promise<Figure[]> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/figures/reorder`,
+      { ordered_figure_ids: orderedIds },
+    )
+    return z.array(FigureSchema).parse(r.data)
+  },
+  remove: async (figureId: string): Promise<void> => {
+    await api.delete(`/api/figures/${figureId}`)
+  },
+}
+
+export const ConsortDataSchema = z.object({
+  enrollment_assessed: z.number().int().nullable().optional(),
+  enrollment_excluded: z.number().int().nullable().optional(),
+  enrollment_excluded_reasons: z.record(z.string(), z.number().int()).nullable().optional(),
+  randomised: z.number().int().nullable().optional(),
+  allocated_intervention: z.number().int().nullable().optional(),
+  allocated_control: z.number().int().nullable().optional(),
+  intervention_received: z.number().int().nullable().optional(),
+  control_received: z.number().int().nullable().optional(),
+  intervention_lost_followup: z.number().int().nullable().optional(),
+  control_lost_followup: z.number().int().nullable().optional(),
+  intervention_discontinued: z.number().int().nullable().optional(),
+  control_discontinued: z.number().int().nullable().optional(),
+  intervention_analysed: z.number().int().nullable().optional(),
+  control_analysed: z.number().int().nullable().optional(),
+})
+export type ConsortDataPayload = z.infer<typeof ConsortDataSchema>
+
+export const ConsortReadSchema = ConsortDataSchema.extend({
+  id: z.string(),
+  project_id: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type ConsortRead = z.infer<typeof ConsortReadSchema>
+
+export const ConsortGetResponseSchema = z.object({
+  data: ConsortReadSchema,
+  warnings: z.array(z.string()),
+  svg_base64: z.string(),
+})
+export type ConsortGetResponse = z.infer<typeof ConsortGetResponseSchema>
+
+export const consortApi = {
+  get: async (projectId: string): Promise<ConsortGetResponse> => {
+    const r = await api.get(`/api/projects/${projectId}/consort`)
+    return ConsortGetResponseSchema.parse(r.data)
+  },
+  patch: async (projectId: string, body: ConsortDataPayload): Promise<ConsortGetResponse> => {
+    const r = await api.patch(`/api/projects/${projectId}/consort`, body)
+    return ConsortGetResponseSchema.parse(r.data)
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(`/api/projects/${projectId}/consort/push`)
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const JournalTemplateSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  max_total_words: z.number().int(),
+  max_words_by_section: z.record(z.string(), z.number().int()),
+  required_sections: z.array(z.string()),
+  structured_abstract: z.boolean(),
+  reference_style: z.enum(['vancouver', 'apa', 'harvard']),
+  max_figures: z.number().int().nullable().optional(),
+  max_tables: z.number().int().nullable().optional(),
+})
+export type JournalTemplate = z.infer<typeof JournalTemplateSchema>
+
+export const journalTemplatesApi = {
+  list: async (): Promise<JournalTemplate[]> => {
+    const r = await api.get('/api/journal-templates')
+    return z.array(JournalTemplateSchema).parse(r.data)
+  },
 }

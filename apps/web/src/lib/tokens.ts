@@ -22,6 +22,7 @@ export const studyTypes = [
   'Prospective Cohort',
   'Retrospective Case Series',
   'Systematic Review',
+  'Randomised Controlled Trial',
 ] as const
 export type StudyType = (typeof studyTypes)[number]
 

@@ -113,6 +113,9 @@ from .ingest import (
     PubMedSearchRequest,
 )
 from .upload import ExtractionSource, UploadResponse
+from .figure import FigureRead, FigureReorderRequest, FigureUpdate, ImageMime
+from .consort import ConsortData, ConsortGetResponse, ConsortRead
+from .journal_template import JournalTemplate, ReferenceStyle
 
 __all__ = [
     "ProjectCreate",
@@ -208,4 +211,13 @@ __all__ = [
     "BundleExportRequest",
     "BundleImportResponse",
     "ExportFormat",
+    "FigureRead",
+    "FigureReorderRequest",
+    "FigureUpdate",
+    "ImageMime",
+    "ConsortData",
+    "ConsortGetResponse",
+    "ConsortRead",
+    "JournalTemplate",
+    "ReferenceStyle",
 ]

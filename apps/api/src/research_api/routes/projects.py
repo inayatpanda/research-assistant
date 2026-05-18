@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..container import Container, get_container
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from ..services.journal_templates.catalogue import get_template
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -60,6 +61,16 @@ async def update_project(
     session: AsyncSession = Depends(_session),
     user_id: str = Depends(_user_id),
 ) -> ProjectRead:
+    # Phase 8.7 — `template_journal`, if not None, must reference a known
+    # catalogue entry. None clears the template.
+    fields = patch.model_dump(exclude_unset=True)
+    if "template_journal" in fields:
+        key = fields["template_journal"]
+        if key is not None and get_template(key) is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown journal template key: {key!r}",
+            )
     repo = SqliteProjectRepository(session)
     updated = await repo.update(project_id, patch, user_id)
     if updated is None:

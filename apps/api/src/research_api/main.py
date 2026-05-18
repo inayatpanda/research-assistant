@@ -7,11 +7,14 @@ from .routes.analyses import router as analyses_router
 from .routes.articles import router as articles_router
 from .routes.compilation import router as compilation_router
 from .routes.datasets import router as datasets_router
+from .routes.consort import router as consort_router
 from .routes.export import router as export_router
+from .routes.figures import router as figures_router
 from .routes.files import router as files_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
 from .routes.ingest import router as ingest_router
+from .routes.journal_templates import router as journal_templates_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
 from .routes.projects import router as projects_router
@@ -46,3 +49,6 @@ app.include_router(analyses_router, prefix="/api")
 app.include_router(reviews_router, prefix="/api")
 app.include_router(reviews_meta_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
+app.include_router(figures_router, prefix="/api")
+app.include_router(consort_router, prefix="/api")
+app.include_router(journal_templates_router, prefix="/api")

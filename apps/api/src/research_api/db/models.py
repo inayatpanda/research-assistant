@@ -25,6 +25,9 @@ class Project(Base):
     target_journal: Mapped[str | None] = mapped_column(Text, nullable=True)
     prospero_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     clinicaltrials_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Phase 8.7 — Journal template key from the server-side catalogue
+    # (services/journal_templates/catalogue.py). Null = no template selected.
+    template_journal: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -493,6 +496,94 @@ class MetaInput(Base):
     # Correlation (r)
     r: Mapped[float | None] = mapped_column(Float, nullable=True)
     n_r: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Figure(Base):
+    """Phase 8.7 — researcher-uploaded figure (PNG/JPEG/SVG).
+
+    figure_number is 1-based ordinal within the (project_id, user_id) scope;
+    repository maintains contiguity on reorder/delete via a two-step UPDATE
+    that first offsets all rows by +1000 to dodge the UNIQUE constraint.
+    """
+
+    __tablename__ = "figures"
+    __table_args__ = (
+        Index("ix_figures_user_id", "user_id"),
+        Index("ix_figures_project", "project_id"),
+        Index(
+            "uq_figures_project_user_number",
+            "project_id", "user_id", "figure_number",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    file_ref: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    file_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    figure_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    caption: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    alt_text: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    width_px: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height_px: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ConsortData(Base):
+    """Phase 8.7 — CONSORT 2010 flow counters; one row per (project, user)."""
+
+    __tablename__ = "consort_data"
+    __table_args__ = (
+        Index("ix_consort_user_id", "user_id"),
+        Index(
+            "uq_consort_project_user",
+            "project_id", "user_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+
+    enrollment_assessed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    enrollment_excluded: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    enrollment_excluded_reasons: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    randomised: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allocated_intervention: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allocated_control: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intervention_received: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    control_received: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intervention_lost_followup: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    control_lost_followup: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intervention_discontinued: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    control_discontinued: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intervention_analysed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    control_analysed: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

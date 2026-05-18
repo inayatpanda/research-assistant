@@ -11,6 +11,7 @@ StudyType = Literal[
     "Prospective Cohort",
     "Retrospective Case Series",
     "Systematic Review",
+    "Randomised Controlled Trial",
 ]
 
 CitationStyle = Literal["vancouver", "apa", "harvard"]
@@ -25,6 +26,7 @@ class ProjectCreate(BaseModel):
     target_journal: str | None = None
     prospero_number: str | None = None
     clinicaltrials_number: str | None = None
+    template_journal: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -35,6 +37,8 @@ class ProjectUpdate(BaseModel):
     target_journal: str | None = None
     prospero_number: str | None = None
     clinicaltrials_number: str | None = None
+    # `template_journal` may be unset, explicit-null (to clear), or a catalogue key.
+    template_journal: str | None = None
 
 
 class ProjectRead(BaseModel):
@@ -49,5 +53,6 @@ class ProjectRead(BaseModel):
     target_journal: str | None
     prospero_number: str | None
     clinicaltrials_number: str | None
+    template_journal: str | None = None
     created_at: datetime
     updated_at: datetime

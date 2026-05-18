@@ -585,6 +585,8 @@ _BLOCK_TAG_BY_CLASS: dict[str, str] = {
     "rob-traffic-light-table": "table",
     "extraction-table": "table",
     "meta-analysis-forest": "figure",
+    # Phase 8.7 — CONSORT 2010 flow diagram (pushed by routes/consort.py).
+    "consort-flow": "figure",
 }
 
 

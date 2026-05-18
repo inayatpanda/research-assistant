@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import type { Editor } from '@tiptap/react'
 
 import { BibliographyPanel } from '@/components/bibliography/BibliographyPanel'
+import { FiguresPanel } from '@/components/figures/FiguresPanel'
 import { AbbreviationsPanel } from '@/components/manuscript/AbbreviationsPanel'
 import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView'
+import { JournalChip } from '@/components/manuscript/JournalChip'
 import { ManuscriptEditor } from '@/components/manuscript/ManuscriptEditor'
 import { ReferenceIntegrityPanel } from '@/components/manuscript/ReferenceIntegrityPanel'
 import {
@@ -82,6 +85,7 @@ function ManuscriptInner({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.get(projectId),
   })
+  const [editor, setEditor] = useState<Editor | null>(null)
 
   // Word counts per section for the tab badges
   const sectionQueries = SECTIONS.map((s) =>
@@ -115,8 +119,11 @@ function ManuscriptInner({
     >
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="px-6 py-3 border-b border-border">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-            Manuscript · {project?.title ?? 'Loading…'}
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+              Manuscript · {project?.title ?? 'Loading…'}
+            </div>
+            <JournalChip templateKey={project?.template_journal ?? null} />
           </div>
           <h1 className="mt-0.5 text-[18px] font-semibold tracking-tight">
             {isFinal ? 'Final Manuscript' : tab}
@@ -133,6 +140,7 @@ function ManuscriptInner({
             projectId={projectId}
             section={tab as ManuscriptSectionName}
             onWordsChange={setSectionWords}
+            onEditorReady={setEditor}
           />
         )}
 
@@ -142,11 +150,14 @@ function ManuscriptInner({
             totalWords={total}
             saving={false}
             savedAt={activeSavedAt}
+            templateKey={project?.template_journal ?? null}
+            activeSectionName={tab as string}
           />
         )}
       </div>
 
       <aside className="hidden xl:flex shrink-0 w-[340px] flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
+        <FiguresPanel projectId={projectId} editor={editor} />
         <BibliographyPanel projectId={projectId} />
         <ReferenceIntegrityPanel projectId={projectId} />
         <AbbreviationsPanel projectId={projectId} />
