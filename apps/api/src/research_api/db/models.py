@@ -106,6 +106,7 @@ class Article(Base):
     file_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     file_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
     study_design: Mapped[str | None] = mapped_column(String(64), nullable=True)
     review_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     exclusion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -252,4 +253,150 @@ class AnalysisResult(Base):
     ai_interpretation: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+    __table_args__ = (
+        Index("uq_reviews_project_user", "project_id", "user_id", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    pico_population: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pico_intervention: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pico_comparator: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pico_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+    eligibility_inclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    eligibility_exclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class SearchRecord(Base):
+    __tablename__ = "search_records"
+    __table_args__ = (
+        Index("ix_search_records_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    database_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    query_string: Mapped[str] = mapped_column(Text, nullable=False)
+    date_searched: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    n_results: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ScreeningRecord(Base):
+    __tablename__ = "screening_records"
+    __table_args__ = (
+        Index(
+            "uq_screening_review_article_stage",
+            "review_id", "article_id", "stage",
+            unique=True,
+        ),
+        Index("ix_screening_review_stage", "review_id", "stage"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    stage: Mapped[str] = mapped_column(String(16), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    exclusion_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ai_suggestion: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RobAssessment(Base):
+    __tablename__ = "rob_assessments"
+    __table_args__ = (
+        Index(
+            "uq_rob_review_article_tool",
+            "review_id", "article_id", "tool",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    tool: Mapped[str] = mapped_column(String(16), nullable=False)
+    domain_answers: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    overall_auto: Mapped[str] = mapped_column(String(16), nullable=False)
+    overall_override: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ExtractionRecord(Base):
+    __tablename__ = "extraction_records"
+    __table_args__ = (
+        Index(
+            "uq_extraction_review_article",
+            "review_id", "article_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    fields: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
