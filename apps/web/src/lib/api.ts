@@ -705,3 +705,477 @@ export const analysesApi = {
     await api.delete(`/api/projects/${projectId}/analyses/${analysisId}`)
   },
 }
+
+// --- Reviews (Systematic Review) ---
+
+export const ReviewStageSchema = z.enum(['title_abstract', 'full_text'])
+export type ReviewStage = z.infer<typeof ReviewStageSchema>
+
+export const ScreeningDecisionSchema = z.enum([
+  'pending',
+  'include',
+  'exclude',
+  'maybe',
+])
+export type ScreeningDecision = z.infer<typeof ScreeningDecisionSchema>
+
+export const ExclusionCategorySchema = z.enum([
+  'population',
+  'intervention',
+  'outcome',
+  'study_design',
+  'language',
+  'duplicate',
+  'other',
+])
+export type ExclusionCategory = z.infer<typeof ExclusionCategorySchema>
+
+export const RoBToolSchema = z.enum(['rob2', 'robins_i', 'nos', 'amstar2'])
+export type RoBTool = z.infer<typeof RoBToolSchema>
+
+export const RoBJudgementSchema = z.enum([
+  'low',
+  'some_concerns',
+  'high',
+  'critical',
+  'unclear',
+])
+export type RoBJudgement = z.infer<typeof RoBJudgementSchema>
+
+export const DatabaseNameSchema = z.enum([
+  'PubMed',
+  'Embase',
+  'Cochrane',
+  'Scopus',
+  'Web of Science',
+  'Google Scholar',
+  'Other',
+])
+export type DatabaseName = z.infer<typeof DatabaseNameSchema>
+
+export const ROB_TOOL_LABELS: Record<RoBTool, string> = {
+  rob2: 'RoB 2 (RCTs)',
+  robins_i: 'ROBINS-I (non-randomised)',
+  nos: 'Newcastle-Ottawa (cohort)',
+  amstar2: 'AMSTAR-2 (reviews)',
+}
+
+export const ROB_JUDGEMENT_LABELS: Record<RoBJudgement, string> = {
+  low: 'Low',
+  some_concerns: 'Some concerns',
+  high: 'High',
+  critical: 'Critical',
+  unclear: 'Unclear',
+}
+
+export const EXCLUSION_CATEGORY_LABELS: Record<ExclusionCategory, string> = {
+  population: 'Wrong population',
+  intervention: 'Wrong intervention',
+  outcome: 'Wrong outcome',
+  study_design: 'Wrong study design',
+  language: 'Language',
+  duplicate: 'Duplicate',
+  other: 'Other',
+}
+
+export const SCREENING_DECISION_LABELS: Record<ScreeningDecision, string> = {
+  pending: 'Pending',
+  include: 'Include',
+  exclude: 'Exclude',
+  maybe: 'Maybe',
+}
+
+// Review (PICO + eligibility)
+
+export const ReviewSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  pico_population: z.string().nullable(),
+  pico_intervention: z.string().nullable(),
+  pico_comparator: z.string().nullable(),
+  pico_outcome: z.string().nullable(),
+  eligibility_inclusion: z.string().nullable(),
+  eligibility_exclusion: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type Review = z.infer<typeof ReviewSchema>
+
+export const ReviewUpdateSchema = z.object({
+  pico_population: z.string().nullable().optional(),
+  pico_intervention: z.string().nullable().optional(),
+  pico_comparator: z.string().nullable().optional(),
+  pico_outcome: z.string().nullable().optional(),
+  eligibility_inclusion: z.string().nullable().optional(),
+  eligibility_exclusion: z.string().nullable().optional(),
+})
+export type ReviewUpdate = z.infer<typeof ReviewUpdateSchema>
+
+// Search records
+
+export const SearchRecordSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  database_name: z.string(),
+  query_string: z.string(),
+  date_searched: z.string(),
+  n_results: z.number().int(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+})
+export type SearchRecord = z.infer<typeof SearchRecordSchema>
+
+export type SearchRecordCreate = {
+  database_name: DatabaseName
+  query_string: string
+  date_searched: string // ISO datetime
+  n_results: number
+  notes?: string | null
+}
+
+export type SearchRecordUpdate = {
+  database_name?: DatabaseName
+  query_string?: string
+  date_searched?: string
+  n_results?: number
+  notes?: string | null
+}
+
+// Screening
+
+export const ScreeningRecordSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  article_id: z.string(),
+  stage: z.string(),
+  decision: z.string(),
+  exclusion_category: z.string().nullable(),
+  reason: z.string().nullable(),
+  reviewer_id: z.string().nullable(),
+  ai_suggestion: z.record(z.string(), z.any()).nullable(),
+  decided_at: z.string().nullable(),
+  created_at: z.string(),
+})
+export type ScreeningRecord = z.infer<typeof ScreeningRecordSchema>
+
+export type ScreeningRecordCreate = {
+  article_id: string
+  stage: ReviewStage
+  decision?: ScreeningDecision
+  exclusion_category?: ExclusionCategory | null
+  reason?: string | null
+}
+
+export type ScreeningRecordUpdate = {
+  decision?: ScreeningDecision
+  exclusion_category?: ExclusionCategory | null
+  reason?: string | null
+}
+
+export const AIScreeningSuggestResponseSchema = z.object({
+  vote: ScreeningDecisionSchema,
+  reason: z.string(),
+  model: z.string(),
+})
+export type AIScreeningSuggestResponse = z.infer<
+  typeof AIScreeningSuggestResponseSchema
+>
+
+// RoB
+
+export const RoBDomainSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  question: z.string(),
+  answers: z.array(z.string()),
+  critical: z.boolean(),
+})
+export type RoBDomain = z.infer<typeof RoBDomainSchema>
+
+export const RoBToolDefSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  applies_to: z.array(z.string()),
+  domains: z.array(RoBDomainSchema),
+})
+export type RoBToolDef = z.infer<typeof RoBToolDefSchema>
+
+export const RoBAssessmentSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  article_id: z.string(),
+  tool: z.string(),
+  domain_answers: z.record(z.string(), z.string()),
+  overall_auto: z.string(),
+  overall_override: z.string().nullable(),
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type RoBAssessment = z.infer<typeof RoBAssessmentSchema>
+
+export type RoBAssessmentCreate = {
+  article_id: string
+  tool: RoBTool
+  domain_answers: Record<string, string>
+  notes?: string | null
+}
+
+export type RoBAssessmentUpdate = {
+  domain_answers?: Record<string, string>
+  overall_override?: RoBJudgement | null
+  notes?: string | null
+}
+
+// Extraction
+
+export const ExtractionFieldTypeSchema = z.enum([
+  'text',
+  'number',
+  'enum',
+  'list',
+])
+export type ExtractionFieldType = z.infer<typeof ExtractionFieldTypeSchema>
+
+export const ExtractionFieldSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: ExtractionFieldTypeSchema,
+  required: z.boolean(),
+  choices: z.array(z.string()).nullable(),
+  allow_negative: z.boolean().optional().default(false),
+})
+export type ExtractionField = z.infer<typeof ExtractionFieldSchema>
+
+export const ExtractionFieldGroupSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  fields: z.array(ExtractionFieldSchema),
+})
+export type ExtractionFieldGroup = z.infer<typeof ExtractionFieldGroupSchema>
+
+export const ExtractionRecordSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  article_id: z.string(),
+  fields: z.record(z.string(), z.any()),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type ExtractionRecord = z.infer<typeof ExtractionRecordSchema>
+
+export type ExtractionRecordCreate = {
+  article_id: string
+  fields: Record<string, unknown>
+}
+
+export type ExtractionRecordUpdate = {
+  fields: Record<string, unknown>
+}
+
+// PRISMA
+
+export const PrismaCountsSchema = z.object({
+  identified: z.number().int(),
+  after_dedupe: z.number().int(),
+  screened: z.number().int(),
+  excluded_title: z.number().int(),
+  full_text_assessed: z.number().int(),
+  excluded_full: z.record(z.string(), z.number().int()),
+  included: z.number().int(),
+})
+export type PrismaCounts = z.infer<typeof PrismaCountsSchema>
+
+export const PrismaResponseSchema = z.object({
+  counts: PrismaCountsSchema,
+  svg: z.string(),
+})
+export type PrismaResponse = z.infer<typeof PrismaResponseSchema>
+
+// API namespaces
+
+export const reviewsApi = {
+  get: async (projectId: string): Promise<Review> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews`)
+    return ReviewSchema.parse(r.data)
+  },
+  patch: async (projectId: string, body: ReviewUpdate): Promise<Review> => {
+    const r = await api.patch(`/api/projects/${projectId}/reviews`, body)
+    return ReviewSchema.parse(r.data)
+  },
+  prisma: async (projectId: string): Promise<PrismaResponse> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/prisma`)
+    return PrismaResponseSchema.parse(r.data)
+  },
+  pushPrisma: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/prisma/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const searchApi = {
+  list: async (projectId: string): Promise<SearchRecord[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/search`)
+    return z.array(SearchRecordSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: SearchRecordCreate,
+  ): Promise<SearchRecord> => {
+    const r = await api.post(`/api/projects/${projectId}/reviews/search`, body)
+    return SearchRecordSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    searchId: string,
+    body: SearchRecordUpdate,
+  ): Promise<SearchRecord> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/search/${searchId}`,
+      body,
+    )
+    return SearchRecordSchema.parse(r.data)
+  },
+  remove: async (projectId: string, searchId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/reviews/search/${searchId}`)
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/search/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const screeningApi = {
+  list: async (
+    projectId: string,
+    stage?: ReviewStage,
+  ): Promise<ScreeningRecord[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/screening`, {
+      params: stage ? { stage } : undefined,
+    })
+    return z.array(ScreeningRecordSchema).parse(r.data)
+  },
+  upsert: async (
+    projectId: string,
+    body: ScreeningRecordCreate,
+  ): Promise<ScreeningRecord> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/screening`,
+      body,
+    )
+    return ScreeningRecordSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    screeningId: string,
+    body: ScreeningRecordUpdate,
+  ): Promise<ScreeningRecord> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/screening/${screeningId}`,
+      body,
+    )
+    return ScreeningRecordSchema.parse(r.data)
+  },
+  remove: async (projectId: string, screeningId: string): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/reviews/screening/${screeningId}`,
+    )
+  },
+  aiSuggest: async (
+    projectId: string,
+    screeningId: string,
+  ): Promise<AIScreeningSuggestResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/screening/${screeningId}/ai-suggest`,
+      {},
+      { timeout: 60_000 },
+    )
+    return AIScreeningSuggestResponseSchema.parse(r.data)
+  },
+}
+
+export const robApi = {
+  tools: async (projectId: string): Promise<RoBToolDef[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/rob/tools`)
+    return z.array(RoBToolDefSchema).parse(r.data)
+  },
+  list: async (projectId: string): Promise<RoBAssessment[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/rob`)
+    return z.array(RoBAssessmentSchema).parse(r.data)
+  },
+  upsert: async (
+    projectId: string,
+    body: RoBAssessmentCreate,
+  ): Promise<RoBAssessment> => {
+    const r = await api.post(`/api/projects/${projectId}/reviews/rob`, body)
+    return RoBAssessmentSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    robId: string,
+    body: RoBAssessmentUpdate,
+  ): Promise<RoBAssessment> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/rob/${robId}`,
+      body,
+    )
+    return RoBAssessmentSchema.parse(r.data)
+  },
+  remove: async (projectId: string, robId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/reviews/rob/${robId}`)
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(`/api/projects/${projectId}/reviews/rob/push`, {})
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const extractionApi = {
+  schema: async (projectId: string): Promise<ExtractionFieldGroup[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/reviews/extraction/schema`,
+    )
+    return z.array(ExtractionFieldGroupSchema).parse(r.data)
+  },
+  list: async (projectId: string): Promise<ExtractionRecord[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/extraction`)
+    return z.array(ExtractionRecordSchema).parse(r.data)
+  },
+  upsert: async (
+    projectId: string,
+    body: ExtractionRecordCreate,
+  ): Promise<ExtractionRecord> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/extraction`,
+      body,
+    )
+    return ExtractionRecordSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    extId: string,
+    body: ExtractionRecordUpdate,
+  ): Promise<ExtractionRecord> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/extraction/${extId}`,
+      body,
+    )
+    return ExtractionRecordSchema.parse(r.data)
+  },
+  remove: async (projectId: string, extId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/reviews/extraction/${extId}`)
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/extraction/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}

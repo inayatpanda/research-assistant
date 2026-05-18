@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardList,
   FileText,
   Layers,
   Library,
@@ -21,6 +22,7 @@ export const navItems: NavItem[] = [
   { to: '/reader',     label: 'Reader',     icon: FileText },
   { to: '/compile',    label: 'Compile',    icon: Layers },
   { to: '/manuscript', label: 'Manuscript', icon: PenLine },
+  { to: '/review',     label: 'Review',     icon: ClipboardList },
   { to: '/statistics', label: 'Statistics', icon: BarChart3 },
   { to: '/settings',   label: 'Settings',   icon: SettingsIcon },
 ]

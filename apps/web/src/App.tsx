@@ -11,6 +11,7 @@ import ManuscriptPage from '@/routes/ManuscriptPage'
 import ReaderPage from '@/routes/ReaderPage'
 import SettingsPage from '@/routes/SettingsPage'
 import StatisticsPage from '@/routes/StatisticsPage'
+import SystematicReviewPage from '@/routes/SystematicReviewPage'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="reader/:articleId" element={<ReaderPage />} />
             <Route path="compile" element={<CompilePage />} />
             <Route path="manuscript" element={<ManuscriptPage />} />
+            <Route path="review" element={<SystematicReviewPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
