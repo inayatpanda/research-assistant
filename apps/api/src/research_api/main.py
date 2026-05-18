@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .container import get_container
 from .routes.abbreviations import router as abbreviations_router
+from .routes.analyses import router as analyses_router
 from .routes.articles import router as articles_router
 from .routes.compilation import router as compilation_router
+from .routes.datasets import router as datasets_router
 from .routes.files import router as files_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
@@ -34,3 +36,5 @@ app.include_router(compilation_router, prefix="/api")
 app.include_router(manuscript_sections_router, prefix="/api")
 app.include_router(abbreviations_router, prefix="/api")
 app.include_router(writing_router, prefix="/api")
+app.include_router(datasets_router, prefix="/api")
+app.include_router(analyses_router, prefix="/api")
