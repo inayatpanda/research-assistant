@@ -4,10 +4,15 @@ import { Library as LibraryIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+import { AddByDoiInline } from '@/components/library/AddByDoiInline'
 import { ArticleFilters } from '@/components/library/ArticleFilters'
 import { ArticleListItem } from '@/components/library/ArticleListItem'
+import { DuplicatesPanel } from '@/components/library/DuplicatesPanel'
+import { ImportPreviewDialog } from '@/components/library/ImportPreviewDialog'
 import { MetadataConfirmDialog } from '@/components/library/MetadataConfirmDialog'
 import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
+import { PubMedSearchDialog } from '@/components/library/PubMedSearchDialog'
+import { RisBibtexDropzone } from '@/components/library/RisBibtexDropzone'
 import { UploadZone } from '@/components/library/UploadZone'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -15,6 +20,7 @@ import {
   projectsApi,
   type Article,
   type ArticleFilters as Filters,
+  type ArticleMetadata,
   type UploadResponse,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -24,6 +30,7 @@ export default function LibraryPage() {
   const projectId = useActiveProject((s) => s.projectId)
   const [filters, setFilters] = useState<Filters>({ sort: 'created_desc' })
   const [editing, setEditing] = useState<Article | null>(null)
+  const [doiPreview, setDoiPreview] = useState<ArticleMetadata | null>(null)
   const qc = useQueryClient()
 
   const { data: project } = useQuery({
@@ -76,7 +83,26 @@ export default function LibraryPage() {
         </div>
       </header>
 
+      <div className="grid gap-3 md:grid-cols-3">
+        <AddByDoiInline
+          projectId={projectId}
+          onResult={(meta) => setDoiPreview(meta)}
+        />
+        <div className="rounded-lg border border-border bg-white/40 p-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-medium">Search PubMed</div>
+            <div className="text-[11px] text-muted-foreground">
+              NCBI E-utilities · preview before import
+            </div>
+          </div>
+          <PubMedSearchDialog projectId={projectId} />
+        </div>
+        <RisBibtexDropzone projectId={projectId} />
+      </div>
+
       <UploadZone projectId={projectId} onUploaded={onUploaded} />
+
+      <DuplicatesPanel projectId={projectId} />
 
       <section className="space-y-4">
         <ArticleFilters value={filters} onChange={setFilters} />
@@ -123,6 +149,17 @@ export default function LibraryPage() {
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(null)}
       />
+
+      {doiPreview && (
+        <ImportPreviewDialog
+          projectId={projectId}
+          open={!!doiPreview}
+          items={[doiPreview]}
+          onOpenChange={(o) => {
+            if (!o) setDoiPreview(null)
+          }}
+        />
+      )}
     </motion.div>
   )
 }

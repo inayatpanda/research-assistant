@@ -131,6 +131,17 @@ export type ReviewStatus = z.infer<typeof ReviewStatusSchema>
 export const ArticleSortSchema = z.enum(['created_desc', 'year_desc', 'year_asc', 'title'])
 export type ArticleSort = z.infer<typeof ArticleSortSchema>
 
+/** Provenance of an Article row. Phase 8.6 — every ingest surface stamps a value. */
+export const ArticleSourceSchema = z.enum([
+  'upload',
+  'doi',
+  'pubmed',
+  'ris',
+  'bibtex',
+  'manual',
+])
+export type ArticleSource = z.infer<typeof ArticleSourceSchema>
+
 export const ArticleSchema = z.object({
   id: z.string(),
   user_id: z.string(),
@@ -143,12 +154,15 @@ export const ArticleSchema = z.object({
   issue: z.string().nullable(),
   pages: z.string().nullable(),
   doi: z.string().nullable(),
+  pmid: z.string().nullable().optional(),
   file_ref: StorageRefSchema.nullable(),
   file_type: z.string().nullable(),
+  abstract: z.string().nullable().optional(),
   study_design: z.string().nullable(),
   review_status: ReviewStatusSchema,
   exclusion_reason: z.string().nullable(),
   conflict_of_interest: z.string().nullable(),
+  source: ArticleSourceSchema.default('upload'),
   created_at: z.string(),
   file_url: z.string().nullable().optional(),
 })
@@ -1531,6 +1545,123 @@ export const metaAnalysisApi = {
     await api.delete(
       `/api/projects/${projectId}/reviews/meta/${metaId}/inputs/${inputId}`,
     )
+  },
+}
+
+// --- Ingest (Phase 8.6) ---
+
+export const ArticleMetadataSchema = z.object({
+  title: z.string(),
+  authors: z.array(z.string()).default([]),
+  journal: z.string().nullable().optional(),
+  year: z.number().int().nullable().optional(),
+  volume: z.string().nullable().optional(),
+  issue: z.string().nullable().optional(),
+  pages: z.string().nullable().optional(),
+  doi: z.string().nullable().optional(),
+  pmid: z.string().nullable().optional(),
+  abstract: z.string().nullable().optional(),
+  source: ArticleSourceSchema,
+})
+export type ArticleMetadata = z.infer<typeof ArticleMetadataSchema>
+
+export const DuplicateReasonSchema = z.enum([
+  'doi_exact',
+  'pmid_exact',
+  'title_fuzzy',
+])
+export type DuplicateReason = z.infer<typeof DuplicateReasonSchema>
+
+export const DuplicateGroupSchema = z.object({
+  keep_candidate_id: z.string(),
+  candidate_ids: z.array(z.string()).min(2),
+  reason: DuplicateReasonSchema,
+  score: z.number().min(0).max(1),
+})
+export type DuplicateGroup = z.infer<typeof DuplicateGroupSchema>
+
+export const ImportFromMetadataResponseSchema = z.object({
+  created: z.array(ArticleSchema),
+  skipped_duplicates: z.array(ArticleSchema),
+  duplicate_groups: z.array(DuplicateGroupSchema),
+})
+export type ImportFromMetadataResponse = z.infer<
+  typeof ImportFromMetadataResponseSchema
+>
+
+export const ingestApi = {
+  lookupDoi: async (
+    projectId: string,
+    doi: string,
+  ): Promise<ArticleMetadata> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/lookup-doi`,
+      { doi },
+    )
+    return ArticleMetadataSchema.parse(r.data)
+  },
+  searchPubMed: async (
+    projectId: string,
+    query: string,
+    retmax = 20,
+  ): Promise<ArticleMetadata[]> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/search-pubmed`,
+      { query, retmax },
+      { timeout: 30_000 },
+    )
+    return z.array(ArticleMetadataSchema).parse(r.data)
+  },
+  importFromMetadata: async (
+    projectId: string,
+    items: ArticleMetadata[],
+  ): Promise<ImportFromMetadataResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/import-from-metadata`,
+      { items },
+    )
+    return ImportFromMetadataResponseSchema.parse(r.data)
+  },
+  importRis: async (
+    projectId: string,
+    file: File,
+  ): Promise<ArticleMetadata[]> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/import-ris`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    return z.array(ArticleMetadataSchema).parse(r.data)
+  },
+  importBibtex: async (
+    projectId: string,
+    file: File,
+  ): Promise<ArticleMetadata[]> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/import-bibtex`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    return z.array(ArticleMetadataSchema).parse(r.data)
+  },
+  duplicates: async (projectId: string): Promise<DuplicateGroup[]> => {
+    const r = await api.get(`/api/projects/${projectId}/articles/duplicates`)
+    return z.array(DuplicateGroupSchema).parse(r.data)
+  },
+  merge: async (
+    projectId: string,
+    keepId: string,
+    dropIds: string[],
+  ): Promise<Article> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/merge-duplicates`,
+      { keep_id: keepId, drop_ids: dropIds },
+    )
+    return ArticleSchema.parse(r.data)
   },
 }
 
