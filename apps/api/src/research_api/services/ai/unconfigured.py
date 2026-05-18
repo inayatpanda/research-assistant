@@ -72,3 +72,25 @@ class UnconfiguredAIProvider(AIProvider):
         subgroups: dict[str, dict[str, float]] | None,
     ) -> str:
         raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def draft_cover_letter(
+        self,
+        *,
+        title: str,
+        abstract: str | None,
+        journal_label: str,
+        novelty_points: list[str] | None,
+        corresponding_name: str | None,
+        corresponding_affiliation: str | None,
+        corresponding_email: str | None,
+        conflicts_statement: str | None,
+    ) -> dict[str, Any]:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def draft_reviewer_response(
+        self,
+        *,
+        raw_comments: str,
+        abstract: str | None,
+    ) -> dict[str, Any]:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)

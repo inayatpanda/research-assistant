@@ -96,6 +96,50 @@ class FakeAIProvider(AIProvider):
             f"({model}-effects). {tokens}"
         )
 
+    async def draft_cover_letter(
+        self,
+        *,
+        title: str,
+        abstract: str | None,
+        journal_label: str,
+        novelty_points: list[str] | None,
+        corresponding_name: str | None,
+        corresponding_affiliation: str | None,
+        corresponding_email: str | None,
+        conflicts_statement: str | None,
+    ) -> dict:
+        self.calls.append("draft_cover_letter")
+        bullets = "; ".join(novelty_points or []) or "(no novelty bullets)"
+        coi = (conflicts_statement or "").strip() or "no conflicts"
+        body = (
+            f"<p>Dear Editor of {journal_label},</p>"
+            f"<p>We submit \"{title}\" for consideration.</p>"
+            f"<p>Novelty: {bullets}.</p>"
+            f"<p>Conflicts: {coi}.</p>"
+            f"<p>Sincerely, {corresponding_name or '(corresponding author)'}.</p>"
+        )
+        return {"body_html": body, "model": "fake-model"}
+
+    async def draft_reviewer_response(
+        self,
+        *,
+        raw_comments: str,
+        abstract: str | None,
+    ) -> dict:
+        self.calls.append("draft_reviewer_response")
+        # Deterministic fake segmenter: split on blank lines.
+        chunks = [c.strip() for c in raw_comments.split("\n\n") if c.strip()]
+        if not chunks:
+            chunks = [raw_comments.strip() or "(empty)"]
+        comments = [
+            {
+                "comment_text": chunk,
+                "response_html": f"<p>We thank the reviewer for the comment. We have addressed point {i + 1}.</p>",
+            }
+            for i, chunk in enumerate(chunks)
+        ]
+        return {"comments": comments, "model": "fake-model"}
+
 
 @pytest_asyncio.fixture
 async def session(tmp_path: Path) -> AsyncSession:

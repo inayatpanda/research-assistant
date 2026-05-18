@@ -28,6 +28,7 @@ from ...db.models import (
     AuthorAffiliation,
     ConsortData,
     Contribution,
+    CoverLetter,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -41,6 +42,7 @@ from ...db.models import (
     Project,
     ProjectFrontmatter,
     Review,
+    ReviewerResponse,
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
@@ -82,6 +84,9 @@ class BundleInputs:
     # Phase 11 — manuscript snapshots + margin comments
     manuscript_snapshots: list[ManuscriptSnapshot] = field(default_factory=list)
     manuscript_comments: list[ManuscriptComment] = field(default_factory=list)
+    # Phase 12 — cover letter + reviewer responses
+    cover_letter: CoverLetter | None = None
+    reviewer_responses: list[ReviewerResponse] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -159,5 +164,13 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         ],
         "manuscript_comments": [
             _row_to_dict(c) for c in inputs.manuscript_comments
+        ],
+        "cover_letter": (
+            _row_to_dict(inputs.cover_letter)
+            if inputs.cover_letter is not None
+            else None
+        ),
+        "reviewer_responses": [
+            _row_to_dict(r) for r in inputs.reviewer_responses
         ],
     }

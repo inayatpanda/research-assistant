@@ -778,6 +778,83 @@ class ManuscriptSnapshot(Base):
     )
 
 
+class CoverLetter(Base):
+    """Phase 12 — single cover letter per (project, user).
+
+    `target_journal` is a key from the JournalTemplate catalogue (e.g.
+    "jbjs"). `novelty_points` is a JSON list of short bullets (2-5 typical).
+    `body_html` is the TipTap-rendered cover-letter body — the user always
+    edits, but the AI populates the first draft via
+    `POST /cover-letter/draft`.
+    """
+
+    __tablename__ = "cover_letters"
+    __table_args__ = (
+        Index(
+            "uq_cover_letters_project_user",
+            "project_id", "user_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    target_journal: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    novelty_points: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    body_html: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    ai_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ReviewerResponse(Base):
+    """Phase 12 — one row per reviewer (typically "Reviewer 1" / "Reviewer 2").
+
+    `comments` is a JSON list of dicts:
+        [{"comment_text": "...", "response_html": "..."}, ...]
+    The AI's segmenter splits the user's free-text dump on blank-line +
+    numeric-prefix heuristic and drafts initial responses; the user then
+    edits each row inline.
+    """
+
+    __tablename__ = "reviewer_responses"
+    __table_args__ = (
+        Index(
+            "ix_reviewer_responses_project_user",
+            "project_id", "user_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    reviewer_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    comments: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class ManuscriptComment(Base):
     """Phase 11 — margin comment anchored to a manuscript section.
 

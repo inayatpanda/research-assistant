@@ -12,6 +12,7 @@ import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView
 import { JournalChip } from '@/components/manuscript/JournalChip'
 import { ManuscriptEditor } from '@/components/manuscript/ManuscriptEditor'
 import { VersionPanel } from '@/components/manuscript/VersionPanel'
+import { SubmissionPackageDialog } from '@/components/submission/SubmissionPackageDialog'
 import {
   ManuscriptSearchPanel,
   type SearchHit,
@@ -270,6 +271,7 @@ function ManuscriptInner({
         <ReferenceIntegrityPanel projectId={projectId} />
         <AbbreviationsPanel projectId={projectId} />
         <VersionPanel projectId={projectId} />
+        <SubmissionPackageDialog projectId={projectId} />
         {!isFinal && !isFrontMatter ? (
           <CommentsRail
             projectId={projectId}

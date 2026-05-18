@@ -6,6 +6,7 @@ import {
   Library,
   LayoutDashboard,
   PenLine,
+  Send,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -24,5 +25,6 @@ export const navItems: NavItem[] = [
   { to: '/manuscript', label: 'Manuscript', icon: PenLine },
   { to: '/review',     label: 'Review',     icon: ClipboardList },
   { to: '/statistics', label: 'Statistics', icon: BarChart3 },
+  { to: '/submission', label: 'Submission', icon: Send },
   { to: '/settings',   label: 'Settings',   icon: SettingsIcon },
 ]

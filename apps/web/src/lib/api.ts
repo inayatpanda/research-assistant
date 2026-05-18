@@ -1328,6 +1328,23 @@ export const exportApi = {
     triggerBlobDownload(blob, filename)
     return filename
   },
+  downloadSubmissionPackage: async (
+    projectId: string,
+    snapshotId?: string,
+    slug = 'submission',
+  ): Promise<string> => {
+    const path = `/api/projects/${projectId}/export/submission-package`
+    const r = await api.post(path, undefined, {
+      responseType: 'blob',
+      params: snapshotId ? { snapshot_id: snapshotId } : undefined,
+    })
+    const filename =
+      parseContentDispositionFilename(
+        (r.headers['content-disposition'] as string | undefined) ?? null,
+      ) ?? `${slug}-${todayStamp()}.zip`
+    triggerBlobDownload(r.data as Blob, filename)
+    return filename
+  },
   importBundle: async (file: File): Promise<BundleImportResponse> => {
     if (file.size > IMPORT_SIZE_CAP_BYTES) {
       throw new Error(
@@ -2154,5 +2171,115 @@ export const commentsApi = {
   },
   delete: async (projectId: string, commentId: string): Promise<void> => {
     await api.delete(`/api/projects/${projectId}/comments/${commentId}`)
+  },
+}
+
+// ── Phase 12: Cover letter ─────────────────────────────────────────────
+
+export const CoverLetterReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  target_journal: z.string().nullable(),
+  novelty_points: z.array(z.string()),
+  body_html: z.string(),
+  ai_model: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type CoverLetterRead = z.infer<typeof CoverLetterReadSchema>
+
+export type CoverLetterUpdate = {
+  target_journal?: string | null
+  novelty_points?: string[]
+  body_html?: string
+}
+
+export type CoverLetterDraftRequest = {
+  target_journal?: string | null
+  novelty_points?: string[]
+}
+
+export const coverLetterApi = {
+  get: async (projectId: string): Promise<CoverLetterRead> => {
+    const r = await api.get(`/api/projects/${projectId}/cover-letter`)
+    return CoverLetterReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    body: CoverLetterUpdate,
+  ): Promise<CoverLetterRead> => {
+    const r = await api.patch(`/api/projects/${projectId}/cover-letter`, body)
+    return CoverLetterReadSchema.parse(r.data)
+  },
+  draft: async (
+    projectId: string,
+    body: CoverLetterDraftRequest = {},
+  ): Promise<CoverLetterRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/cover-letter/draft`,
+      body,
+    )
+    return CoverLetterReadSchema.parse(r.data)
+  },
+}
+
+// ── Phase 12: Reviewer responses ───────────────────────────────────────
+
+export const CommentResponseSchema = z.object({
+  comment_text: z.string(),
+  response_html: z.string(),
+})
+export type CommentResponse = z.infer<typeof CommentResponseSchema>
+
+export const ReviewerResponseReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  reviewer_label: z.string(),
+  comments: z.array(CommentResponseSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type ReviewerResponseRead = z.infer<typeof ReviewerResponseReadSchema>
+
+export type ReviewerResponseCreate = {
+  reviewer_label: string
+  raw_comments: string
+}
+
+export type ReviewerResponseUpdate = {
+  reviewer_label?: string
+  comments?: CommentResponse[]
+}
+
+export const reviewerResponseApi = {
+  list: async (projectId: string): Promise<ReviewerResponseRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviewer-responses`)
+    return z.array(ReviewerResponseReadSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: ReviewerResponseCreate,
+  ): Promise<ReviewerResponseRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviewer-responses`,
+      body,
+    )
+    return ReviewerResponseReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    responseId: string,
+    body: ReviewerResponseUpdate,
+  ): Promise<ReviewerResponseRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviewer-responses/${responseId}`,
+      body,
+    )
+    return ReviewerResponseReadSchema.parse(r.data)
+  },
+  delete: async (projectId: string, responseId: string): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/reviewer-responses/${responseId}`,
+    )
   },
 }

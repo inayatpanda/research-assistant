@@ -34,6 +34,7 @@ from ..db.models import (
     AuthorAffiliation,
     ConsortData,
     Contribution,
+    CoverLetter,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -47,6 +48,7 @@ from ..db.models import (
     Project,
     ProjectFrontmatter,
     Review,
+    ReviewerResponse,
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
@@ -74,6 +76,13 @@ from ..services.export.bundle_export import BundleInputs, build_bundle
 from ..services.export.bundle_import import BundleImportError, import_bundle
 from ..services.export.docx_export import FrontMatterPayload, render_docx
 from ..services.export.pdf_export import render_pdf
+from ..services.export.submission_package import (
+    CoverLetterPayload,
+    FigurePackageItem,
+    ReviewerResponsePayload,
+    build_submission_zip,
+)
+from ..services.storage.base import StorageRef
 
 router = APIRouter(tags=["export"])
 log = logging.getLogger("research_api.export")
@@ -521,6 +530,20 @@ async def _collect_bundle_inputs(
         ).order_by(ManuscriptComment.created_at.asc())
     )).scalars().all())
 
+    # Phase 12 — cover letter + reviewer responses.
+    cover_letter_row = (await session.execute(
+        select(CoverLetter).where(
+            CoverLetter.project_id == project_id,
+            CoverLetter.user_id == user_id,
+        )
+    )).scalar_one_or_none()
+    reviewer_response_rows = list((await session.execute(
+        select(ReviewerResponse).where(
+            ReviewerResponse.project_id == project_id,
+            ReviewerResponse.user_id == user_id,
+        ).order_by(ReviewerResponse.created_at.asc())
+    )).scalars().all())
+
     return BundleInputs(
         project=project,
         articles=articles,
@@ -548,6 +571,8 @@ async def _collect_bundle_inputs(
         project_frontmatter=project_frontmatter,
         manuscript_snapshots=manuscript_snapshots,
         manuscript_comments=manuscript_comments,
+        cover_letter=cover_letter_row,
+        reviewer_responses=reviewer_response_rows,
     )
 
 
@@ -629,6 +654,185 @@ async def import_bundle_route(
 
     await session.commit()
     return BundleImportResponse(project_id=new_project.id, counts=counts)
+
+
+_MIME_TO_EXT: dict[str, str] = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+}
+
+
+def _figure_ext(file_type: str | None) -> str:
+    return _MIME_TO_EXT.get((file_type or "").lower(), "bin")
+
+
+async def _load_figure_bytes(
+    container: Container, figures: list[Figure]
+) -> list[FigurePackageItem]:
+    """Resolve each Figure row to a (figure_number, ext, bytes) item.
+
+    Missing files (storage 404 / backend="missing") are skipped silently —
+    the manuscript still renders without them. The submission package zip
+    therefore matches the live figures gallery state.
+    """
+    items: list[FigurePackageItem] = []
+    for fig in figures:
+        ref_in = fig.file_ref or {}
+        backend = ref_in.get("backend")
+        key = ref_in.get("key")
+        if not backend or not key or backend == "missing":
+            continue
+        try:
+            data = await container.storage.read(
+                StorageRef(backend=backend, key=key)
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:
+            log.exception("Failed to read figure bytes for fig=%s", fig.id)
+            continue
+        items.append(
+            FigurePackageItem(
+                figure_number=int(fig.figure_number or 1),
+                ext=_figure_ext(fig.file_type),
+                data=data,
+            )
+        )
+    return items
+
+
+def _sections_from_snapshot_blob(
+    blob: dict | None,
+) -> list[ManuscriptSection]:
+    """Materialise lightweight section objects from a snapshot blob so the
+    main render_docx pipeline can consume them without knowing about the
+    snapshot at all.
+
+    The blob's `manuscript_sections` was captured via
+    `SqliteSnapshotRepository._row_to_jsonable` — we only need
+    `section_name` + `content` here.
+    """
+    out: list[ManuscriptSection] = []
+    for row in (blob or {}).get("manuscript_sections") or []:
+        m = ManuscriptSection(
+            id=row.get("id") or "",
+            user_id=row.get("user_id") or "",
+            project_id=row.get("project_id") or "",
+            section_name=row.get("section_name") or "",
+            content=row.get("content") or "",
+            word_count=row.get("word_count") or 0,
+        )
+        out.append(m)
+    return out
+
+
+@router.post(
+    "/projects/{project_id}/export/submission-package",
+)
+async def export_submission_package(
+    project_id: str,
+    snapshot_id: str | None = Query(default=None),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+    container: Container = Depends(get_container),
+) -> StreamingResponse:
+    """Phase 12 — Bundle manuscript + figures + tables + cover letter +
+    reviewer responses into a single zip download.
+
+    Query params:
+        snapshot_id: optional. When set, the manuscript content is read
+        from that snapshot's `full_blob` instead of the live tables. Cover
+        letter + reviewer responses always come from the LIVE rows (those
+        edits keep happening between submission rounds).
+    """
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    snapshot_label: str | None = None
+    if snapshot_id:
+        snap = (
+            await session.execute(
+                select(ManuscriptSnapshot).where(
+                    ManuscriptSnapshot.id == snapshot_id,
+                    ManuscriptSnapshot.user_id == user_id,
+                    ManuscriptSnapshot.project_id == project_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if snap is None:
+            raise HTTPException(status_code=404, detail="Snapshot not found")
+        sections = _sections_from_snapshot_blob(snap.full_blob)
+        snapshot_label = snap.label
+    else:
+        sections = await _load_sections(session, project_id, user_id)
+
+    articles = await _load_articles(session, project_id, user_id)
+    style = _coerce_style(None, project.citation_style)
+    entries = await _build_bib_entries(sections, articles, style)
+    frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
+
+    figures = list((await session.execute(
+        select(Figure).where(
+            Figure.project_id == project_id,
+            Figure.user_id == user_id,
+        ).order_by(Figure.figure_number.asc())
+    )).scalars().all())
+    figure_items = await _load_figure_bytes(container, figures)
+
+    cl = (
+        await session.execute(
+            select(CoverLetter).where(
+                CoverLetter.project_id == project_id,
+                CoverLetter.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    cl_payload: CoverLetterPayload | None = None
+    if cl is not None:
+        from ..services.journal_templates.catalogue import JOURNALS
+
+        journal = JOURNALS.get(cl.target_journal or "")
+        cl_payload = CoverLetterPayload(
+            body_html=cl.body_html or "",
+            target_journal_label=(journal.label if journal else None),
+        )
+
+    rr_rows = list((await session.execute(
+        select(ReviewerResponse).where(
+            ReviewerResponse.project_id == project_id,
+            ReviewerResponse.user_id == user_id,
+        ).order_by(ReviewerResponse.created_at.asc())
+    )).scalars().all())
+    rr_payloads = [
+        ReviewerResponsePayload(
+            reviewer_label=r.reviewer_label,
+            comments=list(r.comments or []),
+        )
+        for r in rr_rows
+    ]
+
+    filename, data = build_submission_zip(
+        project=project,
+        sections=sections,
+        articles=articles,
+        frontmatter=frontmatter,
+        figures=figure_items,
+        cover_letter=cl_payload,
+        reviewer_responses=rr_payloads,
+        bibliography=entries,
+        style=style,
+        snapshot_label=snapshot_label,
+    )
+
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get(

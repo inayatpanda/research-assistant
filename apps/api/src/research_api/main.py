@@ -7,6 +7,7 @@ from .routes.analyses import router as analyses_router
 from .routes.articles import router as articles_router
 from .routes.comments import router as comments_router
 from .routes.compilation import router as compilation_router
+from .routes.cover_letter import router as cover_letter_router
 from .routes.datasets import router as datasets_router
 from .routes.consort import router as consort_router
 from .routes.export import router as export_router
@@ -20,6 +21,7 @@ from .routes.journal_templates import router as journal_templates_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
 from .routes.projects import router as projects_router
+from .routes.reviewer_response import router as reviewer_response_router
 from .routes.reviews import router as reviews_router
 from .routes.reviews_meta import router as reviews_meta_router
 from .routes.snapshots import router as snapshots_router
@@ -58,3 +60,5 @@ app.include_router(journal_templates_router, prefix="/api")
 app.include_router(frontmatter_router, prefix="/api")
 app.include_router(snapshots_router, prefix="/api")
 app.include_router(comments_router, prefix="/api")
+app.include_router(cover_letter_router, prefix="/api")
+app.include_router(reviewer_response_router, prefix="/api")

@@ -13,6 +13,7 @@ import ManuscriptPage from '@/routes/ManuscriptPage'
 import ReaderPage from '@/routes/ReaderPage'
 import SettingsPage from '@/routes/SettingsPage'
 import StatisticsPage from '@/routes/StatisticsPage'
+import SubmissionPage from '@/routes/SubmissionPage'
 import SystematicReviewPage from '@/routes/SystematicReviewPage'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="review" element={<SystematicReviewPage />} />
             <Route path="consort" element={<ConsortPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="submission" element={<SubmissionPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="health" element={<HealthPage />} />
           </Route>

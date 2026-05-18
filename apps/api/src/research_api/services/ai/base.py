@@ -77,3 +77,24 @@ class AIProvider(Protocol):
         studies: list[dict[str, str]],
         subgroups: dict[str, dict[str, float]] | None,
     ) -> str: ...
+
+    # Phase 12
+    async def draft_cover_letter(
+        self,
+        *,
+        title: str,
+        abstract: str | None,
+        journal_label: str,
+        novelty_points: list[str] | None,
+        corresponding_name: str | None,
+        corresponding_affiliation: str | None,
+        corresponding_email: str | None,
+        conflicts_statement: str | None,
+    ) -> dict[str, Any]: ...
+
+    async def draft_reviewer_response(
+        self,
+        *,
+        raw_comments: str,
+        abstract: str | None,
+    ) -> dict[str, Any]: ...

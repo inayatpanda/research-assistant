@@ -26,8 +26,10 @@ from .prompts import (
     SECTION_DRAFT_PROMPT,
     SUMMARISE_PROMPT,
     WRITING_ASSIST_PROMPT,
+    build_cover_letter_prompt,
     build_meta_interpretation_prompt,
     build_result_interpretation_prompt,
+    build_reviewer_response_prompt,
     build_screening_suggestion_prompt,
     format_card_for_prompt,
 )
@@ -230,6 +232,124 @@ class GeminiProvider(AIProvider):
         raw = (await self._generate_with_resilience(f"{system}\n\n{user}")).strip()
         vote, reason = _parse_screening_json(raw)
         return {"vote": vote, "reason": reason, "model": self.active_model or "unknown"}
+
+
+    async def draft_cover_letter(
+        self,
+        *,
+        title: str,
+        abstract: str | None,
+        journal_label: str,
+        novelty_points: list[str] | None,
+        corresponding_name: str | None,
+        corresponding_affiliation: str | None,
+        corresponding_email: str | None,
+        conflicts_statement: str | None,
+    ) -> dict[str, Any]:
+        if not (title or "").strip():
+            raise AISourceInsufficient("missing manuscript title", provider="gemini")
+        system, user = build_cover_letter_prompt(
+            title=title,
+            abstract=abstract,
+            journal_label=journal_label,
+            novelty_points=novelty_points,
+            corresponding_name=corresponding_name,
+            corresponding_affiliation=corresponding_affiliation,
+            corresponding_email=corresponding_email,
+            conflicts_statement=conflicts_statement,
+        )
+        raw = (await self._generate_with_resilience(f"{system}\n\n{user}")).strip()
+        body_html = _strip_md_fences(raw)
+        return {"body_html": body_html, "model": self.active_model or "unknown"}
+
+    async def draft_reviewer_response(
+        self,
+        *,
+        raw_comments: str,
+        abstract: str | None,
+    ) -> dict[str, Any]:
+        if not (raw_comments or "").strip():
+            raise AISourceInsufficient(
+                "missing reviewer comments", provider="gemini"
+            )
+        system, user = build_reviewer_response_prompt(
+            raw_comments=raw_comments, abstract=abstract
+        )
+        raw = (await self._generate_with_resilience(f"{system}\n\n{user}")).strip()
+        comments = _parse_reviewer_response_json(raw)
+        return {"comments": comments, "model": self.active_model or "unknown"}
+
+
+def _strip_md_fences(raw: str) -> str:
+    """Strip ```...``` fences if the model wrapped its output."""
+    text = raw.strip()
+    if text.startswith("```"):
+        # Drop the opening fence line.
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
+
+
+def _parse_reviewer_response_json(raw: str) -> list[dict[str, str]]:
+    """Parse the reviewer-response JSON envelope.
+
+    Tolerates ```json fences (mirrors `_parse_screening_json`). Raises
+    AIError when the shape is wrong (not an object, missing `comments`,
+    rows missing `comment_text` / `response_html`, etc.).
+    """
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            stripped = stripped[start : end + 1]
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise AIError(
+            f"could not parse reviewer-response JSON: {e}; raw[:200]={raw[:200]!r}",
+            provider="gemini",
+        ) from e
+    if not isinstance(data, dict):
+        raise AIError(
+            "reviewer-response output is not a JSON object", provider="gemini"
+        )
+    comments = data.get("comments")
+    if not isinstance(comments, list):
+        raise AIError(
+            "reviewer-response missing required `comments` list", provider="gemini"
+        )
+    out: list[dict[str, str]] = []
+    for idx, row in enumerate(comments):
+        if not isinstance(row, dict):
+            raise AIError(
+                f"reviewer-response comment[{idx}] is not an object",
+                provider="gemini",
+            )
+        text = row.get("comment_text")
+        resp = row.get("response_html", "")
+        if not isinstance(text, str) or not text.strip():
+            raise AIError(
+                f"reviewer-response comment[{idx}] missing `comment_text`",
+                provider="gemini",
+            )
+        if not isinstance(resp, str):
+            raise AIError(
+                f"reviewer-response comment[{idx}].response_html is not a string",
+                provider="gemini",
+            )
+        out.append(
+            {"comment_text": text.strip(), "response_html": resp.strip()}
+        )
+    if not out:
+        raise AIError(
+            "reviewer-response returned an empty comments list", provider="gemini"
+        )
+    return out
 
 
 _ALLOWED_SCREENING_VOTES = frozenset({"include", "exclude", "maybe"})

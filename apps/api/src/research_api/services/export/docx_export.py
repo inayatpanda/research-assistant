@@ -367,6 +367,62 @@ def _add_bibliography(document: Document, entries: list[BibliographyEntry]) -> N
         p.add_run(f"{entry.number}. {entry.formatted}")
 
 
+def html_to_docx_bytes(html_str: str, *, title: str | None = None) -> bytes:
+    """Render a standalone HTML blob (e.g. cover-letter body) to DOCX bytes.
+
+    Used by the submission-package builder for cover_letter.docx and
+    response_to_reviewers.docx. The body is walked through `_html_walker`
+    so the same `<p>`/`<strong>`/`<em>`/`<table>` permissive grammar
+    applies, giving identical rendering to the main manuscript export.
+    """
+    document = Document()
+    _configure_page(document)
+    if title:
+        h = document.add_heading(title, level=0)
+        h.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    events = walk_html(html_str or "")
+    if not events:
+        p = document.add_paragraph()
+        p.add_run("(Empty)").italic = True
+    else:
+        _render_events(document, events)
+    buf = io.BytesIO()
+    document.save(buf)
+    return buf.getvalue()
+
+
+def tables_to_individual_docx(section_html: str) -> dict[int, bytes]:
+    """Phase 12 — extract every `<table>` from a section's HTML and render
+    each into its own standalone DOCX, keyed by the table's 1-based index
+    within the section.
+
+    The submission package writer concatenates results across all sections
+    and renumbers tables globally so the filenames stay `Table_1.docx`,
+    `Table_2.docx`, ... in document order.
+    """
+    events = list(walk_html(section_html or ""))
+    out: dict[int, bytes] = {}
+    # Split the event stream into per-table sub-streams.
+    table_idx = 0
+    current: list[tuple] | None = None
+    for ev in events:
+        kind = ev[0]
+        if kind == "table_start":
+            table_idx += 1
+            current = [ev]
+        elif current is not None:
+            current.append(ev)
+            if kind == "table_end":
+                doc = Document()
+                _configure_page(doc)
+                _render_events(doc, current)
+                buf = io.BytesIO()
+                doc.save(buf)
+                out[table_idx] = buf.getvalue()
+                current = None
+    return out
+
+
 def render_docx(
     *,
     project: _ProjectLike,

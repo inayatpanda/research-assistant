@@ -27,6 +27,7 @@ from ...db.models import (
     AuthorAffiliation,
     ConsortData,
     Contribution,
+    CoverLetter,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -40,6 +41,7 @@ from ...db.models import (
     Project,
     ProjectFrontmatter,
     Review,
+    ReviewerResponse,
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
@@ -124,6 +126,7 @@ async def _do_import(
         "authors": 0, "affiliations": 0, "author_affiliations": 0,
         "contributions": 0, "project_frontmatter": 0,
         "manuscript_snapshots": 0, "manuscript_comments": 0,
+        "cover_letter": 0, "reviewer_responses": 0,
     }
 
     proj_in = bundle["project"]
@@ -670,6 +673,49 @@ async def _do_import(
         ))
         counts["manuscript_snapshots"] += 1
     if counts["manuscript_snapshots"]:
+        await session.flush()
+
+    # ── Cover letter (Phase 12) ────────────────────────────────────────
+    cl_in = bundle.get("cover_letter")
+    if isinstance(cl_in, dict):
+        session.add(CoverLetter(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            target_journal=cl_in.get("target_journal"),
+            novelty_points=cl_in.get("novelty_points") or [],
+            body_html=cl_in.get("body_html") or "",
+            ai_model=cl_in.get("ai_model"),
+        ))
+        await session.flush()
+        counts["cover_letter"] = 1
+
+    # ── Reviewer responses (Phase 12) ──────────────────────────────────
+    for rr in bundle.get("reviewer_responses") or []:
+        label = (rr.get("reviewer_label") or "Reviewer").strip() or "Reviewer"
+        raw_comments = rr.get("comments") or []
+        # Defensive normalisation — drop any rows that aren't a {comment_text,
+        # response_html} object so the JSON column stays a clean list.
+        norm_comments: list[dict] = []
+        for c in raw_comments:
+            if not isinstance(c, dict):
+                continue
+            text = (c.get("comment_text") or "").strip()
+            if not text:
+                continue
+            norm_comments.append({
+                "comment_text": text,
+                "response_html": c.get("response_html") or "",
+            })
+        session.add(ReviewerResponse(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            reviewer_label=label,
+            comments=norm_comments,
+        ))
+        counts["reviewer_responses"] += 1
+    if counts["reviewer_responses"]:
         await session.flush()
 
     for cm in bundle.get("manuscript_comments") or []:

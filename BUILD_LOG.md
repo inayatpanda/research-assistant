@@ -5,6 +5,65 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 12 — Cover letter + reviewer response + submission package ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 12 section)
+
+**Three AI-assisted submission helpers closed the journal-submission loop.**
+
+**Changes**
+
+- ✅ Migration `0013_cover_letters_responses.py` — two tables: `cover_letters` (UNIQUE per project_id+user_id) and `reviewer_responses` (many rows per project, JSON `comments` list of `{comment_text, response_html}`).
+- ✅ ORM models `CoverLetter` + `ReviewerResponse`; Pydantic schemas with TipTap-HTML caps and blank-row pruning.
+- ✅ AI prompt builders `prompts/cover_letter.py` + `prompts/reviewer_response.py` — both system+user shape, both keep abstract input but NO citation context (cover letters must not invent references). Reviewer-response prompt instructs the model to segment on blank-line / numeric prefix + draft ≤120-word `<p>` responses, output as strict JSON. Reused the screening_suggestion fence-tolerant parser pattern.
+- ✅ `AIProvider.draft_cover_letter` + `draft_reviewer_response` Protocol methods. Gemini provider implementation reuses `_generate_with_resilience` + a new `_parse_reviewer_response_json` that maps malformed model output to `AIError`. UnconfiguredAIProvider stub + FakeAIProvider deterministic stubs in `tests/conftest.py`.
+- ✅ Repositories `cover_letters.py` (get_or_create / update / delete) and `reviewer_responses.py` (list / create / update / delete).
+- ✅ Routes: `GET /cover-letter` (auto-create row), `PATCH /cover-letter`, `POST /cover-letter/draft` (loads MP10 corresponding-author + COI + structured-or-freeform abstract from frontmatter, drafts via AI, persists). `GET/POST/PATCH/DELETE /reviewer-responses`. All scoped by user_id + project_id with 404 isolation.
+- ✅ `services/export/submission_package.py` — pure `build_submission_zip` using stdlib `zipfile`. Layout per spec: `{slug}/manuscript.docx` (tables inline), `Figure_N.<ext>`, `Table_N.docx`, `cover_letter.docx`, optional `response_to_reviewers.docx`. Filename rule `{slug}_v{snapshot_label_or_'draft'}.zip`; slug strips path traversal (`.`, `/`, `\\`, control chars) via `_SLUG_RE = [^A-Za-z0-9_-]+`. Figure ext sanitised against `[A-Za-z0-9]{1,6}` allow-list (defence-in-depth — uploads are already sanitised at storage time).
+- ✅ `docx_export.py` new helpers `html_to_docx_bytes(html, *, title)` (cover letter / response_to_reviewers blob) and `tables_to_individual_docx(section_html)` (extracts every `<table>` event-stream into its own DOCX, keyed by 1-based table-in-section index — the submission package globally renumbers across all sections).
+- ✅ `POST /projects/{pid}/export/submission-package` (optional `snapshot_id` query param). When supplied, the manuscript content is hydrated from `ManuscriptSnapshot.full_blob.manuscript_sections`; cover letter + reviewer responses always come from live rows (those keep evolving between submission rounds).
+- ✅ Bundle export/import round-trip extended: `BundleInputs.cover_letter` + `reviewer_responses`; export `_collect_bundle_inputs` loads both; import maps both onto the new project_id + target_user_id and drops blank-comment-text rows for defence in depth. Counts dict gained `cover_letter` + `reviewer_responses` keys.
+- ✅ Frontend `lib/api.ts` — `coverLetterApi` (get/update/draft), `reviewerResponseApi` (list/create/update/delete), `exportApi.downloadSubmissionPackage(projectId, snapshotId?)` with `parseContentDispositionFilename` for the server-stamped name.
+- ✅ React-Query hooks `useCoverLetter.ts` + `useReviewerResponses.ts`.
+- ✅ `components/submission/CoverLetterEditor.tsx` (journal select, add/remove novelty bullets, Draft-with-AI button, plain-textarea HTML body, Save → PATCH).
+- ✅ `components/submission/ReviewerResponseEditor.tsx` (existing rows with per-comment-row textareas + Save/Delete; "new reviewer" form with raw_comments block + Draft button).
+- ✅ `components/submission/SubmissionPackageDialog.tsx` (Live or snapshot dropdown; Download button → blob → `Content-Disposition`-driven save).
+- ✅ Mounted on a new `/submission` route + nav entry (lucide `Send` icon) and also exposed inline in the Manuscript right-rail alongside the snapshot panel for proximity.
+
+**Tests**
+
+- Backend: **+51 → 1278 passing** (was 1227). New suites:
+  - `test_cover_letter_prompt.py` — prompt builder fallbacks + truncation (3 tests).
+  - `test_reviewer_response_prompt.py` — JSON parser happy-path + fence-tolerance + shape validation (8 tests).
+  - `test_cover_letter_route.py` — auto-create on GET, PATCH validates journal key, draft requires journal, override journal/novelty, novelty trim (8 tests).
+  - `test_reviewer_response_route.py` — list/create/patch/delete + blank-row pruning (8 tests).
+  - `test_submission_package.py` — pure builder, slug rules, path-traversal ext defense, snapshot-label versioning (5 tests).
+  - `test_submission_package_route.py` — endpoint integration with live + snapshot mode + reviewer-response inclusion (5 tests).
+  - `test_submission_bundle_round_trip.py` — Phase-12 bundle round-trip + blank-comment defence (3 tests).
+  - `test_security_submission_isolation.py` — 11 cross-user / cross-project regression tests covering cover letter, reviewer responses, and the submission-package endpoint.
+- Frontend vitest: **+9 → 153 passing** (was 144). `CoverLetterEditor` (add/remove bullets, draft button disabled without journal, PATCH wiring), `ReviewerResponseEditor` (segmented row rendering, Draft button calls create, Save calls update with edited comment), `SubmissionPackageDialog` (trigger, download path + no-snapshot defaults).
+
+**Decisions**
+
+- **Tables INLINE in manuscript.docx PLUS extracted Table_N.docx** — researchers paste tables in two different places when submitting (full manuscript + standalone supplements), so we ship both rather than picking one.
+- **Tables globally numbered across all sections** — `Table_1.docx` is the manuscript's first table regardless of which section holds it. Per-section indexing was rejected because it doesn't match the published convention.
+- **Cover letter body is plain textarea, not TipTap** — researchers always rewrite the AI's draft and want a fast paste-revise loop; spinning up a second TipTap instance for one document was deemed unnecessary friction. The `body_html` column still carries `<p>` blocks so the DOCX renderer treats it identically to the rest of the manuscript.
+- **AI prompt token-discipline** — cover-letter prompt feeds only abstract + novelty bullets + corresponding-author block + COI statement; it explicitly does NOT receive bibliography or citation context. Reviewer-response prompt feeds abstract + the raw comments block. Both treat user-supplied text as UNTRUSTED.
+- **Reviewer-response JSON parser is strict on shape** — non-string `response_html` raises `AIError` (not `AIProviderUnavailable`) so the route correctly maps to a clean `503` for the user.
+- **Bundle round-trip drops blank-`comment_text` rows on import** — defence-in-depth against a hostile bundle smuggling a `{comment_text: "   ", response_html: "evil"}` row. This is the one bug surfaced during the round-trip test: the original import path passed the raw list through, which would have let an attacker hide HTML in a "blank" comment row that the UI's filter (`comment_text.strip()`) had no chance to display.
+- **Slug rule** — `[^A-Za-z0-9_-]+` strip on title and snapshot label so `../../etc/passwd` becomes `etcpasswd`. Snapshot labels with em-dash collapse to double-hyphen (`v1 — initial submission` → `v1--initial-submission`); the test was updated to match the actual slugger rather than special-casing em-dashes.
+- **Snapshot pinning is OPTIONAL on the submission-package endpoint** — when omitted the live manuscript ships; when supplied the manuscript content comes from `manuscript_snapshots.full_blob` so a "v1 submission package" can be regenerated later. Cover letter + reviewer responses always come from live rows because revisions evolve between submission rounds.
+
+**Out of scope (deferred)**
+
+- Suggested-reviewers AI generation (placeholder text only; researchers still curate by hand).
+- Multi-attachment cover-letter formats (PDF / RTF / .doc) — DOCX only for v1.
+- Per-reviewer cover letters — one cover letter per project.
+- AI re-segmentation when the user thinks the splits are wrong — they manually edit the JSON list for v1.
+- Image transformations during zip assembly (we ship the figure bytes verbatim — researchers expect their PNG to remain a PNG).
+
+---
+
 ## 2026-05-18 · Mini-phase 11 — Manuscript version snapshots + margin comments ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 11 section)
