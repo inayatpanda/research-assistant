@@ -1,0 +1,21 @@
+{
+  "status": "ok",
+  "message-type": "work",
+  "message": {
+    "DOI": "10.1056/NEJMoa2110345",
+    "title": ["Anterior versus Posterior Approach in Total Hip Arthroplasty: A Multicentre Randomised Trial"],
+    "author": [
+      {"given": "Sarah J.", "family": "Patel"},
+      {"given": "Marco", "family": "Ricci"},
+      {"given": "Lena", "family": "Andersson"}
+    ],
+    "container-title": ["The New England Journal of Medicine"],
+    "issued": {"date-parts": [[2023, 7, 14]]},
+    "volume": "389",
+    "issue": "2",
+    "page": "123-134",
+    "abstract": "<jats:p>BACKGROUND: <jats:italic>Total hip arthroplasty</jats:italic> outcomes vary by surgical approach.</jats:p><jats:p>METHODS: We randomised 412 patients.</jats:p><jats:p>CONCLUSION: Anterior approach reduced 30-day complications.</jats:p>",
+    "publisher": "Massachusetts Medical Society",
+    "type": "journal-article"
+  }
+}
