@@ -5,6 +5,65 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Phase 7.5 — Meta-analysis ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-phase-7p5-meta-analysis.md`
+
+**Backend additions**
+
+- Two new tables (`meta_analyses` + `meta_inputs`) with migration `0008_meta_analysis.py` (`down_revision = '0007'`). Both tables `user_id`-scoped. UNIQUE `(meta_id, article_id)`.
+- New service tree `services/meta/` with five pure-function modules:
+  - `effect_sizes.py` — MD / SMD (Hedges' g with small-sample correction) / log-OR / log-RR / log-HR / Fisher-z, all with Cochrane-style zero-cell continuity correction for OR & RR, and HR computable from either `(log_hr, se_log_hr)` or `(hr, ci_low, ci_high)`.
+  - `pooling.py` — inverse-variance fixed-effects + DerSimonian-Laird random-effects, both returning `PooledResult(estimate, se, ci_low, ci_high, z, p, weights, model)`.
+  - `heterogeneity.py` — Cochran Q, df, p, I² (Higgins), τ² (DL).
+  - `forest_plot.py` — matplotlib `Agg`-backend renderer returning PNG bytes; supports subgroup blocks; per-row diamond + pooled diamond; `_build_figure` exposed for testability.
+  - `funnel_plot.py` — scatter of effect vs SE (axis inverted) with pseudo-95% CI funnel lines.
+- AI Protocol method `AIProvider.interpret_meta_analysis(...)`. Real Gemini implementation + FakeAI stub + UnconfiguredAIProvider stub. Prompt at `services/ai/prompts/meta_interpretation.py` preserves every `[CITE_<article_id>]` token verbatim and embeds back-transformed pooled+CI for OR/RR/HR.
+- Repository `SqliteMetaRepository` with defence-in-depth `MetaArticleMismatch` when an input references an article from another project.
+- New routes submodule `routes/reviews_meta.py` mounted under `/api` — full CRUD, `/run`, `/forest.png`, `/funnel.png`, `/interpret`, `/push`. Pushes idempotently via the existing `_push_to_section` helper; new class hook `meta-analysis-forest` registered in `_BLOCK_TAG_BY_CLASS`.
+
+**Frontend additions**
+
+- `metaAnalysisApi` in `lib/api.ts` (kept distinct from the pre-existing `metaApi` for /health which is used elsewhere).
+- `useMeta.ts` TanStack hooks mirroring the `useAnalyses` shape (`useMetaList`, `useMetaDetail`, `useCreateMeta`, `useRunMeta`, `useInterpretMeta`, `usePushMeta`, `useUpsertMetaInput`, …).
+- Six components under `components/review/meta/`: `MetaAnalysisForm`, `PerStudyInputs`, `ForestPlotView`, `FunnelPlotView`, `MetaResultCard`, `MetaListPanel`.
+- `SystematicReviewPage.tsx` extended with a sixth tab `Meta-analysis` between extraction and PRISMA, with a `MetaTabContent` shell that pairs a left-rail list with a detail pane.
+
+**Test deltas**
+
+- Backend: **656 → 765 (+109 tests)** across:
+  - `test_meta_models.py` (3), `test_meta_effect_sizes.py` (12), `test_meta_pooling.py` (8), `test_meta_heterogeneity.py` (8).
+  - `test_meta_forest_plot.py` (6), `test_meta_funnel_plot.py` (4).
+  - `test_meta_prompt.py` (7), `test_meta_ai_provider.py` (6).
+  - `test_meta_repository.py` (9).
+  - Routes: `test_reviews_route_meta_crud.py` (9), `..._run.py` (9), `..._plots.py` (5), `..._interpret.py` (6), `..._push.py` (7).
+  - Security regression: `test_security_meta_isolation.py` (10) — every endpoint + subgroup-variable resolution is user-scoped.
+- Frontend: **71 → 74 (+3 vitest)** — `metaApi.test.ts` exercises the two new zod schemas and the absolute-URL builders.
+
+**Acceptance bar**
+
+- [x] Per-metric effect-size computation (Task 3) — formulae hand-checked against the Cochrane Handbook §10 worked examples (especially the SMD §10.5 example with `mean_a=10, sd_a=4, n_a=40`, `mean_b=8, sd_b=4, n_b=40` → `g ≈ 0.495`, `vi ≈ 0.0515`).
+- [x] Fixed + DL random pooling (Task 4) — hand-computed two-study answer `yi=[0.5,0.3]`, `vi=[0.04,0.05]` → `yi_bar ≈ 0.4111`, `se ≈ 0.149`.
+- [x] Q + df + p + I² + τ² heterogeneity (Task 5).
+- [x] Forest PNG + funnel PNG (Tasks 6/7) — magic-byte check + no matplotlib state leak.
+- [x] Subgroup analysis (Task 11) — `subgroup_variable` resolved via owner's `extraction_records.fields` only.
+- [x] AI interpretation with `[CITE_<article_id>]` per pooled study (Tasks 8/13) — the prompt's "POOLED STUDIES" block lists every token and the model is told not to invent new ones.
+- [x] Push to Results (Task 14) — idempotent via `class="meta-analysis-forest"` hook.
+- [x] Meta-analysis tab in /review (Task 19) — URL state `?tab=meta&meta=<id>`.
+- [x] Cross-user / cross-project security regression (Task 15) — all 10 isolation tests green.
+
+**Decisions / tactical notes**
+
+- Random-effects τ² estimator: **DerSimonian-Laird only** for v1 (REML / Paule-Mandel deferred).
+- Plots are **PNG only** for v1 (SVG forest deferred per plan).
+- HR can be entered as `(log_hr, se_log_hr)` or `(hr, hr_ci_low, hr_ci_high)` — the latter back-calculates `se` via `(ln(hi) - ln(lo)) / (2 · 1.959964)`.
+- Frontend pre-existing `metaApi` (for `/health`) untouched; meta-analysis client is `metaAnalysisApi` to avoid breaking Topbar/Settings/Health imports.
+- E2E browser smoke (Task 20) deferred — pytest route + security tests cover the full HTTP surface.
+
+**Tag:** to be created (`phase-7p5`) after BUILD_LOG commit.
+
+---
+
 ## 2026-05-17 · Phase 0 — Brainstorm & Spec
 
 - Read user's hand-drawn workflow sketch + original `ResearchApp_BuildPlan.md`.

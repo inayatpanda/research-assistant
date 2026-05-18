@@ -65,3 +65,15 @@ class AIProvider(Protocol):
         article_title: str,
         article_abstract: str | None,
     ) -> dict[str, str]: ...
+
+    # Phase 7.5
+    async def interpret_meta_analysis(
+        self,
+        *,
+        metric: str,
+        model: str,
+        pooled: dict[str, float | None],
+        heterogeneity: dict[str, float | int | None],
+        studies: list[dict[str, str]],
+        subgroups: dict[str, dict[str, float]] | None,
+    ) -> str: ...

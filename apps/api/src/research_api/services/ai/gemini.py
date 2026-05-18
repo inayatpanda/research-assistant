@@ -26,6 +26,7 @@ from .prompts import (
     SECTION_DRAFT_PROMPT,
     SUMMARISE_PROMPT,
     WRITING_ASSIST_PROMPT,
+    build_meta_interpretation_prompt,
     build_result_interpretation_prompt,
     build_screening_suggestion_prompt,
     format_card_for_prompt,
@@ -182,6 +183,30 @@ class GeminiProvider(AIProvider):
         if not text or len(text.strip()) < 5:
             raise AISourceInsufficient("text too short to assist", provider="gemini")
         prompt = WRITING_ASSIST_PROMPT.format(action=action, text=text)
+        return (await self._generate_with_resilience(prompt)).strip()
+
+    async def interpret_meta_analysis(
+        self,
+        *,
+        metric: str,
+        model: str,
+        pooled: dict[str, float | None],
+        heterogeneity: dict[str, float | int | None],
+        studies: list[dict[str, str]],
+        subgroups: dict[str, dict[str, float]] | None,
+    ) -> str:
+        if not studies:
+            raise AISourceInsufficient("no studies to interpret", provider="gemini")
+        if pooled.get("estimate") is None:
+            raise AISourceInsufficient("missing pooled estimate", provider="gemini")
+        prompt = build_meta_interpretation_prompt(
+            metric=metric,
+            model=model,
+            pooled=pooled,
+            heterogeneity=heterogeneity,
+            studies=studies,
+            subgroups=subgroups,
+        )
         return (await self._generate_with_resilience(prompt)).strip()
 
     async def suggest_screening(

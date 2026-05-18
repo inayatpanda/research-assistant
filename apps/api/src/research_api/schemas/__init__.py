@@ -51,6 +51,20 @@ from .manuscript_section import (
 )
 from .note import ArticleNoteRead, ArticleNoteUpsert
 from .project import ProjectCreate, ProjectRead, ProjectUpdate
+from .meta import (
+    EffectMetric,
+    MetaAnalysisCreate,
+    MetaAnalysisRead,
+    MetaAnalysisUpdate,
+    MetaInputCreate,
+    MetaInputRead,
+    MetaInputUpdate,
+    MetaInterpretRequest,
+    MetaInterpretResponse,
+    MetaPushRequest,
+    MetaStatus,
+    PoolingModel,
+)
 from .review import (
     AIScreeningSuggestRequest,
     AIScreeningSuggestResponse,
@@ -166,6 +180,18 @@ __all__ = [
     "RoBPushRequest",
     "ExtractionPushRequest",
     "SearchPushRequest",
+    "EffectMetric",
+    "MetaAnalysisCreate",
+    "MetaAnalysisRead",
+    "MetaAnalysisUpdate",
+    "MetaInputCreate",
+    "MetaInputRead",
+    "MetaInputUpdate",
+    "MetaInterpretRequest",
+    "MetaInterpretResponse",
+    "MetaPushRequest",
+    "MetaStatus",
+    "PoolingModel",
     "BibliographyEntryRead",
     "BibliographyResponse",
     "BundleExportRequest",

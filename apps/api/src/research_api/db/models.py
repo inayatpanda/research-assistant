@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -391,6 +391,104 @@ class ExtractionRecord(Base):
         String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
     )
     fields: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class MetaAnalysis(Base):
+    __tablename__ = "meta_analyses"
+    __table_args__ = (
+        Index("ix_meta_analyses_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    effect_metric: Mapped[str] = mapped_column(String(8), nullable=False)
+    model: Mapped[str] = mapped_column(String(8), nullable=False)
+    subgroup_variable: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pooled_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pooled_se: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ci_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ci_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    q_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    q_df: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    q_p: Mapped[float | None] = mapped_column(Float, nullable=True)
+    i2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tau2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    subgroup_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    ai_interpretation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class MetaInput(Base):
+    __tablename__ = "meta_inputs"
+    __table_args__ = (
+        Index(
+            "uq_meta_inputs_meta_article",
+            "meta_id", "article_id",
+            unique=True,
+        ),
+        Index("ix_meta_inputs_meta", "meta_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    meta_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("meta_analyses.id", ondelete="CASCADE"), nullable=False
+    )
+    article_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
+    )
+    study_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    subgroup: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    # Continuous (MD / SMD)
+    mean_a: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sd_a: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_a: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mean_b: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sd_b: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_b: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Binary (OR / RR)
+    events_a: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    n_a_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    events_b: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    n_b_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Time-to-event (HR)
+    log_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    se_log_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hr_ci_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hr_ci_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Correlation (r)
+    r: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_r: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

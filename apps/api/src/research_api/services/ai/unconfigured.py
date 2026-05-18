@@ -60,3 +60,15 @@ class UnconfiguredAIProvider(AIProvider):
         article_abstract: str | None,
     ) -> dict[str, str]:
         raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def interpret_meta_analysis(
+        self,
+        *,
+        metric: str,
+        model: str,
+        pooled: dict[str, float | None],
+        heterogeneity: dict[str, float | int | None],
+        studies: list[dict[str, str]],
+        subgroups: dict[str, dict[str, float]] | None,
+    ) -> str:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)

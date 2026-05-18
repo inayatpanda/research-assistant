@@ -1330,6 +1330,210 @@ export const exportApi = {
   },
 }
 
+// --- Meta-analysis (Phase 7.5) ---
+
+export const EffectMetricSchema = z.enum(['md', 'smd', 'or', 'rr', 'hr', 'r'])
+export type EffectMetric = z.infer<typeof EffectMetricSchema>
+
+export const PoolingModelSchema = z.enum(['fixed', 'random'])
+export type PoolingModel = z.infer<typeof PoolingModelSchema>
+
+export const MetaStatusSchema = z.enum(['draft', 'running', 'completed', 'failed'])
+export type MetaStatus = z.infer<typeof MetaStatusSchema>
+
+export const MetaInputReadSchema = z.object({
+  id: z.string(),
+  meta_id: z.string(),
+  article_id: z.string(),
+  study_label: z.string().nullable(),
+  subgroup: z.string().nullable(),
+  mean_a: z.number().nullable(),
+  sd_a: z.number().nullable(),
+  n_a: z.number().int().nullable(),
+  mean_b: z.number().nullable(),
+  sd_b: z.number().nullable(),
+  n_b: z.number().int().nullable(),
+  events_a: z.number().int().nullable(),
+  n_a_total: z.number().int().nullable(),
+  events_b: z.number().int().nullable(),
+  n_b_total: z.number().int().nullable(),
+  log_hr: z.number().nullable(),
+  se_log_hr: z.number().nullable(),
+  hr: z.number().nullable(),
+  hr_ci_low: z.number().nullable(),
+  hr_ci_high: z.number().nullable(),
+  r: z.number().nullable(),
+  n_r: z.number().int().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type MetaInputRead = z.infer<typeof MetaInputReadSchema>
+
+export const MetaAnalysisReadSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  title: z.string().nullable(),
+  effect_metric: EffectMetricSchema,
+  model: PoolingModelSchema,
+  subgroup_variable: z.string().nullable(),
+  pooled_estimate: z.number().nullable(),
+  pooled_se: z.number().nullable(),
+  ci_low: z.number().nullable(),
+  ci_high: z.number().nullable(),
+  z_value: z.number().nullable(),
+  p_value: z.number().nullable(),
+  q_value: z.number().nullable(),
+  q_df: z.number().int().nullable(),
+  q_p: z.number().nullable(),
+  i2: z.number().nullable(),
+  tau2: z.number().nullable(),
+  subgroup_summary: z.record(z.string(), z.any()).nullable(),
+  ai_interpretation: z.string().nullable(),
+  status: MetaStatusSchema,
+  inputs: z.array(MetaInputReadSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type MetaAnalysisRead = z.infer<typeof MetaAnalysisReadSchema>
+
+export type MetaInputCreate = {
+  article_id: string
+  study_label?: string | null
+  mean_a?: number | null
+  sd_a?: number | null
+  n_a?: number | null
+  mean_b?: number | null
+  sd_b?: number | null
+  n_b?: number | null
+  events_a?: number | null
+  n_a_total?: number | null
+  events_b?: number | null
+  n_b_total?: number | null
+  log_hr?: number | null
+  se_log_hr?: number | null
+  hr?: number | null
+  hr_ci_low?: number | null
+  hr_ci_high?: number | null
+  r?: number | null
+  n_r?: number | null
+}
+
+export type MetaInputUpdate = Omit<MetaInputCreate, 'article_id'>
+
+export type MetaAnalysisCreate = {
+  title?: string | null
+  effect_metric: EffectMetric
+  model: PoolingModel
+  subgroup_variable?: string | null
+  inputs: MetaInputCreate[]
+}
+
+export type MetaAnalysisUpdate = {
+  title?: string | null
+  effect_metric?: EffectMetric
+  model?: PoolingModel
+  subgroup_variable?: string | null
+}
+
+const API_BASE_URL = API_URL
+
+export const metaAnalysisApi = {
+  list: async (projectId: string): Promise<MetaAnalysisRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/meta`)
+    return z.array(MetaAnalysisReadSchema).parse(r.data)
+  },
+  get: async (projectId: string, metaId: string): Promise<MetaAnalysisRead> => {
+    const r = await api.get(`/api/projects/${projectId}/reviews/meta/${metaId}`)
+    return MetaAnalysisReadSchema.parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: MetaAnalysisCreate,
+  ): Promise<MetaAnalysisRead> => {
+    const r = await api.post(`/api/projects/${projectId}/reviews/meta`, body)
+    return MetaAnalysisReadSchema.parse(r.data)
+  },
+  patch: async (
+    projectId: string,
+    metaId: string,
+    body: MetaAnalysisUpdate,
+  ): Promise<MetaAnalysisRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/meta/${metaId}`,
+      body,
+    )
+    return MetaAnalysisReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string, metaId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/reviews/meta/${metaId}`)
+  },
+  run: async (projectId: string, metaId: string): Promise<MetaAnalysisRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/run`,
+      {},
+      { timeout: 60_000 },
+    )
+    return MetaAnalysisReadSchema.parse(r.data)
+  },
+  interpret: async (
+    projectId: string,
+    metaId: string,
+  ): Promise<MetaAnalysisRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/interpret`,
+      {},
+      { timeout: 60_000 },
+    )
+    return MetaAnalysisReadSchema.parse(r.data)
+  },
+  push: async (
+    projectId: string,
+    metaId: string,
+  ): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+  forestUrl: (projectId: string, metaId: string): string =>
+    `${API_BASE_URL}/api/projects/${projectId}/reviews/meta/${metaId}/forest.png`,
+  funnelUrl: (projectId: string, metaId: string): string =>
+    `${API_BASE_URL}/api/projects/${projectId}/reviews/meta/${metaId}/funnel.png`,
+  upsertInput: async (
+    projectId: string,
+    metaId: string,
+    body: MetaInputCreate,
+  ): Promise<MetaInputRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/inputs`,
+      body,
+    )
+    return MetaInputReadSchema.parse(r.data)
+  },
+  updateInput: async (
+    projectId: string,
+    metaId: string,
+    inputId: string,
+    body: MetaInputUpdate,
+  ): Promise<MetaInputRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/inputs/${inputId}`,
+      body,
+    )
+    return MetaInputReadSchema.parse(r.data)
+  },
+  removeInput: async (
+    projectId: string,
+    metaId: string,
+    inputId: string,
+  ): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/inputs/${inputId}`,
+    )
+  },
+}
+
 // exposed for tests
 export const __internal = {
   parseContentDispositionFilename,

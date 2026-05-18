@@ -8,6 +8,11 @@ import { EmptyReviewState } from '@/components/review/EmptyReviewState'
 import { ExtractionTable } from '@/components/review/ExtractionTable'
 import { PRISMAFlowChart } from '@/components/review/PRISMAFlowChart'
 import { ReviewHeader } from '@/components/review/ReviewHeader'
+import { ForestPlotView } from '@/components/review/meta/ForestPlotView'
+import { FunnelPlotView } from '@/components/review/meta/FunnelPlotView'
+import { MetaListPanel } from '@/components/review/meta/MetaListPanel'
+import { MetaResultCard } from '@/components/review/meta/MetaResultCard'
+import { PerStudyInputs } from '@/components/review/meta/PerStudyInputs'
 import { RoBAssessmentForm } from '@/components/review/RoBAssessmentForm'
 import { RoBSummaryFigure } from '@/components/review/RoBSummaryFigure'
 import { RoBToolPicker } from '@/components/review/RoBToolPicker'
@@ -33,14 +38,16 @@ import {
   useRoBTools,
   useScreening,
 } from '@/hooks/useReviews'
+import { useMetaDetail } from '@/hooks/useMeta'
 
-type ReviewTab = 'search' | 'screening' | 'rob' | 'extraction' | 'prisma'
+type ReviewTab = 'search' | 'screening' | 'rob' | 'extraction' | 'meta' | 'prisma'
 
 const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'search', label: 'Search log' },
   { id: 'screening', label: 'Screening' },
   { id: 'rob', label: 'Risk of bias' },
   { id: 'extraction', label: 'Data extraction' },
+  { id: 'meta', label: 'Meta-analysis' },
   { id: 'prisma', label: 'PRISMA flow' },
 ]
 
@@ -121,6 +128,7 @@ function ReviewInner({ projectId }: { projectId: string }) {
         {tab === 'screening' && <ScreeningTabContent projectId={projectId} />}
         {tab === 'rob' && <RoBTabContent projectId={projectId} />}
         {tab === 'extraction' && <ExtractionTable projectId={projectId} />}
+        {tab === 'meta' && <MetaTabContent projectId={projectId} />}
         {tab === 'prisma' && <PRISMAFlowChart projectId={projectId} />}
       </div>
     </motion.div>
@@ -228,6 +236,46 @@ function RoBTabContent({ projectId }: { projectId: string }) {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+function MetaTabContent({ projectId }: { projectId: string }) {
+  const [params] = useSearchParams()
+  const metaId = params.get('meta') || undefined
+  const { data: meta, isLoading } = useMetaDetail(projectId, metaId)
+
+  return (
+    <div className="flex gap-6">
+      <MetaListPanel projectId={projectId} />
+      <div className="flex-1 min-w-0 space-y-4">
+        {!metaId ? (
+          <div className="rounded-md border border-dashed border-border bg-white p-8 text-center text-[13px] text-muted-foreground">
+            Select a meta-analysis from the left, or create a new one.
+          </div>
+        ) : isLoading || !meta ? (
+          <div className="text-[12px] text-muted-foreground">Loading…</div>
+        ) : (
+          <>
+            <PerStudyInputs projectId={projectId} meta={meta} />
+            <MetaResultCard projectId={projectId} meta={meta} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+                  Forest plot
+                </div>
+                <ForestPlotView projectId={projectId} meta={meta} />
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+                  Funnel plot
+                </div>
+                <FunnelPlotView projectId={projectId} meta={meta} />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

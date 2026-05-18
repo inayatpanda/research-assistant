@@ -1,5 +1,9 @@
 from .card_draft import CARD_DRAFT_PROMPT
 from .citation_extraction import EXTRACTION_PROMPT, SUMMARISE_PROMPT
+from .meta_interpretation import (
+    META_INTERPRETATION_PROMPT,
+    build_meta_interpretation_prompt,
+)
 from .result_interpretation import (
     RESULT_INTERPRETATION_PROMPT,
     build_result_interpretation_prompt,
@@ -18,6 +22,8 @@ __all__ = [
     "CARD_DRAFT_PROMPT",
     "SECTION_DRAFT_PROMPT",
     "WRITING_ASSIST_PROMPT",
+    "META_INTERPRETATION_PROMPT",
+    "build_meta_interpretation_prompt",
     "RESULT_INTERPRETATION_PROMPT",
     "SCREENING_SUGGESTION_SYSTEM_PROMPT",
     "SCREENING_SUGGESTION_USER_PROMPT",

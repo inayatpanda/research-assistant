@@ -78,6 +78,24 @@ class FakeAIProvider(AIProvider):
             "model": "fake-model",
         }
 
+    async def interpret_meta_analysis(
+        self,
+        *,
+        metric: str,
+        model: str,
+        pooled: dict,
+        heterogeneity: dict,
+        studies: list,
+        subgroups: dict | None,
+    ) -> str:
+        self.calls.append("interpret_meta_analysis")
+        tokens = " ".join(f"[CITE_{s['article_id']}]" for s in studies)
+        est = pooled.get("estimate")
+        return (
+            f"Pooled {metric.upper()} = {est:.2f} from {len(studies)} studies "
+            f"({model}-effects). {tokens}"
+        )
+
 
 @pytest_asyncio.fixture
 async def session(tmp_path: Path) -> AsyncSession:

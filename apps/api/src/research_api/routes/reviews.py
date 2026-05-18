@@ -584,6 +584,7 @@ _BLOCK_TAG_BY_CLASS: dict[str, str] = {
     "search-records-table": "table",
     "rob-traffic-light-table": "table",
     "extraction-table": "table",
+    "meta-analysis-forest": "figure",
 }
 
 
