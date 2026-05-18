@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete, select, text, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Article, new_id
@@ -99,6 +99,139 @@ class SqliteArticleRepository:
         )
         await self.session.execute(stmt)
         await self.session.commit()
+
+    async def merge(
+        self, *, keep_id: str, drop_ids: list[str], user_id: str
+    ) -> Article:
+        """Merge ``drop_ids`` into ``keep_id``.
+
+        All foreign keys that currently point at any drop article are
+        rewritten to ``keep_id``; the drop rows are then deleted. Single
+        transaction (the request-scoped session is committed at the end).
+
+        Composite-UNIQUE-bearing tables (article_notes UQ(user, article);
+        screening_records UQ(review, article, stage); rob_assessments
+        UQ(review, article, tool); extraction_records UQ(review, article);
+        meta_inputs UQ(meta, article)) require a per-row collision check
+        — when keep already has a sibling row in the same UQ-tuple as a
+        drop row, the drop row is deleted rather than rewritten.
+
+        Raises ``ValueError`` (caught by the route → 422) for the four
+        refusal conditions: same id, missing keep / missing drop, and
+        cross-project merge.
+        """
+        if keep_id in drop_ids:
+            raise ValueError("cannot merge an article into itself")
+
+        keep = await self.get(keep_id, user_id)
+        if keep is None:
+            raise ValueError("keep article not found")
+
+        drops: list[Article] = []
+        for did in drop_ids:
+            d = await self.get(did, user_id)
+            if d is None:
+                raise ValueError("drop article not found")
+            drops.append(d)
+
+        for d in drops:
+            if d.project_id != keep.project_id:
+                raise ValueError("cross-project merge refused")
+
+        async def _rewire_simple(table: str, fk_col: str) -> None:
+            for d in drops:
+                await self.session.execute(
+                    text(
+                        f"UPDATE {table} SET {fk_col} = :keep "
+                        f"WHERE {fk_col} = :drop AND user_id = :u"
+                    ),
+                    {"keep": keep_id, "drop": d.id, "u": user_id},
+                )
+
+        async def _rewire_with_unique(
+            table: str,
+            fk_col: str,
+            other_cols: tuple[str, ...],
+        ) -> None:
+            for d in drops:
+                select_cols = ", ".join(("id",) + other_cols)
+                drop_rows = (
+                    await self.session.execute(
+                        text(
+                            f"SELECT {select_cols} FROM {table} "
+                            f"WHERE {fk_col} = :drop AND user_id = :u"
+                        ),
+                        {"drop": d.id, "u": user_id},
+                    )
+                ).all()
+                for row in drop_rows:
+                    drop_row_id = row[0]
+                    other_vals = dict(zip(other_cols, row[1:]))
+                    where = " AND ".join(
+                        [f"{col} = :{col}" for col in other_cols]
+                    )
+                    params: dict[str, object] = {
+                        "keep": keep_id,
+                        "u": user_id,
+                        **other_vals,
+                    }
+                    sibling = (
+                        await self.session.execute(
+                            text(
+                                f"SELECT id FROM {table} "
+                                f"WHERE {fk_col} = :keep AND user_id = :u "
+                                + (f"AND {where}" if other_cols else "")
+                            ),
+                            params,
+                        )
+                    ).first()
+                    if sibling is not None:
+                        await self.session.execute(
+                            text(f"DELETE FROM {table} WHERE id = :id"),
+                            {"id": drop_row_id},
+                        )
+                    else:
+                        await self.session.execute(
+                            text(
+                                f"UPDATE {table} SET {fk_col} = :keep "
+                                f"WHERE id = :id"
+                            ),
+                            {"keep": keep_id, "id": drop_row_id},
+                        )
+
+        # Highlights — no UNIQUE on article_id, plain rewire.
+        await _rewire_simple("highlights", "article_id")
+        # article_notes — UQ(article_id, user_id).
+        await _rewire_with_unique(
+            "article_notes", "article_id", ("user_id",)
+        )
+        # screening_records — UQ(review_id, article_id, stage).
+        await _rewire_with_unique(
+            "screening_records", "article_id", ("review_id", "stage")
+        )
+        # rob_assessments — UQ(review_id, article_id, tool).
+        await _rewire_with_unique(
+            "rob_assessments", "article_id", ("review_id", "tool")
+        )
+        # extraction_records — UQ(review_id, article_id).
+        await _rewire_with_unique(
+            "extraction_records", "article_id", ("review_id",)
+        )
+        # meta_inputs — UQ(meta_id, article_id) — Phase 7.5 cross-link.
+        await _rewire_with_unique(
+            "meta_inputs", "article_id", ("meta_id",)
+        )
+
+        for d in drops:
+            await self.session.execute(
+                sa_delete(Article).where(
+                    Article.id == d.id, Article.user_id == user_id
+                )
+            )
+
+        await self.session.commit()
+        await self.session.refresh(keep)
+        return keep
 
     async def find_duplicate(
         self, *, project_id: str, doi: str | None, title: str, user_id: str
