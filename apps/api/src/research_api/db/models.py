@@ -740,3 +740,79 @@ class ProjectFrontmatter(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class ManuscriptSnapshot(Base):
+    """Phase 11 — immutable point-in-time copy of the project's manuscript.
+
+    `full_blob` carries a JSON snapshot of every section's HTML plus the
+    Phase-10 ICMJE rows (authors / affiliations / contributions /
+    project_frontmatter), figures, abbreviations, meta_analyses, and
+    extraction_records. Snapshots are append-only; the only mutation is
+    DELETE.
+    """
+
+    __tablename__ = "manuscript_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_manuscript_snapshots_project_user_label",
+            "project_id", "user_id", "label",
+            unique=True,
+        ),
+        Index(
+            "ix_manuscript_snapshots_project_user",
+            "project_id", "user_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    full_blob: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ManuscriptComment(Base):
+    """Phase 11 — margin comment anchored to a manuscript section.
+
+    `anchor_start`/`anchor_end` are ProseMirror integer positions. The
+    frontend defends against stale anchors when text drifts; the backend
+    never validates the positions against the live content.
+
+    `section_name` is one of Abstract / Introduction / Methodology /
+    Results / Discussion / Conclusion / FrontMatter.
+    """
+
+    __tablename__ = "manuscript_comments"
+    __table_args__ = (
+        Index(
+            "ix_manuscript_comments_section",
+            "project_id", "user_id", "section_name", "resolved",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    section_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    anchor_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    anchor_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

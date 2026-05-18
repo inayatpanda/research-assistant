@@ -2,12 +2,23 @@ import { DOMSerializer } from '@tiptap/pm/model'
 import { useMutation } from '@tanstack/react-query'
 import type { Editor } from '@tiptap/react'
 import { motion } from 'framer-motion'
-import { Pencil, Scissors, Sparkles, Wand2 } from 'lucide-react'
+import {
+  MessageSquarePlus,
+  Pencil,
+  Scissors,
+  Sparkles,
+  Wand2,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { type WritingAction, writingApi } from '@/lib/api'
+import { useCreateComment } from '@/hooks/useComments'
+import {
+  type CommentSection,
+  type WritingAction,
+  writingApi,
+} from '@/lib/api'
 import {
   aiSafeTextToHtml,
   htmlToAiSafeText,
@@ -44,12 +55,21 @@ function selectionToHtml(editor: Editor): string {
 export function BubbleAIMenu({
   editor,
   validArticleIds,
+  projectId,
+  section,
 }: {
   editor: Editor
   validArticleIds: Set<string>
+  /** When provided, enables the "Comment" button next to the AI actions. */
+  projectId?: string
+  /** Manuscript section the editor is bound to — required for commenting. */
+  section?: CommentSection
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const [suggestion, setSuggestion] = useState<string | null>(null)
+  const [commentMode, setCommentMode] = useState(false)
+  const [commentBody, setCommentBody] = useState('')
+  const create = useCreateComment(projectId ?? '')
 
   const assist = useMutation({
     mutationFn: async (action: WritingAction): Promise<string> => {
@@ -71,7 +91,7 @@ export function BubbleAIMenu({
       if (to <= from) {
         // Selection just collapsed — don't tear down the menu while the user is
         // mid-action (a suggestion is being reviewed or a request is in flight).
-        if (suggestion || assist.isPending) return
+        if (suggestion || assist.isPending || commentMode) return
         setPos(null)
         return
       }
@@ -85,7 +105,38 @@ export function BubbleAIMenu({
     return () => {
       editor.off('selectionUpdate', update)
     }
-  }, [editor, suggestion, assist.isPending])
+  }, [editor, suggestion, assist.isPending, commentMode])
+
+  async function handleCommitComment() {
+    if (!projectId || !section) {
+      toast.error('Comment binding missing')
+      return
+    }
+    const body = commentBody.trim()
+    if (!body) {
+      toast.error('Write a comment first')
+      return
+    }
+    const { from, to } = editor.state.selection
+    if (to <= from) {
+      toast.error('Select some text first')
+      return
+    }
+    try {
+      await create.mutateAsync({
+        section_name: section,
+        anchor_start: from,
+        anchor_end: to,
+        body,
+      })
+      toast.success('Comment added')
+      setCommentBody('')
+      setCommentMode(false)
+      setPos(null)
+    } catch {
+      toast.error('Could not save comment')
+    }
+  }
 
   function handleAccept(text: string) {
     const { from, to } = editor.state.selection
@@ -125,7 +176,59 @@ export function BubbleAIMenu({
             {a.label}
           </Button>
         ))}
+        {projectId && section ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={assist.isPending}
+            onClick={() => setCommentMode((m) => !m)}
+            className="h-7 px-2 text-[12px]"
+            title="Comment"
+            data-testid="bubble-comment-toggle"
+          >
+            <MessageSquarePlus className="h-3.5 w-3.5 mr-1" />
+            Comment
+          </Button>
+        ) : null}
       </div>
+
+      {commentMode && projectId && section ? (
+        <div
+          className="mt-2 rounded-md border border-border bg-white p-2 shadow-md space-y-2"
+          data-testid="bubble-comment-form"
+        >
+          <textarea
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            placeholder="Add a comment…"
+            rows={3}
+            className="w-full text-[12px] rounded border border-border p-1.5 outline-none focus:ring-1 focus:ring-accent"
+            data-testid="bubble-comment-body"
+          />
+          <div className="flex justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[12px]"
+              onClick={() => {
+                setCommentMode(false)
+                setCommentBody('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[12px]"
+              onClick={handleCommitComment}
+              disabled={create.isPending}
+              data-testid="bubble-comment-submit"
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {(assist.isPending || suggestion) && (
         <div className="mt-2">

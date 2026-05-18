@@ -39,7 +39,9 @@ from ..db.models import (
     ExtractionRecord,
     Figure,
     Highlight,
+    ManuscriptComment,
     ManuscriptSection,
+    ManuscriptSnapshot,
     MetaAnalysis,
     MetaInput,
     Project,
@@ -505,6 +507,20 @@ async def _collect_bundle_inputs(
         )
     )).scalar_one_or_none()
 
+    # Phase 11 — snapshots + margin comments.
+    manuscript_snapshots = list((await session.execute(
+        select(ManuscriptSnapshot).where(
+            ManuscriptSnapshot.project_id == project_id,
+            ManuscriptSnapshot.user_id == user_id,
+        ).order_by(ManuscriptSnapshot.created_at.asc())
+    )).scalars().all())
+    manuscript_comments = list((await session.execute(
+        select(ManuscriptComment).where(
+            ManuscriptComment.project_id == project_id,
+            ManuscriptComment.user_id == user_id,
+        ).order_by(ManuscriptComment.created_at.asc())
+    )).scalars().all())
+
     return BundleInputs(
         project=project,
         articles=articles,
@@ -530,6 +546,8 @@ async def _collect_bundle_inputs(
         author_affiliations=fm_author_affiliations,
         contributions=fm_contributions,
         project_frontmatter=project_frontmatter,
+        manuscript_snapshots=manuscript_snapshots,
+        manuscript_comments=manuscript_comments,
     )
 
 

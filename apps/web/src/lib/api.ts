@@ -2023,3 +2023,136 @@ export const frontmatterApi = {
     },
   },
 }
+
+// ── Phase 11: Manuscript snapshots ────────────────────────────────────
+
+export const SnapshotSummarySchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  label: z.string(),
+  description: z.string().nullable(),
+  created_at: z.string(),
+})
+export type SnapshotSummary = z.infer<typeof SnapshotSummarySchema>
+
+export const SnapshotReadSchema = SnapshotSummarySchema.extend({
+  full_blob: z.record(z.any()),
+})
+export type SnapshotRead = z.infer<typeof SnapshotReadSchema>
+
+export const DiffLineSchema = z.object({
+  type: z.string(),
+  line: z.string(),
+})
+export type DiffLine = z.infer<typeof DiffLineSchema>
+
+export const SnapshotDiffResponseSchema = z.object({
+  base_snapshot_id: z.string(),
+  target_snapshot_id: z.string().nullable(),
+  sections: z.record(z.array(DiffLineSchema)),
+})
+export type SnapshotDiffResponse = z.infer<typeof SnapshotDiffResponseSchema>
+
+export type SnapshotCreate = {
+  label: string
+  description?: string | null
+}
+
+export const snapshotsApi = {
+  list: async (projectId: string): Promise<SnapshotSummary[]> => {
+    const r = await api.get(`/api/projects/${projectId}/snapshots`)
+    return z.array(SnapshotSummarySchema).parse(r.data)
+  },
+  create: async (projectId: string, body: SnapshotCreate): Promise<SnapshotRead> => {
+    const r = await api.post(`/api/projects/${projectId}/snapshots`, body)
+    return SnapshotReadSchema.parse(r.data)
+  },
+  get: async (projectId: string, snapshotId: string): Promise<SnapshotRead> => {
+    const r = await api.get(`/api/projects/${projectId}/snapshots/${snapshotId}`)
+    return SnapshotReadSchema.parse(r.data)
+  },
+  diff: async (
+    projectId: string,
+    snapshotId: string,
+    targetId?: string,
+  ): Promise<SnapshotDiffResponse> => {
+    const params = targetId ? { target: targetId } : undefined
+    const r = await api.get(
+      `/api/projects/${projectId}/snapshots/${snapshotId}/diff`,
+      { params },
+    )
+    return SnapshotDiffResponseSchema.parse(r.data)
+  },
+  delete: async (projectId: string, snapshotId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/snapshots/${snapshotId}`)
+  },
+}
+
+// ── Phase 11: Margin comments ─────────────────────────────────────────
+
+export const CommentSectionSchema = z.enum([
+  'Abstract',
+  'Introduction',
+  'Methodology',
+  'Results',
+  'Discussion',
+  'Conclusion',
+  'FrontMatter',
+])
+export type CommentSection = z.infer<typeof CommentSectionSchema>
+
+export const CommentReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  section_name: z.string(),
+  anchor_start: z.number().int(),
+  anchor_end: z.number().int(),
+  body: z.string(),
+  resolved: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type CommentRead = z.infer<typeof CommentReadSchema>
+
+export type CommentCreate = {
+  section_name: CommentSection
+  anchor_start: number
+  anchor_end: number
+  body: string
+}
+
+export type CommentUpdate = {
+  body?: string
+  resolved?: boolean
+}
+
+export const commentsApi = {
+  list: async (
+    projectId: string,
+    filters?: { section?: CommentSection; resolved?: boolean },
+  ): Promise<CommentRead[]> => {
+    const params: Record<string, string | boolean> = {}
+    if (filters?.section) params.section = filters.section
+    if (filters?.resolved !== undefined) params.resolved = filters.resolved
+    const r = await api.get(`/api/projects/${projectId}/comments`, { params })
+    return z.array(CommentReadSchema).parse(r.data)
+  },
+  create: async (projectId: string, body: CommentCreate): Promise<CommentRead> => {
+    const r = await api.post(`/api/projects/${projectId}/comments`, body)
+    return CommentReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    commentId: string,
+    body: CommentUpdate,
+  ): Promise<CommentRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/comments/${commentId}`,
+      body,
+    )
+    return CommentReadSchema.parse(r.data)
+  },
+  delete: async (projectId: string, commentId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/comments/${commentId}`)
+  },
+}

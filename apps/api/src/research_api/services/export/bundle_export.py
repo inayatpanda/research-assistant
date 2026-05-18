@@ -33,7 +33,9 @@ from ...db.models import (
     ExtractionRecord,
     Figure,
     Highlight,
+    ManuscriptComment,
     ManuscriptSection,
+    ManuscriptSnapshot,
     MetaAnalysis,
     MetaInput,
     Project,
@@ -77,6 +79,9 @@ class BundleInputs:
     author_affiliations: list[AuthorAffiliation] = field(default_factory=list)
     contributions: list[Contribution] = field(default_factory=list)
     project_frontmatter: ProjectFrontmatter | None = None
+    # Phase 11 — manuscript snapshots + margin comments
+    manuscript_snapshots: list[ManuscriptSnapshot] = field(default_factory=list)
+    manuscript_comments: list[ManuscriptComment] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -149,4 +154,10 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
             if inputs.project_frontmatter is not None
             else None
         ),
+        "manuscript_snapshots": [
+            _row_to_dict(s) for s in inputs.manuscript_snapshots
+        ],
+        "manuscript_comments": [
+            _row_to_dict(c) for c in inputs.manuscript_comments
+        ],
     }

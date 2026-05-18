@@ -7,9 +7,11 @@ import { BibliographyPanel } from '@/components/bibliography/BibliographyPanel'
 import { FiguresPanel } from '@/components/figures/FiguresPanel'
 import { FrontMatterPanel } from '@/components/frontmatter/FrontMatterPanel'
 import { AbbreviationsPanel } from '@/components/manuscript/AbbreviationsPanel'
+import { CommentsRail } from '@/components/manuscript/CommentsRail'
 import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView'
 import { JournalChip } from '@/components/manuscript/JournalChip'
 import { ManuscriptEditor } from '@/components/manuscript/ManuscriptEditor'
+import { VersionPanel } from '@/components/manuscript/VersionPanel'
 import {
   ManuscriptSearchPanel,
   type SearchHit,
@@ -23,7 +25,12 @@ import {
 } from '@/components/manuscript/SectionTabs'
 import { WordCountBar } from '@/components/manuscript/WordCountBar'
 import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
-import { manuscriptApi, projectsApi, type ManuscriptSectionName } from '@/lib/api'
+import {
+  manuscriptApi,
+  projectsApi,
+  type CommentSection,
+  type ManuscriptSectionName,
+} from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
 import { useActiveProject } from '@/lib/projectContext'
 
@@ -262,6 +269,16 @@ function ManuscriptInner({
         <BibliographyPanel projectId={projectId} />
         <ReferenceIntegrityPanel projectId={projectId} />
         <AbbreviationsPanel projectId={projectId} />
+        <VersionPanel projectId={projectId} />
+        {!isFinal && !isFrontMatter ? (
+          <CommentsRail
+            projectId={projectId}
+            activeSection={tab as CommentSection}
+            editor={editor}
+          />
+        ) : (
+          <CommentsRail projectId={projectId} />
+        )}
       </aside>
     </motion.div>
   )

@@ -32,7 +32,9 @@ from ...db.models import (
     ExtractionRecord,
     Figure,
     Highlight,
+    ManuscriptComment,
     ManuscriptSection,
+    ManuscriptSnapshot,
     MetaAnalysis,
     MetaInput,
     Project,
@@ -121,6 +123,7 @@ async def _do_import(
         "meta_analyses": 0, "meta_inputs": 0,
         "authors": 0, "affiliations": 0, "author_affiliations": 0,
         "contributions": 0, "project_frontmatter": 0,
+        "manuscript_snapshots": 0, "manuscript_comments": 0,
     }
 
     proj_in = bundle["project"]
@@ -642,5 +645,52 @@ async def _do_import(
         ))
         await session.flush()
         counts["project_frontmatter"] = 1
+
+    # ── Manuscript snapshots (Phase 11) ────────────────────────────────
+    # Re-key on `label` collisions: if a snapshot with the same label already
+    # exists for the new project (e.g. on importing into a populated user),
+    # suffix with " (imported)" to dodge the UNIQUE (project, user, label)
+    # constraint without dropping the row.
+    seen_labels: set[str] = set()
+    for snap in bundle.get("manuscript_snapshots") or []:
+        raw_label = (snap.get("label") or "Imported").strip() or "Imported"
+        label = raw_label
+        suffix = 0
+        while label in seen_labels:
+            suffix += 1
+            label = f"{raw_label} (imported {suffix})"
+        seen_labels.add(label)
+        session.add(ManuscriptSnapshot(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            label=label,
+            description=snap.get("description"),
+            full_blob=snap.get("full_blob") or {},
+        ))
+        counts["manuscript_snapshots"] += 1
+    if counts["manuscript_snapshots"]:
+        await session.flush()
+
+    for cm in bundle.get("manuscript_comments") or []:
+        section_name = cm.get("section_name") or "Introduction"
+        anchor_start = int(cm.get("anchor_start") or 0)
+        anchor_end = int(cm.get("anchor_end") or anchor_start)
+        body_text = cm.get("body")
+        if not body_text:
+            continue
+        session.add(ManuscriptComment(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            section_name=section_name,
+            anchor_start=anchor_start,
+            anchor_end=anchor_end,
+            body=body_text,
+            resolved=bool(cm.get("resolved")),
+        ))
+        counts["manuscript_comments"] += 1
+    if counts["manuscript_comments"]:
+        await session.flush()
 
     return counts

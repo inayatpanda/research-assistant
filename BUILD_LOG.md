@@ -5,6 +5,104 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 11 — Manuscript version snapshots + margin comments ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 11 section)
+
+**Items addressed:** #2 (version history + diff), #3 (margin comments).
+
+**Backend changes**
+
+- New migration `0012_snapshots_comments.py` creating:
+  - `manuscript_snapshots` (project_id, user_id, label, description, full_blob JSON, created_at). `UNIQUE (project_id, user_id, label)`. Index on (project_id, user_id).
+  - `manuscript_comments` (project_id, user_id, section_name, anchor_start, anchor_end, body, resolved, created_at, updated_at). Index on (project_id, user_id, section_name, resolved).
+- `db/models.py` — new `ManuscriptSnapshot` + `ManuscriptComment` ORM classes; both FK-cascade off `projects`.
+- `schemas/snapshots.py` + `schemas/comments.py` — Pydantic models incl. the diff payload shape (`{section_name: [{type, line}]}`). `CommentSection` is a `Literal` of the six sections plus `FrontMatter`.
+- `repositories/snapshots.py` — `list_for_project / get / create_from_current / delete`. No update path — snapshots are immutable. `create_from_current` assembles the JSON blob by walking sections, ICMJE rows (authors/affiliations/links/contributions/project_frontmatter), figures, abbreviations, meta_analyses, and extraction_records via direct selects (so the snapshot survives independent of the live repos).
+- `repositories/comments.py` — list-with-filters / create / update (body or resolved) / delete. Returns `None` on cross-tenant ids so the route layer surfaces 404.
+- `routes/snapshots.py` — five endpoints: list (Summary, no `full_blob`), create (201, 409 on label clash), get full, GET diff with optional `?target=` query (omitted = diff vs current state), DELETE.
+- `routes/comments.py` — list (filterable by `?section=&resolved=`), POST, PATCH (body/resolved), DELETE.
+- `services/export/bundle_export.py` + `bundle_import.py` — round-trip both tables; the importer suffixes label collisions with " (imported)" so the UNIQUE(project,user,label) constraint never trips.
+- Wired `snapshots_router` + `comments_router` under `/api` in `main.py`.
+
+**Diff design**
+
+- `difflib.unified_diff` (stdlib only — no `diff-match-patch` dep). Per section, HTML is `splitlines()`-ed and fed in with `n=0` (no context) so the response is surgical: only changed lines surface. The route post-processes `+`/`-` markers into typed records; `---`/`+++`/`@@` headers are stripped before serialisation. Identical sections drop out of the response payload entirely (the UI shows "No changes" on empty `sections`).
+- Granularity: line-by-line. TipTap emits one block per `<p>` so line granularity yields readable surgical diffs without a word-diff dep.
+
+**Anchor staleness**
+
+- Backend never validates `anchor_start/end` against the live content — comments are append-only metadata. The frontend's `CommentsRail` checks the bound editor's `state.doc.content.size`; if `anchor_start >= docSize` or `anchor_end > docSize+1`, the row gets a `(anchor stale)` badge and the jump button toasts "Comment anchor is no longer in this section" instead of moving the selection.
+
+**Frontend changes**
+
+- `lib/api.ts` — `snapshotsApi` (5 methods) + `commentsApi` (4 methods); Zod schemas for `SnapshotSummary / SnapshotRead / SnapshotDiffResponse / DiffLine / CommentRead`.
+- `hooks/useSnapshots.ts` + `hooks/useComments.ts` — TanStack Query hooks with `['snapshots', projectId]` / `['comments', projectId, section, resolved]` invalidation on every mutation.
+- `components/manuscript/VersionPanel.tsx` — right-rail collapsible card; new-snapshot dialog (label + description); rows show created-at, label, description, and Diff/Hide + Delete buttons. Diff expands inline under each row.
+- `components/manuscript/VersionDiffView.tsx` — renders per-section `<ins>` / `<del>` blocks with emerald/rose background tinting; equal lines render in dim grey. No new dependency.
+- `components/manuscript/CommentsRail.tsx` — open comments at top, resolved ones tucked in `<details>` collapsible. Click body → jumps the bound `Editor` to the anchored range. DOMPurify-strips ALL tags from comment body before display.
+- `lib/tiptap/extensions/CommentMark.ts` — TipTap Mark with `commentId` attr. Serialised HTML: `<span data-comment data-comment-id="…">…</span>`. Inclusive=false so typing adjacent to a comment doesn't widen it.
+- `components/manuscript/BubbleAIMenu.tsx` — appended a `Comment` button next to the AI actions; click opens a textarea, Save POSTs to `commentsApi.create` with the current selection's `from`/`to` as anchors.
+- `ManuscriptPage.tsx` — mounted `VersionPanel` + `CommentsRail` in the right rail (xl breakpoint), alongside Figures/Bibliography/References/Abbreviations panels. CommentsRail is filtered to the active manuscript-section tab.
+
+**Test deltas**
+
+- Backend: 1200 → **1227 (+27)**.
+  - `test_snapshots_route.py` (10) — create, list, label collision, frontmatter capture, get full blob, diff vs current, diff between two snapshots, identical diff returns empty, delete, project-404, target-404.
+  - `test_comments_route.py` (9) — create/list, section + resolved filters, PATCH resolved, PATCH body, delete, anchor range validation, unknown section in query, unknown section in POST, FrontMatter section accepted.
+  - `test_security_snapshots_comments_isolation.py` (8) — 4 snapshot tests (list/get/diff/delete 404 for other user, alice's data survives bob's attempted delete) + 3 comment tests + 1 bundle round-trip that exports as alice and re-imports as bob, asserting both new counts arrive and rows are re-tagged.
+  - `test_bundle_import.py` updated to allow `manuscript_snapshots`/`manuscript_comments` keys in the lossless round-trip dict.
+- Frontend: 131 → **144 (+13 vitest across 4 new files)**.
+  - `VersionDiffView.test.tsx` (3) — empty-state, `<ins>`/`<del>` rendering, loading state.
+  - `VersionPanel.test.tsx` (3) — list rendering, create dialog opens with empty label input, Diff button toggles to Hide.
+  - `CommentsRail.test.tsx` (4) — open vs resolved separation, stale badge logic does NOT fire when anchor in range, jump button calls `setTextSelection({from, to})`, DOMPurify strips `<script>` from bodies.
+  - `CommentMark.test.ts` (3) — Mark name + type, `commentId` attribute declared, `renderHTML` emits a `<span data-comment>`.
+
+**One bug found during diff testing**
+
+- The first cut of `_diff_html` returned the unified-diff headers (`--- / +++ / @@ … @@`) as `=` lines, which polluted the response payload — the frontend renders `=` rows in dim grey, so the user saw chatty diff-machinery noise above every changed line. Fix: explicitly skip lines starting with `---`, `+++`, or `@@` before classifying. Captured in test `test_diff_between_two_snapshots` (asserts only `+` and `-` rows survive for the changed line).
+
+**Files created**
+
+- `apps/api/alembic/versions/0012_snapshots_comments.py`
+- `apps/api/src/research_api/schemas/snapshots.py`
+- `apps/api/src/research_api/schemas/comments.py`
+- `apps/api/src/research_api/repositories/snapshots.py`
+- `apps/api/src/research_api/repositories/comments.py`
+- `apps/api/src/research_api/routes/snapshots.py`
+- `apps/api/src/research_api/routes/comments.py`
+- `apps/api/tests/test_snapshots_route.py`
+- `apps/api/tests/test_comments_route.py`
+- `apps/api/tests/test_security_snapshots_comments_isolation.py`
+- `apps/web/src/hooks/useSnapshots.ts`
+- `apps/web/src/hooks/useComments.ts`
+- `apps/web/src/components/manuscript/VersionPanel.tsx`
+- `apps/web/src/components/manuscript/VersionDiffView.tsx`
+- `apps/web/src/components/manuscript/CommentsRail.tsx`
+- `apps/web/src/lib/tiptap/extensions/CommentMark.ts`
+- `apps/web/src/components/manuscript/__tests__/VersionDiffView.test.tsx`
+- `apps/web/src/components/manuscript/__tests__/VersionPanel.test.tsx`
+- `apps/web/src/components/manuscript/__tests__/CommentsRail.test.tsx`
+- `apps/web/src/lib/tiptap/extensions/__tests__/CommentMark.test.ts`
+
+**Files modified**
+
+- `apps/api/src/research_api/db/models.py`
+- `apps/api/src/research_api/main.py`
+- `apps/api/src/research_api/routes/export.py`
+- `apps/api/src/research_api/services/export/bundle_export.py`
+- `apps/api/src/research_api/services/export/bundle_import.py`
+- `apps/api/src/research_api/schemas/__init__.py`
+- `apps/api/tests/test_bundle_import.py`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/components/manuscript/BubbleAIMenu.tsx`
+- `apps/web/src/components/manuscript/ManuscriptEditor.tsx`
+- `apps/web/src/routes/ManuscriptPage.tsx`
+
+**Git:** tagged `phase-11`.
+
+---
+
 ## 2026-05-18 · Mini-phase 10 — ICMJE structured front-matter ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 10 section)

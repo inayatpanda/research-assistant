@@ -136,7 +136,12 @@ export function ManuscriptEditor({
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-white">
       <EditorContent editor={editor} />
-      <BubbleAIMenu editor={editor} validArticleIds={validIds} />
+      <BubbleAIMenu
+        editor={editor}
+        validArticleIds={validIds}
+        projectId={projectId}
+        section={section}
+      />
       <CitationSuggestions editor={editor} articles={articles} />
     </div>
   )

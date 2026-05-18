@@ -116,6 +116,20 @@ from .upload import ExtractionSource, UploadResponse
 from .figure import FigureRead, FigureReorderRequest, FigureUpdate, ImageMime
 from .consort import ConsortData, ConsortGetResponse, ConsortRead
 from .journal_template import JournalTemplate, ReferenceStyle
+from .snapshots import (
+    DiffLine,
+    SectionDiff,
+    SnapshotCreate,
+    SnapshotDiffResponse,
+    SnapshotRead,
+    SnapshotSummary,
+)
+from .comments import (
+    CommentCreate,
+    CommentRead,
+    CommentSection,
+    CommentUpdate,
+)
 
 __all__ = [
     "ProjectCreate",
@@ -220,4 +234,14 @@ __all__ = [
     "ConsortRead",
     "JournalTemplate",
     "ReferenceStyle",
+    "SnapshotCreate",
+    "SnapshotSummary",
+    "SnapshotRead",
+    "DiffLine",
+    "SectionDiff",
+    "SnapshotDiffResponse",
+    "CommentCreate",
+    "CommentUpdate",
+    "CommentRead",
+    "CommentSection",
 ]

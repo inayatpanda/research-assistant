@@ -5,6 +5,7 @@ from .container import get_container
 from .routes.abbreviations import router as abbreviations_router
 from .routes.analyses import router as analyses_router
 from .routes.articles import router as articles_router
+from .routes.comments import router as comments_router
 from .routes.compilation import router as compilation_router
 from .routes.datasets import router as datasets_router
 from .routes.consort import router as consort_router
@@ -21,6 +22,7 @@ from .routes.notes import router as notes_router
 from .routes.projects import router as projects_router
 from .routes.reviews import router as reviews_router
 from .routes.reviews_meta import router as reviews_meta_router
+from .routes.snapshots import router as snapshots_router
 from .routes.writing import router as writing_router
 
 app = FastAPI(title="Research Manuscript Assistant API", version="0.0.1")
@@ -54,3 +56,5 @@ app.include_router(figures_router, prefix="/api")
 app.include_router(consort_router, prefix="/api")
 app.include_router(journal_templates_router, prefix="/api")
 app.include_router(frontmatter_router, prefix="/api")
+app.include_router(snapshots_router, prefix="/api")
+app.include_router(comments_router, prefix="/api")
