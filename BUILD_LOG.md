@@ -5,6 +5,100 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 12.5 — URL-scoped project routing ✅ COMPLETE
+
+**Scope**
+
+Move the "active project" out of a global Zustand store into the URL so multiple
+projects can be opened in parallel tabs. Each tab now has its own `projectId`
+in the route, completely independent of every other tab.
+
+**Tests**
+
+- ✅ `apps/web` frontend vitest: **159 / 159 green** (153 baseline + 6 new).
+- ✅ `apps/web` `tsc --noEmit`: clean (only the pre-existing `baseUrl`
+  deprecation warning).
+- Backend: untouched in this mini-phase.
+
+**Deltas**
+
+- `App.tsx` — flat route list becomes a nested tree:
+  - `/` Dashboard · `/settings` · `/health` stay global.
+  - `/projects/:projectId` is the new nested branch, guarded by
+    `<ProjectLayoutGuard>`; index = `ProjectHomePage`; children = the eight
+    module pages.
+  - Pre-MP12.5 paths (`/library`, `/manuscript`, …) still resolve via
+    `<LegacyRedirect>` — to be removed in MP14.
+- `components/layout/ProjectLayoutGuard.tsx` — resolves `:projectId` from
+  the URL, fetches the project, surfaces it through a `ProjectContext`,
+  redirects to `/` + toast on 404, and stamps the projectId as
+  "last viewed" so a blank new tab can default to it.
+- `components/layout/LegacyRedirect.tsx` — generic `to` redirector +
+  `ReaderLegacyForward` specialisation that preserves `:articleId`.
+- `components/layout/ProjectSwitcher.tsx` — Topbar dropdown listing every
+  project, with an inline ⤴ "open in new tab" button per row.
+- `components/layout/Sidebar.tsx` / `MobileNav.tsx` — nav items now
+  resolve project-scoped hrefs through `resolveNavHref()`, falling back to
+  the last-viewed project for global pages.
+- `lib/projectContext.ts` — new `useLastViewedProject` (replaces
+  `useActiveProject`; the old name is kept as a `@deprecated` alias).
+  Adds `ProjectContext`, `useProjectId()`, `useProject()`. Includes a
+  read-time migration from the old `research-active-project` localStorage
+  key. Ships a memory-storage fallback for jsdom (see "incidents").
+- All eight module pages converted from `useActiveProject(...)` +
+  `<ProjectSelectGate />` checks to `useProjectId()`; the gate component
+  was deleted.
+- `~10 navigate() / Link to=` call sites updated to include
+  `/projects/${id}/`: ProjectCard, AnalysisResultCard, ImportDropzone,
+  BibliographyPanel, ArticleListItem, ReaderShell, EmptySectionState,
+  ReaderPage (×2), PRISMAFlowChart, SearchLog, RoBSummaryFigure,
+  ExtractionTable, MetaResultCard.
+- New `routes/ProjectHomePage.tsx` — 8-tile launchpad with live counts
+  (articles, datasets, manuscript word total) and a recent-articles list.
+- `components/projects/ProjectCard.tsx` — cards now navigate to
+  `/projects/<id>` and expose a corner ⤴ "open in new tab".
+- 6 new vitest in `components/layout/__tests__/ProjectLayoutGuard.test.tsx`
+  covering happy-path, 404 redirect, last-viewed recording, both legacy
+  redirect branches, and the useProjectId() out-of-context guard.
+
+**Decisions**
+
+- **React-Context guard, not a hook**: ProjectLayoutGuard wraps `<Outlet />`
+  with `<ProjectContext.Provider>`. Pages call `useProjectId()` which throws
+  if used outside the project route — strong invariant, no need for null
+  checks scattered across pages.
+- **Legacy redirects via Zustand "last viewed"**: rather than greying out
+  module links when no project is selected, the sidebar/legacy redirects
+  navigate to the user's most-recent project. Better UX than a dead link.
+- **Render the page with `project: null`**: the guard does not block on
+  the `projectsApi.get` query; pages already tolerate `project?.title`
+  being `undefined` (they show "Loading…"), and a shared queryKey means
+  the in-page `useQuery({ queryKey: ['project', id] })` dedupes the
+  in-flight request.
+- **Topbar over Sidebar for the switcher**: project switching is a global
+  action, fits the Topbar's existing "current context" affordance.
+
+**Incidents**
+
+- **jsdom 29 omits `window.localStorage`**: vitest's `jsdom` environment
+  doesn't expose `localStorage`, and the existing Zustand `persist`
+  middleware (which had been silently no-oping reads) started crashing
+  the moment any test exercised `.set()` / `.clear()`. Fixed by passing
+  an explicit `createJSONStorage(() => <fallback>)` to `persist()`, where
+  the fallback is `window.localStorage` if present, else an in-memory
+  Map. Real browsers behave identically; tests now persist into the Map
+  for the duration of the test.
+
+**Out of scope (deferred)**
+
+- Removing the legacy `/library` etc. routes — kept for one release per
+  the plan; will be removed in MP14.
+- Per-tab last-active section memory (e.g. remember the user was on
+  Manuscript when they re-open a project tab) — currently we always land
+  on the project home.
+
+---
+
 ## 2026-05-18 · Mini-phase 12 — Cover letter + reviewer response + submission package ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 12 section)

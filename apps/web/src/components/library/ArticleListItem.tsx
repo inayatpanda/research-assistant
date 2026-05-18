@@ -39,7 +39,7 @@ export function ArticleListItem({
       variants={cardEnter(index)}
       initial="initial"
       animate="animate"
-      onClick={() => navigate(`/reader/${article.id}`)}
+      onClick={() => navigate(`/projects/${article.project_id}/reader/${article.id}`)}
       className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-white hover:shadow-sm hover:border-accent/40 transition-all cursor-pointer"
     >
       <div className="shrink-0 h-10 w-10 rounded-md bg-muted flex items-center justify-center text-muted-foreground">

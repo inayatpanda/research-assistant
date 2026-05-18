@@ -99,7 +99,9 @@ export function BibliographyPanel({ projectId }: { projectId: string }) {
     const params = new URLSearchParams()
     params.set('section', section)
     params.set('scrollTo', `cite-${entry.article_id}`)
-    navigate(`/manuscript?${params.toString()}`, { replace: true })
+    navigate(`/projects/${projectId}/manuscript?${params.toString()}`, {
+      replace: true,
+    })
   }
 
   /** Resolve the article list to the bibliography order so client-side exports

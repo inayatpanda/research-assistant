@@ -77,7 +77,7 @@ export function ExtractionTable({ projectId }: { projectId: string }) {
             push.mutate(undefined, {
               onSuccess: () => {
                 toast.success('Pushed to Results')
-                navigate('/manuscript?section=Results')
+                navigate(`/projects/${projectId}/manuscript?section=Results`)
               },
               onError: (e: Error) => toast.error(e.message),
             })

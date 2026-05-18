@@ -10,7 +10,6 @@ import { ArticleListItem } from '@/components/library/ArticleListItem'
 import { DuplicatesPanel } from '@/components/library/DuplicatesPanel'
 import { ImportPreviewDialog } from '@/components/library/ImportPreviewDialog'
 import { MetadataConfirmDialog } from '@/components/library/MetadataConfirmDialog'
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import { PubMedSearchDialog } from '@/components/library/PubMedSearchDialog'
 import { RisBibtexDropzone } from '@/components/library/RisBibtexDropzone'
 import { UploadZone } from '@/components/library/UploadZone'
@@ -24,10 +23,10 @@ import {
   type UploadResponse,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 
 export default function LibraryPage() {
-  const projectId = useActiveProject((s) => s.projectId)
+  const projectId = useProjectId()
   const [filters, setFilters] = useState<Filters>({ sort: 'created_desc' })
   const [editing, setEditing] = useState<Article | null>(null)
   const [doiPreview, setDoiPreview] = useState<ArticleMetadata | null>(null)
@@ -35,14 +34,12 @@ export default function LibraryPage() {
 
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => (projectId ? projectsApi.get(projectId) : Promise.resolve(null)),
-    enabled: !!projectId,
+    queryFn: () => projectsApi.get(projectId),
   })
 
   const { data: articles = [], isLoading } = useQuery({
     queryKey: ['articles', projectId, filters],
-    queryFn: () => articlesApi.list(projectId!, filters),
-    enabled: !!projectId,
+    queryFn: () => articlesApi.list(projectId, filters),
   })
 
   const del = useMutation({
@@ -53,8 +50,6 @@ export default function LibraryPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   })
-
-  if (!projectId) return <ProjectSelectGate />
 
   function onUploaded(response: UploadResponse) {
     // Open metadata confirm for the newly created article so user can review extraction

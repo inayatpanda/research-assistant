@@ -4,7 +4,6 @@ import { BarChart3 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import { AnalysisResultCard } from '@/components/statistics/AnalysisResultCard'
 import { DatasetDetail } from '@/components/statistics/DatasetDetail'
 import { DatasetList } from '@/components/statistics/DatasetList'
@@ -13,13 +12,12 @@ import { NewAnalysisWizard } from '@/components/statistics/NewAnalysisWizard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type Dataset, projectsApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 import { useAnalysesForDataset } from '@/hooks/useAnalyses'
 import { useDataset, useDatasets } from '@/hooks/useDatasets'
 
 export default function StatisticsPage() {
-  const projectId = useActiveProject((s) => s.projectId)
-  if (!projectId) return <ProjectSelectGate />
+  const projectId = useProjectId()
   return <StatisticsInner projectId={projectId} />
 }
 

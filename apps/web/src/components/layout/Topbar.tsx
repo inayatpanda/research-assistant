@@ -5,6 +5,7 @@ import { metaApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 import { MobileNav } from './MobileNav'
+import { ProjectSwitcher } from './ProjectSwitcher'
 
 export function Topbar() {
   const { data, isError } = useQuery({
@@ -18,24 +19,27 @@ export function Topbar() {
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-white flex items-center justify-between px-3 md:px-5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <MobileNav />
         <div className="text-[13px] text-muted-foreground">Local · ./data</div>
       </div>
-      <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-        <CircleDot
-          className={cn(
-            'h-3 w-3',
-            ok && 'text-emerald-500',
-            degraded && 'text-amber-500',
-            !ok && !degraded && 'text-rose-500',
-          )}
-        />
-        <span>
-          {ok && 'API ready'}
-          {degraded && 'API degraded'}
-          {!ok && !degraded && 'API offline'}
-        </span>
+      <div className="flex items-center gap-3">
+        <ProjectSwitcher />
+        <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+          <CircleDot
+            className={cn(
+              'h-3 w-3',
+              ok && 'text-emerald-500',
+              degraded && 'text-amber-500',
+              !ok && !degraded && 'text-rose-500',
+            )}
+          />
+          <span>
+            {ok && 'API ready'}
+            {degraded && 'API degraded'}
+            {!ok && !degraded && 'API offline'}
+          </span>
+        </div>
       </div>
     </header>
   )

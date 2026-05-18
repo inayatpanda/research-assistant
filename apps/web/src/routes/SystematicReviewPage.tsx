@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import { EmptyReviewState } from '@/components/review/EmptyReviewState'
 import { ExtractionTable } from '@/components/review/ExtractionTable'
 import { PRISMAFlowChart } from '@/components/review/PRISMAFlowChart'
@@ -32,7 +31,7 @@ import {
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
 import { cn } from '@/lib/utils'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 import {
   useRoBAssessments,
   useRoBTools,
@@ -52,8 +51,7 @@ const TABS: { id: ReviewTab; label: string }[] = [
 ]
 
 export default function SystematicReviewPage() {
-  const projectId = useActiveProject((s) => s.projectId)
-  if (!projectId) return <ProjectSelectGate />
+  const projectId = useProjectId()
   return <ReviewInner projectId={projectId} />
 }
 

@@ -25,7 +25,6 @@ import {
   useManuscriptTab,
 } from '@/components/manuscript/SectionTabs'
 import { WordCountBar } from '@/components/manuscript/WordCountBar'
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import {
   manuscriptApi,
   projectsApi,
@@ -33,7 +32,7 @@ import {
   type ManuscriptSectionName,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 
 const SECTIONS: ManuscriptSectionName[] = [
   'Abstract',
@@ -54,7 +53,7 @@ const COMPILE_TAB_TO_SECTION: Record<string, ManuscriptSectionName> = {
 }
 
 export default function ManuscriptPage() {
-  const projectId = useActiveProject((s) => s.projectId)
+  const projectId = useProjectId()
   const [tab, setTab] = useManuscriptTab()
   const [sectionWords, setSectionWords] = useState(0)
 
@@ -68,8 +67,6 @@ export default function ManuscriptPage() {
       window.history.replaceState({}, '', `?${next.toString()}`)
     }
   }
-
-  if (!projectId) return <ProjectSelectGate />
 
   return (
     <ManuscriptInner

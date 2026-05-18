@@ -10,11 +10,13 @@ import { JournalTemplateCard } from '@/components/settings/JournalTemplateCard'
 import { StorageCard } from '@/components/settings/StorageCard'
 import { metaApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
-import { useActiveProject } from '@/lib/projectContext'
+import { useLastViewedProject } from '@/lib/projectContext'
 
 export default function SettingsPage() {
   const { data } = useQuery({ queryKey: ['health'], queryFn: metaApi.health })
-  const projectId = useActiveProject((s) => s.projectId)
+  // Settings is a global page (no projectId in URL), so we use the
+  // last-viewed project for context — same UX as before MP12.5.
+  const projectId = useLastViewedProject((s) => s.projectId)
 
   return (
     <motion.div

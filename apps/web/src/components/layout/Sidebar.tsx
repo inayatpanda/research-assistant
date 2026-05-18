@@ -1,12 +1,17 @@
 import { motion } from 'framer-motion'
-import { NavLink } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { sidebarSlide } from '@/lib/motion'
+import { useLastViewedProject } from '@/lib/projectContext'
 import { cn } from '@/lib/utils'
 
-import { navItems } from './nav-items'
+import { isNavItemActive, navItems, resolveNavHref } from './nav-items'
 
 export function Sidebar() {
+  const { projectId: routeProjectId } = useParams<{ projectId: string }>()
+  const lastViewedProjectId = useLastViewedProject((s) => s.projectId)
+  const { pathname } = useLocation()
+
   return (
     <motion.aside
       variants={sidebarSlide}
@@ -20,33 +25,30 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 px-2 py-3">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            className={({ isActive }) =>
-              cn(
+        {navItems.map((item) => {
+          const href = resolveNavHref(item, { routeProjectId, lastViewedProjectId })
+          const active = isNavItemActive(item, pathname)
+          return (
+            <Link
+              key={item.slug || 'dashboard'}
+              to={href}
+              className={cn(
                 'group relative flex items-center gap-3 h-10 px-3 rounded-md text-[14px] font-medium transition-colors',
                 'text-white/70 hover:text-white hover:bg-white/[0.06]',
-                isActive && 'text-white bg-white/[0.08]',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <motion.span
-                    layoutId="active-bar"
-                    className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-accent"
-                  />
-                )}
-                <item.icon className="h-[16px] w-[16px] shrink-0" />
-                <span>{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
+                active && 'text-white bg-white/[0.08]',
+              )}
+            >
+              {active && (
+                <motion.span
+                  layoutId="active-bar"
+                  className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-accent"
+                />
+              )}
+              <item.icon className="h-[16px] w-[16px] shrink-0" />
+              <span>{item.label}</span>
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="border-t border-white/10 px-4 py-3 text-[11px] text-white/40">

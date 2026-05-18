@@ -22,7 +22,7 @@ export function ReaderShell({ article }: { article: Article }) {
     >
       <div className="h-12 px-4 border-b border-border bg-white flex items-center gap-3">
         <Link
-          to="/library"
+          to={`/projects/${article.project_id}/library`}
           className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

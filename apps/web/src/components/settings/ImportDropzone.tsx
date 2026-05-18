@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { exportApi, IMPORT_SIZE_CAP_BYTES } from '@/lib/api'
-import { useActiveProject } from '@/lib/projectContext'
+import { useLastViewedProject } from '@/lib/projectContext'
 import { cn } from '@/lib/utils'
 
 const MAX_MB = Math.round(IMPORT_SIZE_CAP_BYTES / (1024 * 1024))
@@ -25,18 +25,22 @@ function summariseCounts(counts: Record<string, number>): string {
 export function ImportDropzone() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const setActiveProject = useActiveProject((s) => s.set)
+  const setLastViewed = useLastViewedProject((s) => s.set)
 
   const mutation = useMutation({
     mutationFn: (file: File) => exportApi.importBundle(file),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['projects'] })
-      setActiveProject(data.project_id)
+      // MP12.5: keep the import-then-default behaviour by stashing the
+      // new project as the user's "last viewed", and navigate using the
+      // URL-scoped route.
+      setLastViewed(data.project_id)
       const summary = summariseCounts(data.counts)
       toast.success(`Imported project · ${summary || 'no items'}`, {
         action: {
           label: 'Open',
-          onClick: () => navigate('/manuscript'),
+          onClick: () =>
+            navigate(`/projects/${data.project_id}/manuscript`),
         },
       })
     },

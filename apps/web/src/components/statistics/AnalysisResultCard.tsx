@@ -172,7 +172,7 @@ export function AnalysisResultCard({
                   push.mutate(analysis.id, {
                     onSuccess: () => {
                       toast.success('Pushed to Manuscript Results')
-                      navigate('/manuscript?section=Results')
+                      navigate(`/projects/${projectId}/manuscript?section=Results`)
                     },
                     onError: (e: Error) => toast.error(e.message),
                   })

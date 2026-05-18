@@ -179,7 +179,7 @@ export function MetaResultCard({
             variant="outline"
             onClick={async () => {
               await pushMeta(meta.id)
-              navigate('/manuscript?section=Results')
+              navigate(`/projects/${projectId}/manuscript?section=Results`)
             }}
             disabled={meta.status !== 'completed' || isPushing}
           >

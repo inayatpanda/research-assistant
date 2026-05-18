@@ -2,9 +2,11 @@ import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { HighlightColour } from '@/lib/api'
+import { useProjectId } from '@/lib/projectContext'
 import { highlightColors, sectionLabels } from '@/lib/tokens'
 
 export function EmptySectionState({ colour }: { colour: HighlightColour }) {
+  const projectId = useProjectId()
   const palette = highlightColors[colour]
   return (
     <div className="rounded-lg border border-dashed border-border bg-white/40 p-10 text-center">
@@ -23,7 +25,7 @@ export function EmptySectionState({ colour }: { colour: HighlightColour }) {
         colour to add it here.
       </div>
       <Link
-        to="/library"
+        to={`/projects/${projectId}/library`}
         className="mt-4 inline-flex items-center gap-1 text-[13px] text-accent hover:underline"
       >
         Go to Library

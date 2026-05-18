@@ -38,7 +38,7 @@ export function PRISMAFlowChart({ projectId }: { projectId: string }) {
             push.mutate(undefined, {
               onSuccess: () => {
                 toast.success('Pushed to Methodology')
-                navigate('/manuscript?section=Methodology')
+                navigate(`/projects/${projectId}/manuscript?section=Methodology`)
               },
               onError: (e: Error) => toast.error(e.message),
             })

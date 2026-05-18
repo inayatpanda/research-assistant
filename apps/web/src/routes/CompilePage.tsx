@@ -8,7 +8,6 @@ import { CompiledCard } from '@/components/compile/CompiledCard'
 import { EmptySectionState } from '@/components/compile/EmptySectionState'
 import { SectionDraftPanel } from '@/components/compile/SectionDraftPanel'
 import { SortableCardList } from '@/components/compile/SortableCardList'
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   type CompiledCard as CardType,
@@ -17,17 +16,15 @@ import {
   projectsApi,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 import { sectionLabels } from '@/lib/tokens'
 
 const COLOURS: HighlightColour[] = ['intro', 'method', 'results', 'discussion']
 
 export default function CompilePage() {
-  const projectId = useActiveProject((s) => s.projectId)
+  const projectId = useProjectId()
   const [activeColour, setActiveColour] = useActiveColour()
   const qc = useQueryClient()
-
-  if (!projectId) return <ProjectSelectGate />
 
   return <CompileInner projectId={projectId} active={activeColour} setActive={setActiveColour} qc={qc} />
 }

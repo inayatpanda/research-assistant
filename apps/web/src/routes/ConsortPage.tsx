@@ -3,10 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { CONSORTFlowChart } from '@/components/consort/CONSORTFlowChart'
-import { ProjectSelectGate } from '@/components/library/ProjectSelectGate'
 import { useConsort, usePushConsort, useUpdateConsort } from '@/hooks/useConsort'
 import { projectsApi, type ConsortDataPayload } from '@/lib/api'
-import { useActiveProject } from '@/lib/projectContext'
+import { useProjectId } from '@/lib/projectContext'
 
 const NUM_FIELDS: { key: keyof ConsortDataPayload; label: string }[] = [
   { key: 'enrollment_assessed', label: 'Assessed for eligibility' },
@@ -25,8 +24,7 @@ const NUM_FIELDS: { key: keyof ConsortDataPayload; label: string }[] = [
 ]
 
 export default function ConsortPage() {
-  const projectId = useActiveProject((s) => s.projectId)
-  if (!projectId) return <ProjectSelectGate />
+  const projectId = useProjectId()
   return <ConsortInner projectId={projectId} />
 }
 
