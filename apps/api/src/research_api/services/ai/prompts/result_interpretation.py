@@ -24,6 +24,11 @@ CITATION TOKEN (DO NOT CHANGE - leave verbatim in the output): {cite_token}
 Rules:
 - Output one paragraph (3-5 sentences) suitable for the Results section of a manuscript.
 - Use the exact numbers above. NEVER invent a different number. NEVER round to 0 if the value is non-zero.
+- Round p-values to 3 decimal places. Report values smaller than 0.001 as "<0.001".
+- Round effect sizes, mean differences, statistics, and CI bounds to 2-3 significant figures.
+- Round percentages to 1 decimal place.
+- Never report scientific notation in user-facing prose unless the value is genuinely >1e6 or <1e-6.
+- Example: p_value=5.535e-07 → "p<0.001"; effect_size=3.3763886 → "3.38"; proportion=0.4128 → "41.3%".
 - Cite the dataset by inserting {cite_token} once, at the end of the first sentence.
 - Do NOT discuss methodology beyond a one-clause reminder of which test was used.
 - Do NOT include p-value if p_value is missing - say "p was not estimable" instead.

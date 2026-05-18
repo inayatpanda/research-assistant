@@ -25,6 +25,47 @@ export type VariableSelection = {
   paired?: boolean
 }
 
+const EXPECTED_TYPES: Record<string, VariableType[]> = {
+  'group_comparison:outcome': ['numeric'],
+  'group_comparison:groups': ['nominal', 'ordinal'],
+  'association:x': ['numeric', 'ordinal'],
+  'association:y': ['numeric', 'ordinal'],
+  'time_to_event:time': ['numeric', 'time'],
+  'time_to_event:event': ['event_indicator'],
+  'time_to_event:groups': ['nominal', 'ordinal'],
+}
+
+const SUGGESTED_ALTERNATIVE: Record<string, string> = {
+  'group_comparison:outcome':
+    'A non-numeric outcome suggests a chi-square or Mann-Whitney test rather than a t-test.',
+  'association:x':
+    'A nominal predictor changes the recommended model (group comparison or chi-square).',
+  'association:y':
+    'A nominal outcome changes the recommended model (logistic regression or chi-square).',
+  'time_to_event:event':
+    'Survival analysis expects a 0/1 event indicator. Map the column or override its type.',
+}
+
+function effectiveType(v: DatasetVariable): VariableType {
+  return v.user_type ?? v.inferred_type
+}
+
+export function typeWarningFor(
+  variable: DatasetVariable | undefined,
+  questionType: QuestionType,
+  role: string,
+): string | null {
+  if (!variable) return null
+  const key = `${questionType}:${role}`
+  const expected = EXPECTED_TYPES[key]
+  if (!expected || expected.length === 0) return null
+  const actual = effectiveType(variable)
+  if (expected.includes(actual)) return null
+  const hint = SUGGESTED_ALTERNATIVE[key]
+  const base = `This column is ${actual}; the expected type is ${expected.join(' or ')}.`
+  return hint ? `${base} ${hint}` : base
+}
+
 export function VariablePickerStep({
   dataset,
   questionType,
@@ -39,6 +80,10 @@ export function VariablePickerStep({
   const variables = dataset.variables
   const update = (patch: Partial<VariableSelection>) =>
     onChange({ ...selection, ...patch })
+  const lookup = (name: string | undefined) =>
+    name ? variables.find((v) => v.name === name) : undefined
+  const warn = (role: string, name: string | undefined) =>
+    typeWarningFor(lookup(name), questionType, role)
 
   if (questionType === 'group_comparison') {
     return (
@@ -49,6 +94,7 @@ export function VariablePickerStep({
           variables={filter(variables, ['numeric', 'ordinal', 'nominal'])}
           value={selection.outcome}
           onChange={(v) => update({ outcome: v })}
+          warning={warn('outcome', selection.outcome)}
         />
         <VarField
           label="Group"
@@ -56,6 +102,7 @@ export function VariablePickerStep({
           variables={filter(variables, ['nominal', 'ordinal'])}
           value={selection.groups}
           onChange={(v) => update({ groups: v })}
+          warning={warn('groups', selection.groups)}
         />
         <label className="flex items-center gap-2 text-[13px]">
           <input
@@ -77,6 +124,7 @@ export function VariablePickerStep({
           variables={filter(variables, ['numeric', 'ordinal', 'nominal'])}
           value={selection.x}
           onChange={(v) => update({ x: v })}
+          warning={warn('x', selection.x)}
         />
         <VarField
           label="Y (outcome)"
@@ -88,6 +136,7 @@ export function VariablePickerStep({
           ])}
           value={selection.y}
           onChange={(v) => update({ y: v })}
+          warning={warn('y', selection.y)}
         />
         <MultiVarField
           label="Additional covariates (optional)"
@@ -108,6 +157,7 @@ export function VariablePickerStep({
           variables={filter(variables, ['numeric', 'time'])}
           value={selection.time}
           onChange={(v) => update({ time: v })}
+          warning={warn('time', selection.time)}
         />
         <VarField
           label="Event indicator"
@@ -115,6 +165,7 @@ export function VariablePickerStep({
           variables={filter(variables, ['event_indicator', 'numeric', 'nominal'])}
           value={selection.event}
           onChange={(v) => update({ event: v })}
+          warning={warn('event', selection.event)}
         />
         <VarField
           label="Group (optional)"
@@ -122,6 +173,7 @@ export function VariablePickerStep({
           value={selection.groups}
           onChange={(v) => update({ groups: v })}
           allowClear
+          warning={warn('groups', selection.groups)}
         />
         <MultiVarField
           label="Covariates (optional)"
@@ -159,6 +211,7 @@ function VarField({
   value,
   onChange,
   allowClear = false,
+  warning,
 }: {
   label: string
   help?: string
@@ -166,6 +219,7 @@ function VarField({
   value: string | undefined
   onChange: (v: string | undefined) => void
   allowClear?: boolean
+  warning?: string | null
 }) {
   return (
     <div className="space-y-1">
@@ -200,6 +254,14 @@ function VarField({
           ))}
         </SelectContent>
       </Select>
+      {warning && (
+        <div
+          role="alert"
+          className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1"
+        >
+          {warning}
+        </div>
+      )}
     </div>
   )
 }

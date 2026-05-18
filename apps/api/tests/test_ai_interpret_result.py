@@ -43,6 +43,15 @@ def test_prompt_template_has_token_preservation_rule():
     assert "{cite_token}" in RESULT_INTERPRETATION_PROMPT
 
 
+def test_prompt_includes_rounding_rules():
+    text = RESULT_INTERPRETATION_PROMPT
+    assert "Round p-values to 3 decimal places" in text
+    assert "<0.001" in text
+    assert "2-3 significant figures" in text
+    assert "Round percentages to 1 decimal place" in text
+    assert "scientific notation" in text
+
+
 def test_builder_interpolates_all_key_numbers():
     prompt = build_result_interpretation_prompt(
         test_label="Independent samples t-test",

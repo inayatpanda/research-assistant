@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 from collections.abc import AsyncIterator
 from html import escape
 
@@ -578,21 +579,43 @@ async def get_prisma(
     }
 
 
-async def _append_to_section(
+_BLOCK_TAG_BY_CLASS: dict[str, str] = {
+    "prisma-flow": "figure",
+    "search-records-table": "table",
+    "rob-traffic-light-table": "table",
+    "extraction-table": "table",
+}
+
+
+def _strip_block_by_class(content: str, class_hook: str) -> str:
+    """Remove any prior <tag class="<hook>">...</tag> block (deterministic, tag-aware)."""
+    tag = _BLOCK_TAG_BY_CLASS[class_hook]
+    pattern = re.compile(
+        rf'<{tag}\b[^>]*\bclass="{re.escape(class_hook)}"[^>]*>.*?</{tag}>',
+        flags=re.DOTALL,
+    )
+    return pattern.sub("", content)
+
+
+async def _push_to_section(
     session: AsyncSession,
     *,
     project_id: str,
     section_name: str,
     html: str,
+    class_hook: str,
     user_id: str,
 ) -> ManuscriptSectionRead:
+    """Replace-by-class-hook: strip any prior artefact of the same class then append."""
     sec_repo = SqliteManuscriptSectionRepository(session)
     existing = await sec_repo.get(
         project_id=project_id, section_name=section_name, user_id=user_id
     )
-    new_content = html if existing is None or not existing.content else (
-        existing.content + html
-    )
+    if existing is None or not existing.content:
+        new_content = html
+    else:
+        stripped = _strip_block_by_class(existing.content, class_hook)
+        new_content = stripped + html
     updated = await sec_repo.upsert(
         project_id=project_id,
         section_name=section_name,
@@ -626,11 +649,12 @@ async def push_prisma(
         f'<figcaption>PRISMA 2020 flow diagram.</figcaption>'
         f'</figure>'
     )
-    return await _append_to_section(
+    return await _push_to_section(
         session,
         project_id=project_id,
         section_name="Methodology",
         html=html,
+        class_hook="prisma-flow",
         user_id=user_id,
     )
 
@@ -667,11 +691,12 @@ async def push_search(
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"
     )
-    return await _append_to_section(
+    return await _push_to_section(
         session,
         project_id=project_id,
         section_name="Methodology",
         html=html,
+        class_hook="search-records-table",
         user_id=user_id,
     )
 
@@ -737,11 +762,12 @@ async def push_rob(
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"
     )
-    return await _append_to_section(
+    return await _push_to_section(
         session,
         project_id=project_id,
         section_name="Results",
         html=html,
+        class_hook="rob-traffic-light-table",
         user_id=user_id,
     )
 
@@ -802,10 +828,11 @@ async def push_extraction(
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"
     )
-    return await _append_to_section(
+    return await _push_to_section(
         session,
         project_id=project_id,
         section_name="Results",
         html=html,
+        class_hook="extraction-table",
         user_id=user_id,
     )

@@ -8,7 +8,11 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { type WritingAction, writingApi } from '@/lib/api'
-import { aiSafeTextToHtml, htmlToAiSafeText } from '@/lib/citationSerialize'
+import {
+  aiSafeTextToHtml,
+  htmlToAiSafeText,
+  sanitizeAiHtml,
+} from '@/lib/citationSerialize'
 
 import { AISuggestionBlock } from '../compile/AISuggestionBlock'
 
@@ -85,7 +89,8 @@ export function BubbleAIMenu({
 
   function handleAccept(text: string) {
     const { from, to } = editor.state.selection
-    editor.chain().focus().deleteRange({ from, to }).insertContent(text).run()
+    const clean = sanitizeAiHtml(text)
+    editor.chain().focus().deleteRange({ from, to }).insertContent(clean).run()
     setSuggestion(null)
     toast.success('Replaced')
   }

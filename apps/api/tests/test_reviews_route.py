@@ -741,3 +741,95 @@ async def test_extraction_push_skips_studies_without_extraction(client):
     content = r.json()["content"]
     assert f"[CITE_{aid_with}]" in content
     assert f"[CITE_{aid_without}]" not in content
+
+
+# ── Replace-by-class-hook (P8-T16) ─────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_prisma_push_replaces_previous_figure(client):
+    pid = await _make_project_via_api(client)
+    await client.post(f"/api/projects/{pid}/reviews/search", json=_search_body(n=3))
+
+    r1 = await client.post(f"/api/projects/{pid}/reviews/prisma/push")
+    assert r1.status_code == 200
+    first = r1.json()["content"]
+    assert first.count('class="prisma-flow"') == 1
+
+    r2 = await client.post(f"/api/projects/{pid}/reviews/prisma/push")
+    assert r2.status_code == 200
+    second = r2.json()["content"]
+    assert second.count('class="prisma-flow"') == 1
+
+
+@pytest.mark.asyncio
+async def test_search_push_replaces_previous_table(client):
+    pid = await _make_project_via_api(client)
+    await client.post(
+        f"/api/projects/{pid}/reviews/search",
+        json=_search_body(n=7, db="PubMed", q="alpha"),
+    )
+    r1 = await client.post(f"/api/projects/{pid}/reviews/search/push")
+    assert r1.status_code == 200
+
+    # mutate the search records: replace original with a different query
+    rows = (await client.get(f"/api/projects/{pid}/reviews/search")).json()
+    await client.patch(
+        f"/api/projects/{pid}/reviews/search/{rows[0]['id']}",
+        json={"query_string": "beta"},
+    )
+
+    r2 = await client.post(f"/api/projects/{pid}/reviews/search/push")
+    content = r2.json()["content"]
+    assert content.count('class="search-records-table"') == 1
+    assert "beta" in content
+    assert "alpha" not in content
+
+
+@pytest.mark.asyncio
+async def test_rob_push_replace_preserves_other_artefacts(client):
+    """RoB push (Results) must not erase an existing Extraction table in the same section."""
+    pid = await _make_project_via_api(client)
+    aid = await _seed_article(title="Study X", project_id=pid, user_id="local-user")
+    await client.post(
+        f"/api/projects/{pid}/reviews/screening",
+        json={"article_id": aid, "stage": "full_text", "decision": "include"},
+    )
+    await client.post(
+        f"/api/projects/{pid}/reviews/extraction",
+        json={"article_id": aid, "fields": _good_extraction_fields()},
+    )
+    await client.post(
+        f"/api/projects/{pid}/reviews/rob",
+        json={"article_id": aid, "tool": "rob2", "domain_answers": _rob2_answers_low()},
+    )
+
+    # first: extraction in Results
+    r_ext = await client.post(f"/api/projects/{pid}/reviews/extraction/push")
+    assert r_ext.status_code == 200
+    assert 'class="extraction-table"' in r_ext.json()["content"]
+
+    # then: rob in the same Results section — extraction must remain
+    r_rob = await client.post(f"/api/projects/{pid}/reviews/rob/push")
+    content = r_rob.json()["content"]
+    assert content.count('class="rob-traffic-light-table"') == 1
+    assert content.count('class="extraction-table"') == 1
+
+
+@pytest.mark.asyncio
+async def test_extraction_push_replaces_previous_table(client):
+    pid = await _make_project_via_api(client)
+    aid = await _seed_article(title="Study X", project_id=pid, user_id="local-user")
+    await client.post(
+        f"/api/projects/{pid}/reviews/screening",
+        json={"article_id": aid, "stage": "full_text", "decision": "include"},
+    )
+    await client.post(
+        f"/api/projects/{pid}/reviews/extraction",
+        json={"article_id": aid, "fields": _good_extraction_fields()},
+    )
+    r1 = await client.post(f"/api/projects/{pid}/reviews/extraction/push")
+    assert r1.status_code == 200
+    r2 = await client.post(f"/api/projects/{pid}/reviews/extraction/push")
+    content = r2.json()["content"]
+    assert content.count('class="extraction-table"') == 1

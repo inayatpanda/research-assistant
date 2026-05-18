@@ -8,6 +8,22 @@
  * the mapping. Tokens whose articleId isn't in the document context are left
  * as literal text — same contract as the backend's citation_format service.
  */
+import DOMPurify from 'dompurify'
+
+const AI_HTML_ALLOWED_TAGS = ['p', 'sup', 'strong', 'em', 'br', 'a', 'span']
+const AI_HTML_ALLOWED_ATTR = [
+  'data-citation',
+  'data-article-id',
+  'class',
+  'href',
+]
+
+export function sanitizeAiHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: AI_HTML_ALLOWED_TAGS,
+    ALLOWED_ATTR: AI_HTML_ALLOWED_ATTR,
+  })
+}
 
 const SUP_RE =
   /<sup\b[^>]*?\bdata-citation\b[^>]*?\bdata-article-id="([^"]+)"[^>]*>(.*?)<\/sup>/gi
@@ -35,8 +51,9 @@ export function aiSafeTextToHtml(
   validArticleIds: Set<string>,
 ): string {
   if (!text) return ''
-  return text.replace(CITE_TOKEN_RE, (full, articleId: string) => {
+  const replaced = text.replace(CITE_TOKEN_RE, (full, articleId: string) => {
     if (!validArticleIds.has(articleId)) return full
     return `<sup data-citation="true" class="citation" data-article-id="${articleId}">[…]</sup>`
   })
+  return sanitizeAiHtml(replaced)
 }

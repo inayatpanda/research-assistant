@@ -92,11 +92,7 @@ async def test_dataset_variables_cascade_on_dataset_delete(session):
     ))
     await session.flush()
 
-    # Enable FK enforcement on the live aiosqlite connection (must be issued outside any
-    # active transaction so SQLite accepts it).
     await session.commit()
-    raw_conn = (await session.connection()).sync_connection.connection.driver_connection
-    await raw_conn.execute("PRAGMA foreign_keys=ON")
     await session.execute(text("DELETE FROM datasets WHERE id = :id"), {"id": ds.id})
     await session.commit()
 
@@ -201,8 +197,6 @@ async def test_analysis_cascades_to_result_on_delete(session):
     await session.flush()
 
     await session.commit()
-    raw_conn = (await session.connection()).sync_connection.connection.driver_connection
-    await raw_conn.execute("PRAGMA foreign_keys=ON")
     await session.execute(text("DELETE FROM analyses WHERE id = :id"), {"id": a.id})
     await session.commit()
 
