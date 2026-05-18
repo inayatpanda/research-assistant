@@ -464,3 +464,244 @@ export const abbreviationsApi = {
     await api.delete(`/api/abbreviations/${id}`)
   },
 }
+
+// --- Datasets ---
+
+export const VariableTypeSchema = z.enum([
+  'numeric',
+  'ordinal',
+  'nominal',
+  'time',
+  'event_indicator',
+  'unknown',
+])
+export type VariableType = z.infer<typeof VariableTypeSchema>
+
+export const DatasetVariableSchema = z.object({
+  id: z.string(),
+  dataset_id: z.string(),
+  name: z.string(),
+  position: z.number().int(),
+  inferred_type: VariableTypeSchema,
+  user_type: VariableTypeSchema.nullable(),
+  n_missing: z.number().int(),
+  sample_values: z.array(z.string()),
+})
+export type DatasetVariable = z.infer<typeof DatasetVariableSchema>
+
+export const DatasetSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  filename: z.string(),
+  file_type: z.string(),
+  n_rows: z.number().int(),
+  n_columns: z.number().int(),
+  created_at: z.string(),
+  variables: z.array(DatasetVariableSchema),
+})
+export type Dataset = z.infer<typeof DatasetSchema>
+
+export const datasetsApi = {
+  list: async (projectId: string): Promise<Dataset[]> => {
+    const r = await api.get(`/api/projects/${projectId}/datasets`)
+    return z.array(DatasetSchema).parse(r.data)
+  },
+  get: async (projectId: string, datasetId: string): Promise<Dataset> => {
+    const r = await api.get(`/api/projects/${projectId}/datasets/${datasetId}`)
+    return DatasetSchema.parse(r.data)
+  },
+  upload: async (projectId: string, file: File): Promise<Dataset> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const r = await api.post(`/api/projects/${projectId}/datasets`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000,
+    })
+    return DatasetSchema.parse(r.data)
+  },
+  delete: async (projectId: string, datasetId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/datasets/${datasetId}`)
+  },
+  updateVariable: async (
+    projectId: string,
+    datasetId: string,
+    variableId: string,
+    userType: VariableType | null,
+  ): Promise<DatasetVariable> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/datasets/${datasetId}/variables/${variableId}`,
+      { user_type: userType },
+    )
+    return DatasetVariableSchema.parse(r.data)
+  },
+}
+
+// --- Analyses ---
+
+export const QuestionTypeSchema = z.enum([
+  'group_comparison',
+  'association',
+  'time_to_event',
+  'agreement',
+])
+export type QuestionType = z.infer<typeof QuestionTypeSchema>
+
+export const TestKeySchema = z.enum([
+  'independent_t',
+  'paired_t',
+  'mann_whitney',
+  'wilcoxon_signed',
+  'chi_squared',
+  'fisher_exact',
+  'one_way_anova',
+  'kruskal_wallis',
+  'rm_anova',
+  'pearson',
+  'spearman',
+  'linear_regression',
+  'multiple_linear',
+  'logistic',
+  'kaplan_meier',
+  'cox_ph',
+  'icc',
+  'cohen_kappa',
+])
+export type TestKey = z.infer<typeof TestKeySchema>
+
+export const AnalysisStatusSchema = z.enum([
+  'draft',
+  'ready',
+  'running',
+  'completed',
+  'failed',
+])
+export type AnalysisStatus = z.infer<typeof AnalysisStatusSchema>
+
+export const RecommendationResponseSchema = z.object({
+  chosen_test: TestKeySchema,
+  rationale: z.string(),
+  assumption_warnings: z.array(z.string()),
+})
+export type RecommendationResponse = z.infer<typeof RecommendationResponseSchema>
+
+export type RecommendationRequest = {
+  question_type: QuestionType
+  variables: Record<string, string | string[]>
+}
+
+export const AnalysisResultSchema = z.object({
+  summary: z.record(z.string(), z.any()),
+  assumptions: z.record(z.string(), z.any()),
+  chart: z.record(z.string(), z.any()).nullable(),
+  ai_interpretation: z.string().nullable(),
+})
+export type AnalysisResult = z.infer<typeof AnalysisResultSchema>
+
+export const AnalysisSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  dataset_id: z.string(),
+  question_type: QuestionTypeSchema,
+  chosen_test: TestKeySchema,
+  recommendation_rationale: z.string(),
+  variables: z.record(z.string(), z.any()),
+  status: AnalysisStatusSchema,
+  created_at: z.string(),
+  result: AnalysisResultSchema.nullable().optional(),
+})
+export type Analysis = z.infer<typeof AnalysisSchema>
+
+export type AnalysisCreate = {
+  question_type: QuestionType
+  chosen_test: TestKey
+  variables: Record<string, unknown>
+}
+
+export const TEST_LABELS: Record<TestKey, string> = {
+  independent_t: 'Independent t-test',
+  paired_t: 'Paired t-test',
+  mann_whitney: 'Mann–Whitney U',
+  wilcoxon_signed: 'Wilcoxon signed-rank',
+  chi_squared: 'Chi-squared test',
+  fisher_exact: "Fisher's exact test",
+  one_way_anova: 'One-way ANOVA',
+  kruskal_wallis: 'Kruskal–Wallis',
+  rm_anova: 'Repeated-measures ANOVA',
+  pearson: 'Pearson correlation',
+  spearman: 'Spearman correlation',
+  linear_regression: 'Linear regression',
+  multiple_linear: 'Multiple linear regression',
+  logistic: 'Logistic regression',
+  kaplan_meier: 'Kaplan–Meier',
+  cox_ph: 'Cox proportional hazards',
+  icc: 'Intraclass correlation',
+  cohen_kappa: "Cohen's kappa",
+}
+
+export const analysesApi = {
+  recommend: async (
+    projectId: string,
+    datasetId: string,
+    body: RecommendationRequest,
+  ): Promise<RecommendationResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/analyses/recommend`,
+      body,
+      { timeout: 60_000 },
+    )
+    return RecommendationResponseSchema.parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    datasetId: string,
+    body: AnalysisCreate,
+  ): Promise<Analysis> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/analyses`,
+      body,
+    )
+    return AnalysisSchema.parse(r.data)
+  },
+  listForDataset: async (
+    projectId: string,
+    datasetId: string,
+  ): Promise<Analysis[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/datasets/${datasetId}/analyses`,
+    )
+    return z.array(AnalysisSchema).parse(r.data)
+  },
+  get: async (projectId: string, analysisId: string): Promise<Analysis> => {
+    const r = await api.get(`/api/projects/${projectId}/analyses/${analysisId}`)
+    return AnalysisSchema.parse(r.data)
+  },
+  run: async (projectId: string, analysisId: string): Promise<Analysis> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/run`,
+      {},
+      { timeout: 90_000 },
+    )
+    return AnalysisSchema.parse(r.data)
+  },
+  interpret: async (projectId: string, analysisId: string): Promise<Analysis> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/interpret`,
+      {},
+      { timeout: 60_000 },
+    )
+    return AnalysisSchema.parse(r.data)
+  },
+  pushToManuscript: async (
+    projectId: string,
+    analysisId: string,
+  ): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+  delete: async (projectId: string, analysisId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/analyses/${analysisId}`)
+  },
+}
