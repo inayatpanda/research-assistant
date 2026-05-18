@@ -80,6 +80,13 @@ from .review import (
     SearchRecordRead,
     SearchRecordUpdate,
 )
+from .export import (
+    BibliographyEntryRead,
+    BibliographyResponse,
+    BundleExportRequest,
+    BundleImportResponse,
+    ExportFormat,
+)
 from .upload import ExtractionSource, UploadResponse
 
 __all__ = [
@@ -159,4 +166,9 @@ __all__ = [
     "RoBPushRequest",
     "ExtractionPushRequest",
     "SearchPushRequest",
+    "BibliographyEntryRead",
+    "BibliographyResponse",
+    "BundleExportRequest",
+    "BundleImportResponse",
+    "ExportFormat",
 ]

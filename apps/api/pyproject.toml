@@ -27,6 +27,9 @@ dependencies = [
   "pingouin>=0.5",
   "lifelines>=0.29",
   "openpyxl>=3.1",
+  "reportlab>=4.0",
+  "svglib==1.4.1",
+  "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]
