@@ -470,3 +470,88 @@ Initial test pushes returned 422 because: (a) the RoB 2 catalogue uses `randomis
 **Next:** Phase 8 — bibliography polish, export (DOCX + PDF + JSON), full-app polish, deploy targets (Vercel for static / Fly.io for API). Phase 9 (Electron desktop) remains paused per the user's directive — autonomous runs end after Phase 8.
 
 ---
+
+## 2026-05-18 · Phase 8 — Bibliography, Export, Polish & Deploy ✅ COMPLETE
+
+**Goal**
+
+Bibliography UI in 4 styles (Vancouver / APA 7 / Harvard / IEEE), one-click export of the whole project to DOCX / PDF / JSON, JSON bundle import that re-tags everything to the current user (security-critical), six high-priority `POLISH.md` items resolved, and deploy artefacts for Vercel (frontend) + Fly.io (API) prepared but not pushed.
+
+**What shipped**
+
+Backend (12 files + tests):
+
+- `services/citation_format.py` extended with full APA 7, Harvard, IEEE formatters (Vancouver byte-identical). `format_entry(article, style)` dispatcher + HTML-safe `format_entry_html`.
+- `services/export/bibliography.py`: `build_bibliography(sections, articles, style)` walking all six sections in order, dedupe by article_id, returns numbered entries.
+- `services/export/{docx,pdf,bundle}_export.py`: DOCX via python-docx (A4, TNR 11, double-spaced); PDF via reportlab.platypus with native SVG embedding via svglib; JSON bundle covering all 17 tables.
+- `services/export/bundle_import.py`: the security gate. Mints fresh primary keys, rewrites every FK through old→new id maps, **force-stamps `user_id = target_user_id` on every row regardless of bundle contents**. Validates `schema_version == 1`. Orphan FKs silently dropped. Wrapped in a transaction.
+- `services/export/_html_walker.py`: shared HTML walker (stdlib `html.parser`), allowlist-only.
+- `schemas/export.py`: `BibliographyResponse`, `BundleImportResponse`, `ExportFormat`, etc.
+- `routes/export.py`: `POST /export/docx`, `POST /export/pdf`, `POST /export/bundle`, `POST /import/bundle`, `GET /bibliography`. Slug-safe `Content-Disposition` filenames. 50 MiB upload cap. 415 for non-JSON content, 422 for `BundleImportError`, 413 for oversize.
+- `tests/test_security_export_isolation.py`: 19 tests proving cross-user 404s, force-retag of imported bundles, size + content-type rejections.
+
+Frontend (10 files):
+
+- `lib/api.ts`: `bibliographyApi`, `exportApi` (`downloadDocx/Pdf/Bundle`, `importBundle`). Blob download helper + RFC 5987-aware Content-Disposition filename parser.
+- `lib/bibliographyFormat.ts`: client-side mirror of all 4 server formatters + `toBibTeX`, `toRIS`, `toCSLJSON` converters.
+- `components/bibliography/`: BibliographyPanel + BibliographyToolbar + BibliographyRow. Mounted in the right rail of ManuscriptPage. Style picker persists via `projectsApi.update` for vancouver/apa/harvard; IEEE is a session-only override (schema doesn't store it — see POLISH).
+- `components/settings/`: ExportCard (per-project DOCX/PDF/Bundle download buttons), ImportDropzone (react-dropzone, 50 MiB client cap), StorageCard (backend identifier + "Migrate to cloud" stub), HealthLink.
+- `routes/HealthPage.tsx`: read-only diagnostics polled every 10s.
+- `ManuscriptEditor.tsx`: `?scrollTo=cite-<articleId>` URL handler — walks the ProseMirror doc, places selection on the matching citation node, scrolls into view, strips the param.
+- `App.tsx`: React Router v7 future flags (`v7_startTransition`, `v7_relativeSplatPath`), `/health` route added.
+
+**Six POLISH items resolved**
+
+- **T11**: React Router v7 future flags — no more console warnings.
+- **T12**: DOMPurify pre-pass applied in `aiSafeTextToHtml()` AND `BubbleAIMenu.handleAccept()` (defence-in-depth).
+- **T13**: SQLite FK PRAGMA enabled app-wide via a SQLAlchemy `event.listen` on engine connect. Per-test PRAGMA workarounds removed.
+- **T14**: AI result-interpretation prompt teaches the model to round p-values to 3 decimals (or `<0.001`), effect sizes / CI to 2-3 sig figs.
+- **T15**: Stats wizard step 2 surfaces an inline amber warning when the picked variable's type doesn't match the slot expectation (advisory; backend still validates).
+- **T16**: Review pushes (PRISMA / search / RoB / extraction) use **replace-by-class-hook** — re-push swaps the existing block in place rather than stacking duplicates.
+
+**Deploy artefacts (prepared, NOT deployed)**
+
+- `apps/api/Dockerfile`: Python 3.12-slim, `libmagic1` system dep for python-magic, mounts `/data` volume for the SQLite DB + file storage. Runs `alembic upgrade head` before `uvicorn`.
+- `apps/api/fly.toml`: placeholder pointing at the Dockerfile, with a `/data` volume mount, `/health` HTTP healthcheck, and shared-cpu-1x / 512MB sizing. Secrets (`GEMINI_API_KEY` etc.) are stamped via `fly secrets set`.
+- `apps/web/vercel.json`: vite framework, SPA rewrites, security headers (`X-Content-Type-Options`, `X-Frame-Options=DENY`, `Referrer-Policy`, `Permissions-Policy`), and immutable cache for `/assets/`.
+
+**E2E verification (browser smoke on the Phase 7 systematic-review project)**
+
+`POST /export/docx` → 37 KB DOCX, `POST /export/pdf` → 7.5 KB PDF, `POST /export/bundle` → JSON with all 17 tables + `schema_version: 1`. `GET /bibliography?style=apa` returned 1 entry (the one cited article) with `first_section` populated. **Round-trip**: posted the bundle straight to `POST /import/bundle`; got back a fresh project_id (`a930029d…` vs source `5ebc0209…`) with counts {projects: 1, articles: 2, manuscript_sections: 2, reviews: 1, search_records: 2, screening_records: 3, rob_assessments: 1, extraction_records: 1} — identical to the source modulo IDs + user_id (which is correctly re-stamped).
+
+**Security review (1 LOW polish; 0 blockers)**
+
+- Bundle import re-tags every row to `target_user_id` and mints fresh primary keys — proven by `test_security_export_isolation.py::test_import_stamps_target_user_id_regardless_of_bundle` and a follow-up sweep asserting every model's `user_id == target` post-import.
+- Filename slug regex strips path-traversal characters before composing `Content-Disposition`.
+- Multipart import rejects size > 50 MiB (413), content not starting with `{` (415), and `BundleImportError` (422).
+- DOMPurify pre-pass on AI HTML adds a defence-in-depth layer on top of ProseMirror's schema filter.
+- **LOW polish** (logged): `schemas/project.py::CitationStyle` doesn't list `ieee`, so `PATCH /projects/{id} citation_style=ieee` would 422. Frontend handles this gracefully but the schema mismatch is worth tightening.
+
+**Test counts**
+
+- Backend: **656 pass** (was 488 entering Phase 8; +168 in Phase 8 across citation styles, bibliography, all four export services + import, routes, polish-fix coverage)
+- Frontend: 71 vitest pass (was 44; +27 across bibliography format + API client + dompurify)
+
+**Open items**
+
+- `POLISH.md`: 6 entries struck through with `✅ resolved in P8-T1{1..6} (2026-05-18)`; one new low-sev entry added about the `CitationStyle` schema mismatch on `ieee`.
+- `DECISIONS.md`: unchanged
+- `DEFERRED.md`: meta-analysis + GRADE + PubMed direct-search still deferred.
+
+---
+
+## Phase 9 readiness checklist (autonomous run STOPS here — user check-in required)
+
+Before starting Phase 9 (Electron desktop packaging), the user should decide on / acknowledge:
+
+1. **Bundling strategy** — Electron + Python sidecar (uvicorn) vs PyOxidizer-compiled single binary vs sidecar via `electron-forge`'s `extraResource`. The pragmatic v1 is "spawn `uvicorn` as a child process from `electron/main.ts` with the bundled venv path" — works on macOS / Windows / Linux out of the box but ships ~120 MB of Python deps. Document the trade-off.
+2. **Auto-update** — `electron-updater` with a code-signing certificate (Apple Developer ID / Microsoft Authenticode). User needs to decide on signing identities BEFORE the first release, otherwise users get "unidentified developer" warnings.
+3. **Data directory** — per-OS conventions: `~/Library/Application Support/ResearchAssistant/` on macOS, `%APPDATA%/ResearchAssistant/` on Windows, `~/.local/share/ResearchAssistant/` on Linux. The SQLite DB + file storage move from `./data/` to the OS data dir on first launch (migration step).
+4. **AI provider keys** — currently in `.env` at the project root. For desktop, store in OS keychain via `keytar` (npm package) — user enters once in Settings, never written to disk in plaintext.
+5. **IPC** — Electron renderer talks to the bundled uvicorn on a locally-bound port (127.0.0.1:8787 default). For multi-instance support, pick a free port at launch and pass to the renderer via IPC.
+6. **Signed-build CI** — GitHub Actions matrix (macOS / Windows / Linux) with secrets for the signing identity. Build artefacts: `.dmg` / `.exe` / `.AppImage`. Optionally `.deb` / `.rpm`.
+7. **First-launch UX** — health-check the sidecar process; if it dies, show a "Restart API" button rather than a white screen. The existing `/health` endpoint already gives the data needed.
+
+**This is the user check-in point.** Phase 9 is paused. Web app is feature-complete for single-user local-first use; Vercel + Fly deploys are ready when the user wants them.
+
+---

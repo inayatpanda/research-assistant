@@ -1,0 +1,48 @@
+# Fly.io deployment placeholder for the Research Manuscript Assistant API.
+#
+# Usage:
+#   1. `fly auth login`
+#   2. `fly launch --no-deploy --copy-config --dockerfile apps/api/Dockerfile` (run from apps/api/)
+#   3. `fly volumes create research_data --region <region> --size 1`
+#   4. `fly secrets set GEMINI_API_KEY=<...>` (and any other AI provider keys)
+#   5. `fly deploy`
+#
+# This file is a STARTING POINT. Update `app` and `primary_region` before deploying.
+
+app = "research-assistant-api"          # CHANGE before deploying
+primary_region = "lhr"                  # CHANGE if a closer region exists
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8787"
+  STORAGE_DIR = "/data/storage"
+  DATABASE_URL = "sqlite+aiosqlite:////data/research.db"
+
+[mounts]
+  source = "research_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Secrets are NOT set in this file. Use `fly secrets set KEY=value`.
+# Required: GEMINI_API_KEY
+# Optional: CLAUDE_API_KEY, OPENAI_API_KEY, API_SIGNING_SECRET (auto-generated if absent)
