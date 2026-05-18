@@ -25,11 +25,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..container import Container, get_container
 from ..db.models import (
     Abbreviation,
+    Affiliation,
     Analysis,
     AnalysisResult,
     Article,
     ArticleNote,
+    Author,
+    AuthorAffiliation,
     ConsortData,
+    Contribution,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -39,6 +43,7 @@ from ..db.models import (
     MetaAnalysis,
     MetaInput,
     Project,
+    ProjectFrontmatter,
     Review,
     RobAssessment,
     ScreeningRecord,
@@ -65,7 +70,7 @@ from ..services.export.bibliography import (
 )
 from ..services.export.bundle_export import BundleInputs, build_bundle
 from ..services.export.bundle_import import BundleImportError, import_bundle
-from ..services.export.docx_export import render_docx
+from ..services.export.docx_export import FrontMatterPayload, render_docx
 from ..services.export.pdf_export import render_pdf
 
 router = APIRouter(tags=["export"])
@@ -135,6 +140,94 @@ async def _build_bib_entries(
     return build_bibliography(articles_by_id=by_id, sections=sections, style=style)
 
 
+async def _load_frontmatter_payload(
+    session: AsyncSession, project_id: str, user_id: str
+) -> FrontMatterPayload | None:
+    """Phase 10 — load authors + affiliations + links + frontmatter for export.
+
+    Returns None when the project has no authors and no frontmatter row, so
+    legacy pre-Phase-10 exports keep their original layout untouched.
+    """
+    authors = list((await session.execute(
+        select(Author).where(
+            Author.project_id == project_id, Author.user_id == user_id
+        ).order_by(Author.position.asc())
+    )).scalars().all())
+    affiliations = list((await session.execute(
+        select(Affiliation).where(
+            Affiliation.project_id == project_id, Affiliation.user_id == user_id
+        ).order_by(Affiliation.position.asc())
+    )).scalars().all())
+    links: list[AuthorAffiliation] = []
+    if authors:
+        author_ids = [a.id for a in authors]
+        links = list((await session.execute(
+            select(AuthorAffiliation).where(
+                AuthorAffiliation.user_id == user_id,
+                AuthorAffiliation.author_id.in_(author_ids),
+            ).order_by(AuthorAffiliation.position.asc())
+        )).scalars().all())
+    frontmatter = (await session.execute(
+        select(ProjectFrontmatter).where(
+            ProjectFrontmatter.project_id == project_id,
+            ProjectFrontmatter.user_id == user_id,
+        )
+    )).scalar_one_or_none()
+
+    if not authors and frontmatter is None:
+        return None
+
+    links_by_author: dict[str, list[str]] = {}
+    for link in links:
+        links_by_author.setdefault(link.author_id, []).append(link.affiliation_id)
+
+    author_payload = [
+        {
+            "id": a.id,
+            "full_name": a.full_name,
+            "given_name": a.given_name,
+            "family_name": a.family_name,
+            "orcid": a.orcid,
+            "email": a.email,
+            "is_corresponding": a.is_corresponding,
+            "position": a.position,
+            "affiliation_ids": links_by_author.get(a.id, []),
+        }
+        for a in authors
+    ]
+    aff_payload = [
+        {
+            "id": a.id,
+            "name": a.name,
+            "address": a.address,
+            "city": a.city,
+            "country": a.country,
+            "position": a.position,
+        }
+        for a in affiliations
+    ]
+    return FrontMatterPayload(
+        authors=author_payload,
+        affiliations=aff_payload,
+        funding_statement=(frontmatter.funding_statement if frontmatter else None),
+        funders=(frontmatter.funders or []) if frontmatter else [],
+        ethics_irb=(frontmatter.ethics_irb if frontmatter else None),
+        ethics_approval_number=(
+            frontmatter.ethics_approval_number if frontmatter else None
+        ),
+        ethics_consent=(frontmatter.ethics_consent if frontmatter else None),
+        conflicts_statement=(
+            frontmatter.conflicts_statement if frontmatter else None
+        ),
+        structured_abstract_enabled=bool(
+            frontmatter and frontmatter.structured_abstract_enabled
+        ),
+        structured_abstract=(
+            frontmatter.structured_abstract if frontmatter else None
+        ),
+    )
+
+
 class _ConsolidatedSection:
     """Lightweight stand-in for a ManuscriptSection used by render_docx/pdf.
 
@@ -196,7 +289,13 @@ async def export_docx(
     style = _coerce_style(None, project.citation_style)
     entries = await _build_bib_entries(sections, articles, style)
     consolidated = _consolidate_sections(sections, style)
-    data = render_docx(project=project, sections=consolidated, bibliography=entries)
+    frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
+    data = render_docx(
+        project=project,
+        sections=consolidated,
+        bibliography=entries,
+        frontmatter=frontmatter,
+    )
 
     slug = _slugify_filename(project.title)
     filename = f"{slug}-{_today()}.docx"
@@ -222,7 +321,13 @@ async def export_pdf(
     style = _coerce_style(None, project.citation_style)
     entries = await _build_bib_entries(sections, articles, style)
     consolidated = _consolidate_sections(sections, style)
-    data = render_pdf(project=project, sections=consolidated, bibliography=entries)
+    frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
+    data = render_pdf(
+        project=project,
+        sections=consolidated,
+        bibliography=entries,
+        frontmatter=frontmatter,
+    )
 
     slug = _slugify_filename(project.title)
     filename = f"{slug}-{_today()}.pdf"
@@ -366,6 +471,40 @@ async def _collect_bundle_inputs(
         )
     )).scalar_one_or_none()
 
+    # Phase 10 — ICMJE front-matter rows.
+    fm_authors = list((await session.execute(
+        select(Author).where(
+            Author.project_id == project_id, Author.user_id == user_id
+        ).order_by(Author.position.asc())
+    )).scalars().all())
+    fm_affiliations = list((await session.execute(
+        select(Affiliation).where(
+            Affiliation.project_id == project_id, Affiliation.user_id == user_id
+        ).order_by(Affiliation.position.asc())
+    )).scalars().all())
+    fm_author_affiliations: list[AuthorAffiliation] = []
+    fm_contributions: list[Contribution] = []
+    if fm_authors:
+        author_ids_p10 = [a.id for a in fm_authors]
+        fm_author_affiliations = list((await session.execute(
+            select(AuthorAffiliation).where(
+                AuthorAffiliation.user_id == user_id,
+                AuthorAffiliation.author_id.in_(author_ids_p10),
+            )
+        )).scalars().all())
+        fm_contributions = list((await session.execute(
+            select(Contribution).where(
+                Contribution.user_id == user_id,
+                Contribution.author_id.in_(author_ids_p10),
+            )
+        )).scalars().all())
+    project_frontmatter = (await session.execute(
+        select(ProjectFrontmatter).where(
+            ProjectFrontmatter.project_id == project_id,
+            ProjectFrontmatter.user_id == user_id,
+        )
+    )).scalar_one_or_none()
+
     return BundleInputs(
         project=project,
         articles=articles,
@@ -386,6 +525,11 @@ async def _collect_bundle_inputs(
         consort_data=consort_data,
         meta_analyses=meta_analyses,
         meta_inputs=meta_inputs,
+        authors=fm_authors,
+        affiliations=fm_affiliations,
+        author_affiliations=fm_author_affiliations,
+        contributions=fm_contributions,
+        project_frontmatter=project_frontmatter,
     )
 
 

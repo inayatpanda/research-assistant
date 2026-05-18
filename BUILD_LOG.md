@@ -5,6 +5,187 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 10 — ICMJE structured front-matter ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 10 section)
+
+**Items addressed:** #1.
+
+**Backend changes**
+
+- New migration `0011_icmje_frontmatter.py` (down_revision 0010) with 5
+  tables: `authors`, `affiliations`, `author_affiliations` (m2m UNIQUE pair),
+  `contributions` (UNIQUE author_id+role), `project_frontmatter` (1:1 with
+  project, JSON columns for funders + structured_abstract).
+- `db/models.py` — Author / Affiliation / AuthorAffiliation / Contribution
+  / ProjectFrontmatter ORM classes. Author has a contiguous `position`
+  invariant within (project_id, user_id).
+- `schemas/frontmatter.py` — `CreditRole` Literal of 14 NISO-CRediT roles,
+  `validate_orcid()` with ISO/IEC 7064 MOD-11-2 checksum (uppercase X = 10),
+  light-weight regex email validator (avoids the optional
+  `pydantic[email]` dep).
+- `repositories/frontmatter.py` — `SqliteAuthorRepository` /
+  `SqliteAffiliationRepository` / `SqliteContributionRepository` /
+  `SqliteFrontmatterRepository`. All scoped by user_id. Reorder uses the
+  same `+1000` two-step UPDATE trick as `figures.py`. The corresponding-
+  author single-row invariant is enforced via a single
+  `UPDATE authors SET is_corresponding=false WHERE project_id=? AND
+  user_id=? AND id != ?` BEFORE any insert/update sets the flag.
+- `routes/frontmatter.py` — 12 endpoints under `/api`: authors CRUD +
+  reorder + set-corresponding, affiliations CRUD + reorder, m2m
+  link/unlink under `/api/authors/{id}/affiliations/{id}`, contributions
+  set/clear, frontmatter GET (auto-creates) / PATCH.
+- `services/export/docx_export.py` — accepts an optional
+  `FrontMatterPayload` dataclass; when present, renders authors with
+  numbered affiliation superscripts (first-encounter ordering), a
+  corresponding-author email line, COI / funding / ethics paragraphs
+  after References, and optional structured abstract replacing the
+  freeform Abstract section. Backwards compatible: omitting the payload
+  reproduces the pre-Phase-10 title page exactly.
+- `services/export/pdf_export.py` — same surface, reportlab platypus
+  flowables.
+- `services/export/bundle_export.py` + `bundle_import.py` — extended to
+  round-trip the 5 new tables. Import re-stamps user_id, mints fresh PKs,
+  rewires FKs through `author_map` / `affiliation_map`, and **defensively
+  caps `is_corresponding=true` to one row per project** even if the
+  incoming bundle smuggles two.
+- `routes/export.py` — DOCX / PDF / bundle export endpoints now load the
+  front-matter rows and pass them through.
+
+**Frontend changes**
+
+- `lib/api.ts` — `frontmatterApi` with `authors` / `affiliations` /
+  `link` / `contributions` / `frontmatter` sub-namespaces. TS literal
+  union for the 14 CRediT roles. Zod schemas for every server payload.
+- `components/frontmatter/AuthorsEditor.tsx` — `@dnd-kit/sortable` list
+  with per-row fields (full name, ORCID, email, corresponding checkbox)
+  and per-row affiliation toggle chips.
+- `components/frontmatter/AffiliationsEditor.tsx` — drag-sortable list
+  with name + address + city + country.
+- `components/frontmatter/ContributionsMatrix.tsx` — authors × 14 CRediT
+  roles checkbox grid; click toggles via per-author per-role
+  `contributions.set` / `.clear`.
+- `components/frontmatter/EthicsFundingForm.tsx` — free-text COI,
+  funding statement + dynamic funder list (name + grant id), IRB,
+  approval number, consent.
+- `components/frontmatter/StructuredAbstract.tsx` — opt-in toggle
+  reveals four textareas (Background / Methods / Results / Conclusions).
+  When disabled (default), the freeform Abstract section is used.
+- `components/frontmatter/FrontMatterPanel.tsx` — wrapper that hosts
+  the five sub-section tabs.
+- `routes/ManuscriptPage.tsx` + `SectionTabs.tsx` — new "Front matter"
+  tab inserted before Abstract; mounts `FrontMatterPanel` instead of
+  the TipTap editor when selected.
+
+**Test deltas**
+
+- Backend: **1122 → 1200 (+78 tests across 6 new files)**
+  - `test_frontmatter_schemas.py` (18) — ORCID checksum (valid + invalid),
+    14-role enum, Funder min-length, partial PATCH dump.
+  - `test_frontmatter_repository.py` (19) — position assignment,
+    corresponding-author single-row, cross-project isolation, reorder
+    rejection on foreign ids, m2m cross-project rejection, contributions
+    idempotent, frontmatter auto-create.
+  - `test_frontmatter_route.py` (9) — happy-path CRUD round-trip via
+    live ASGI app.
+  - `test_security_frontmatter_isolation.py` (19) — every endpoint
+    returns 404 / 422 for the other user.
+  - `test_frontmatter_export.py` (7) — DOCX emits authors + ethics
+    block, structured abstract replaces freeform when enabled, HTML
+    chars escaped, PDF byte-magic check.
+  - `test_frontmatter_bundle_round_trip.py` (2) — full export → re-import
+    as a different user; corresponding-author cap enforced on hostile
+    bundle.
+  - `test_bundle_import.py` — extended the existing count-dict assertion
+    with the 5 new keys (no logic change).
+- Frontend: **117 → 131 (+14 vitest across 3 new files)**
+  - `lib/__tests__/frontmatterApi.test.ts` (10) — Zod schema parsing for
+    Author / Affiliation / Contribution / ProjectFrontmatter + CRediT
+    role enum exhaustiveness.
+  - `components/frontmatter/__tests__/FrontMatterPanel.test.tsx` (2) —
+    renders 5 sub-section tabs, starts on Authors.
+  - `components/frontmatter/__tests__/StructuredAbstract.test.tsx` (2) —
+    sub-fields hidden when toggle off, visible after toggling, PATCH
+    fires correctly.
+
+**Decisions logged**
+
+- **ORCID checksum.** Implemented the ISO/IEC 7064 MOD-11-2 algorithm
+  documented at orcid.org — the final character is digit 0-9 or `X` for
+  the value 10. Inputs are uppercased before validation so a lowercase
+  `x` is accepted as a canonical `X`. We do NOT call orcid.org for v1.
+- **Corresponding-author single-row enforcement.** All three write paths
+  (create, update, set-corresponding endpoint) call a private
+  `_clear_corresponding(project_id, user_id, exclude_id)` BEFORE setting
+  the target row's flag. The bundle importer applies the same cap by
+  consuming a `correspondings_remaining = 1` counter while inserting
+  authors so a malicious bundle cannot bypass the invariant.
+- **Front matter UI placement.** Mounted as a NEW LEFTMOST tab in the
+  manuscript section tabbar ("Front matter"), not as a dialog. The tab
+  shows 5 sub-sections (Authors, Affiliations, Contributions, Ethics &
+  funding, Structured abstract) so all ICMJE fields live in the same
+  workspace as the body sections.
+- **Backwards compatibility.** `structured_abstract_enabled` defaults
+  to FALSE so existing manuscripts keep using the freeform Abstract.
+  `render_docx` / `render_pdf` accept `frontmatter` as optional, so
+  pre-Phase-10 callers reproduce their original output.
+- **Defence in depth.** All user-supplied front-matter strings flow
+  through `html.escape` before being emitted into DOCX / PDF, mirroring
+  the existing `replace_cite_tokens_with_markup` discipline.
+
+**Acceptance bar**
+
+- [x] 5 new tables; migration `0011` clean upgrade.
+- [x] ORCID validates the canonical iD + checksum (incl. uppercase X).
+- [x] At most one corresponding author per project — enforced server-side.
+- [x] All 12 frontmatter endpoints scoped by user_id + project_id (19
+  isolation tests).
+- [x] DOCX / PDF exports emit ICMJE block when present; legacy projects
+  unchanged.
+- [x] Bundle round-trip carries all 5 new tables and re-stamps user_id.
+- [x] `cd apps/web && npx tsc -p tsconfig.app.json --noEmit` clean.
+- [x] 1200 backend tests pass; 131 frontend vitest pass.
+
+**Files created**
+
+- `apps/api/alembic/versions/0011_icmje_frontmatter.py`
+- `apps/api/src/research_api/schemas/frontmatter.py`
+- `apps/api/src/research_api/repositories/frontmatter.py`
+- `apps/api/src/research_api/routes/frontmatter.py`
+- `apps/api/tests/test_frontmatter_schemas.py`
+- `apps/api/tests/test_frontmatter_repository.py`
+- `apps/api/tests/test_frontmatter_route.py`
+- `apps/api/tests/test_security_frontmatter_isolation.py`
+- `apps/api/tests/test_frontmatter_export.py`
+- `apps/api/tests/test_frontmatter_bundle_round_trip.py`
+- `apps/web/src/components/frontmatter/AuthorsEditor.tsx`
+- `apps/web/src/components/frontmatter/AffiliationsEditor.tsx`
+- `apps/web/src/components/frontmatter/ContributionsMatrix.tsx`
+- `apps/web/src/components/frontmatter/EthicsFundingForm.tsx`
+- `apps/web/src/components/frontmatter/StructuredAbstract.tsx`
+- `apps/web/src/components/frontmatter/FrontMatterPanel.tsx`
+- `apps/web/src/lib/__tests__/frontmatterApi.test.ts`
+- `apps/web/src/components/frontmatter/__tests__/FrontMatterPanel.test.tsx`
+- `apps/web/src/components/frontmatter/__tests__/StructuredAbstract.test.tsx`
+
+**Files modified**
+
+- `apps/api/src/research_api/db/models.py`
+- `apps/api/src/research_api/main.py`
+- `apps/api/src/research_api/routes/export.py`
+- `apps/api/src/research_api/services/export/docx_export.py`
+- `apps/api/src/research_api/services/export/pdf_export.py`
+- `apps/api/src/research_api/services/export/bundle_export.py`
+- `apps/api/src/research_api/services/export/bundle_import.py`
+- `apps/api/tests/test_bundle_import.py`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/components/manuscript/SectionTabs.tsx`
+- `apps/web/src/routes/ManuscriptPage.tsx`
+
+**Git:** tagged `phase-10`.
+
+---
+
 ## 2026-05-18 · Mini-phase 9 — Citation correctness + manuscript search ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 9 section)

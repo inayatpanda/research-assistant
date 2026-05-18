@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/react'
 
 import { BibliographyPanel } from '@/components/bibliography/BibliographyPanel'
 import { FiguresPanel } from '@/components/figures/FiguresPanel'
+import { FrontMatterPanel } from '@/components/frontmatter/FrontMatterPanel'
 import { AbbreviationsPanel } from '@/components/manuscript/AbbreviationsPanel'
 import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView'
 import { JournalChip } from '@/components/manuscript/JournalChip'
@@ -112,6 +113,7 @@ function ManuscriptInner({
   })
 
   const isFinal = tab === 'final'
+  const isFrontMatter = tab === 'frontmatter'
   const activeSavedAt =
     !isFinal && SECTIONS.includes(tab as ManuscriptSectionName)
       ? sectionQueries[SECTIONS.indexOf(tab as ManuscriptSectionName)].data?.updated_at ?? null
@@ -207,7 +209,11 @@ function ManuscriptInner({
             <JournalChip templateKey={project?.template_journal ?? null} />
           </div>
           <h1 className="mt-0.5 text-[18px] font-semibold tracking-tight">
-            {isFinal ? 'Final Manuscript' : tab}
+            {isFinal
+              ? 'Final Manuscript'
+              : isFrontMatter
+              ? 'Front matter (ICMJE)'
+              : tab}
           </h1>
         </header>
 
@@ -226,6 +232,8 @@ function ManuscriptInner({
           )}
           {isFinal ? (
             <FinalManuscriptView projectId={projectId} />
+          ) : isFrontMatter ? (
+            <FrontMatterPanel projectId={projectId} />
           ) : (
             <ManuscriptEditor
               key={`${projectId}-${tab}`}
@@ -237,7 +245,7 @@ function ManuscriptInner({
           )}
         </div>
 
-        {!isFinal && (
+        {!isFinal && !isFrontMatter && (
           <WordCountBar
             sectionWords={sectionWords || wordCounts[tab] || 0}
             totalWords={total}

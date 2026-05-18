@@ -263,6 +263,9 @@ async def test_import_full_round_trip_lossless(session):
         "rob_assessments": 1, "extraction_records": 1,
         "figures": 0, "consort_data": 0,
         "meta_analyses": 0, "meta_inputs": 0,
+        # Phase 10 additions — bundle source didn't include any rows.
+        "authors": 0, "affiliations": 0, "author_affiliations": 0,
+        "contributions": 0, "project_frontmatter": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

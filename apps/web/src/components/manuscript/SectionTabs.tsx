@@ -4,7 +4,8 @@ import { useSearchParams } from 'react-router-dom'
 import type { ManuscriptSectionName } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const TABS: { id: ManuscriptSectionName | 'final'; label: string }[] = [
+const TABS: { id: ManuscriptSectionName | 'final' | 'frontmatter'; label: string }[] = [
+  { id: 'frontmatter', label: 'Front matter' },
   { id: 'Abstract', label: 'Abstract' },
   { id: 'Introduction', label: 'Introduction' },
   { id: 'Methodology', label: 'Methodology' },
@@ -14,7 +15,7 @@ const TABS: { id: ManuscriptSectionName | 'final'; label: string }[] = [
   { id: 'final', label: 'Final' },
 ]
 
-export type ManuscriptTab = ManuscriptSectionName | 'final'
+export type ManuscriptTab = ManuscriptSectionName | 'final' | 'frontmatter'
 
 export function useManuscriptTab(): [ManuscriptTab, (t: ManuscriptTab) => void] {
   const [params, setParams] = useSearchParams()
@@ -53,7 +54,7 @@ export function SectionTabs({
               )}
             >
               {t.label}
-              {t.id !== 'final' && (
+              {t.id !== 'final' && t.id !== 'frontmatter' && (
                 <span
                   className={cn(
                     'inline-flex items-center justify-center min-w-[24px] h-[16px] px-1 rounded text-[10px] tabular-nums',

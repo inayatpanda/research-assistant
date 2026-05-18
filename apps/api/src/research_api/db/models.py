@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -588,6 +588,152 @@ class ConsortData(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Author(Base):
+    """Phase 10 — ICMJE structured author row.
+
+    `position` is 1-based sort order within the (project_id, user_id) scope.
+    `is_corresponding` is enforced as at-most-one-per-project by the repository
+    via a clearing UPDATE before any insert/update sets it true.
+    """
+
+    __tablename__ = "authors"
+    __table_args__ = (
+        Index("ix_authors_project_user", "project_id", "user_id"),
+        Index("ix_authors_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    full_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    given_name: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    family_name: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    orcid: Mapped[str | None] = mapped_column(String(19), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    is_corresponding: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Affiliation(Base):
+    """Phase 10 — institutional affiliation row, scoped per (project, user)."""
+
+    __tablename__ = "affiliations"
+    __table_args__ = (
+        Index("ix_affiliations_project_user", "project_id", "user_id"),
+        Index("ix_affiliations_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AuthorAffiliation(Base):
+    """Phase 10 — many-to-many link between Author and Affiliation."""
+
+    __tablename__ = "author_affiliations"
+    __table_args__ = (
+        Index(
+            "uq_author_affiliation_pair",
+            "author_id", "affiliation_id",
+            unique=True,
+        ),
+        Index("ix_author_affiliations_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    author_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("authors.id", ondelete="CASCADE"), nullable=False
+    )
+    affiliation_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("affiliations.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class Contribution(Base):
+    """Phase 10 — CRediT contribution role row, one per (author, role).
+
+    The 14 CRediT roles are validated at the Pydantic boundary; the DB column
+    stays a plain string so future role additions don't require a migration.
+    """
+
+    __tablename__ = "contributions"
+    __table_args__ = (
+        Index(
+            "uq_contribution_author_role",
+            "author_id", "role",
+            unique=True,
+        ),
+        Index("ix_contributions_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    author_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("authors.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class ProjectFrontmatter(Base):
+    """Phase 10 — per-project ICMJE front-matter row (1:1 with project)."""
+
+    __tablename__ = "project_frontmatter"
+    __table_args__ = (
+        Index(
+            "uq_project_frontmatter_project_user",
+            "project_id", "user_id",
+            unique=True,
+        ),
+        Index("ix_project_frontmatter_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    funding_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    funders: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    ethics_irb: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ethics_approval_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ethics_consent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conflicts_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    structured_abstract_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    structured_abstract: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

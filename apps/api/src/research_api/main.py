@@ -11,6 +11,7 @@ from .routes.consort import router as consort_router
 from .routes.export import router as export_router
 from .routes.figures import router as figures_router
 from .routes.files import router as files_router
+from .routes.frontmatter import router as frontmatter_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
 from .routes.ingest import router as ingest_router
@@ -52,3 +53,4 @@ app.include_router(export_router, prefix="/api")
 app.include_router(figures_router, prefix="/api")
 app.include_router(consort_router, prefix="/api")
 app.include_router(journal_templates_router, prefix="/api")
+app.include_router(frontmatter_router, prefix="/api")

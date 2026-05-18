@@ -18,11 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.models import (
     Abbreviation,
+    Affiliation,
     Analysis,
     AnalysisResult,
     Article,
     ArticleNote,
+    Author,
+    AuthorAffiliation,
     ConsortData,
+    Contribution,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -32,6 +36,7 @@ from ...db.models import (
     MetaAnalysis,
     MetaInput,
     Project,
+    ProjectFrontmatter,
     Review,
     RobAssessment,
     ScreeningRecord,
@@ -114,6 +119,8 @@ async def _do_import(
         "rob_assessments": 0, "extraction_records": 0,
         "figures": 0, "consort_data": 0,
         "meta_analyses": 0, "meta_inputs": 0,
+        "authors": 0, "affiliations": 0, "author_affiliations": 0,
+        "contributions": 0, "project_frontmatter": 0,
     }
 
     proj_in = bundle["project"]
@@ -510,5 +517,130 @@ async def _do_import(
             counts["meta_inputs"] += 1
         if counts["meta_inputs"]:
             await session.flush()
+
+    # ── ICMJE front-matter (Phase 10) ──────────────────────────────────
+    author_map: dict[str, str] = {}
+    incoming_authors = bundle.get("authors") or []
+    # Sort by position so newly-minted authors keep their relative order.
+    incoming_authors = sorted(
+        incoming_authors, key=lambda a: a.get("position") or 0
+    )
+    correspondings_remaining = 1  # at most one is_corresponding per project
+    for author in incoming_authors:
+        new_aid = _new_id()
+        is_corr = bool(author.get("is_corresponding"))
+        # Defensive: even if the bundle smuggles two corresponding authors,
+        # the receiving project must respect the at-most-one invariant.
+        if is_corr and correspondings_remaining <= 0:
+            is_corr = False
+        if is_corr:
+            correspondings_remaining -= 1
+        session.add(Author(
+            id=new_aid,
+            user_id=target_user_id,
+            project_id=new_project_id,
+            full_name=author.get("full_name") or "Unnamed",
+            given_name=author.get("given_name") or "",
+            family_name=author.get("family_name") or "",
+            orcid=author.get("orcid"),
+            email=author.get("email"),
+            is_corresponding=is_corr,
+            position=author.get("position") or (counts["authors"] + 1),
+        ))
+        if author.get("id"):
+            author_map[author["id"]] = new_aid
+        counts["authors"] += 1
+    if counts["authors"]:
+        await session.flush()
+
+    affiliation_map: dict[str, str] = {}
+    incoming_affiliations = sorted(
+        bundle.get("affiliations") or [],
+        key=lambda a: a.get("position") or 0,
+    )
+    for aff in incoming_affiliations:
+        new_aff_id = _new_id()
+        session.add(Affiliation(
+            id=new_aff_id,
+            user_id=target_user_id,
+            project_id=new_project_id,
+            name=aff.get("name") or "Unnamed",
+            address=aff.get("address"),
+            city=aff.get("city"),
+            country=aff.get("country"),
+            position=aff.get("position") or (counts["affiliations"] + 1),
+        ))
+        if aff.get("id"):
+            affiliation_map[aff["id"]] = new_aff_id
+        counts["affiliations"] += 1
+    if counts["affiliations"]:
+        await session.flush()
+
+    # m2m links — drop orphans where either side wasn't carried in the bundle.
+    seen_links: set[tuple[str, str]] = set()
+    for link in bundle.get("author_affiliations") or []:
+        new_aid = author_map.get(link.get("author_id"))
+        new_aff = affiliation_map.get(link.get("affiliation_id"))
+        if new_aid is None or new_aff is None:
+            continue
+        key = (new_aid, new_aff)
+        if key in seen_links:
+            continue  # avoid UNIQUE collision on duplicate links
+        seen_links.add(key)
+        session.add(AuthorAffiliation(
+            id=_new_id(),
+            user_id=target_user_id,
+            author_id=new_aid,
+            affiliation_id=new_aff,
+            position=link.get("position") or 1,
+        ))
+        counts["author_affiliations"] += 1
+    if counts["author_affiliations"]:
+        await session.flush()
+
+    seen_contributions: set[tuple[str, str]] = set()
+    for c in bundle.get("contributions") or []:
+        new_aid = author_map.get(c.get("author_id"))
+        role = c.get("role")
+        if new_aid is None or not role:
+            continue
+        key = (new_aid, role)
+        if key in seen_contributions:
+            continue
+        seen_contributions.add(key)
+        session.add(Contribution(
+            id=_new_id(),
+            user_id=target_user_id,
+            author_id=new_aid,
+            role=role,
+        ))
+        counts["contributions"] += 1
+    if counts["contributions"]:
+        await session.flush()
+
+    fm_in = bundle.get("project_frontmatter")
+    if isinstance(fm_in, dict):
+        session.add(ProjectFrontmatter(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            funding_statement=fm_in.get("funding_statement"),
+            funders=fm_in.get("funders") or [],
+            ethics_irb=fm_in.get("ethics_irb"),
+            ethics_approval_number=fm_in.get("ethics_approval_number"),
+            ethics_consent=fm_in.get("ethics_consent"),
+            conflicts_statement=fm_in.get("conflicts_statement"),
+            structured_abstract_enabled=bool(
+                fm_in.get("structured_abstract_enabled")
+            ),
+            structured_abstract=fm_in.get("structured_abstract") or {
+                "background": "",
+                "methods": "",
+                "results": "",
+                "conclusions": "",
+            },
+        ))
+        await session.flush()
+        counts["project_frontmatter"] = 1
 
     return counts

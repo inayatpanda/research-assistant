@@ -26,6 +26,7 @@ from svglib.svglib import svg2rlg
 
 from ._html_walker import walk_html
 from .bibliography import CANONICAL_SECTION_ORDER, BibliographyEntry
+from .docx_export import FrontMatterPayload, _to_superscript
 
 
 class _ProjectLike(Protocol):
@@ -230,11 +231,122 @@ def _section_flowables(section: _SectionLike, styles: dict, max_width: float) ->
     return out
 
 
+def _frontmatter_flowables(
+    fm: FrontMatterPayload, styles: dict
+) -> list:
+    """Title page authors + affiliations + corresponding-author line.
+
+    Mirrors `docx_export._add_authors_block` but emits reportlab flowables.
+    All user text is `html.escape`d before mini-HTML composition.
+    """
+    from html import escape
+
+    out: list = []
+    aff_by_id = {a["id"]: a for a in fm.affiliations}
+    seen: dict[str, int] = {}
+    ordered_affs: list[dict] = []
+    for author in sorted(fm.authors, key=lambda a: a.get("position", 0)):
+        for aff_id in author.get("affiliation_ids") or []:
+            if aff_id in seen or aff_id not in aff_by_id:
+                continue
+            seen[aff_id] = len(seen) + 1
+            ordered_affs.append(aff_by_id[aff_id])
+
+    chunks: list[str] = []
+    for author in sorted(fm.authors, key=lambda a: a.get("position", 0)):
+        name = escape(author.get("full_name") or "")
+        nums = [
+            seen[aid]
+            for aid in (author.get("affiliation_ids") or [])
+            if aid in seen
+        ]
+        sup = "".join(_to_superscript(n) for n in sorted(nums))
+        star = "*" if author.get("is_corresponding") else ""
+        chunks.append(f"{name}{sup}{star}")
+    if chunks:
+        out.append(Paragraph(", ".join(chunks), styles["subtitle"]))
+    for aff in ordered_affs:
+        number = seen[aff["id"]]
+        parts = [escape(aff.get(k) or "") for k in ("name", "address", "city", "country")]
+        text = ", ".join(p for p in parts if p)
+        out.append(
+            Paragraph(
+                f"{_to_superscript(number)} <i>{text}</i>", styles["subtitle"]
+            )
+        )
+    corresponding = next(
+        (a for a in fm.authors if a.get("is_corresponding")), None
+    )
+    if corresponding and corresponding.get("email"):
+        out.append(
+            Paragraph(
+                f"<b>* Corresponding author:</b> {escape(corresponding['email'])}",
+                styles["subtitle"],
+            )
+        )
+    return out
+
+
+def _structured_abstract_flowables(abstract: dict, styles: dict) -> list:
+    from html import escape
+
+    out: list = [Paragraph("Abstract", styles["h1"])]
+    for label, key in [
+        ("Background", "background"),
+        ("Methods", "methods"),
+        ("Results", "results"),
+        ("Conclusions", "conclusions"),
+    ]:
+        text = escape(abstract.get(key, "") or "") or "(Empty)"
+        out.append(Paragraph(f"<b>{label}:</b> {text}", styles["body"]))
+    return out
+
+
+def _frontmatter_statements(fm: FrontMatterPayload, styles: dict) -> list:
+    from html import escape
+
+    out: list = []
+
+    def emit(label: str, body: str | None) -> None:
+        if not body:
+            return
+        out.append(Paragraph(f"<b>{label}</b>", styles["body"]))
+        out.append(Paragraph(escape(body), styles["body"]))
+
+    emit("Conflicts of Interest", fm.conflicts_statement)
+    # Funding (statement + structured funder list)
+    funding_parts: list[str] = []
+    if fm.funding_statement:
+        funding_parts.append(fm.funding_statement.strip())
+    if fm.funders:
+        chunks = []
+        for f in fm.funders:
+            name = (f.get("name") or "").strip()
+            grant = (f.get("grant_id") or "").strip()
+            if not name:
+                continue
+            chunks.append(f"{name} ({grant})" if grant else name)
+        if chunks:
+            funding_parts.append("Funders: " + "; ".join(chunks) + ".")
+    emit("Funding", " ".join(funding_parts) or None)
+    # Ethics
+    ethics_parts: list[str] = []
+    if fm.ethics_irb:
+        ethics_parts.append(f"IRB: {fm.ethics_irb.strip()}.")
+    if fm.ethics_approval_number:
+        ethics_parts.append(f"Approval number: {fm.ethics_approval_number.strip()}.")
+    if fm.ethics_consent:
+        ethics_parts.append(fm.ethics_consent.strip())
+    emit("Ethics", " ".join(ethics_parts) or None)
+    return out
+
+
 def render_pdf(
     *,
     project: _ProjectLike,
     sections: Iterable[_SectionLike],
     bibliography: list[BibliographyEntry],
+    frontmatter: FrontMatterPayload | None = None,
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -245,18 +357,41 @@ def render_pdf(
     )
     styles = _make_styles()
     max_width = doc.width
-    story: list = [
-        Paragraph(project.title or "Untitled", styles["title"]),
-        Paragraph(f"Study type: {project.study_type}", styles["subtitle"]),
-        Paragraph(f"Citation style: {_style_label(project.citation_style)}",
-                  styles["subtitle"]),
-        Spacer(1, 24),
-    ]
+    story: list = [Paragraph(project.title or "Untitled", styles["title"])]
+    if frontmatter and frontmatter.authors:
+        story.extend(_frontmatter_flowables(frontmatter, styles))
+    else:
+        story.append(
+            Paragraph(f"Study type: {project.study_type}", styles["subtitle"])
+        )
+        story.append(
+            Paragraph(
+                f"Citation style: {_style_label(project.citation_style)}",
+                styles["subtitle"],
+            )
+        )
+    story.append(Spacer(1, 24))
+
+    use_structured = bool(
+        frontmatter
+        and frontmatter.structured_abstract_enabled
+        and frontmatter.structured_abstract
+    )
     for section in _order_sections(sections):
-        story.extend(_section_flowables(section, styles, max_width))
+        if use_structured and section.section_name == "Abstract":
+            story.extend(
+                _structured_abstract_flowables(
+                    frontmatter.structured_abstract, styles  # type: ignore[union-attr]
+                )
+            )
+            story.append(Spacer(1, 12))
+        else:
+            story.extend(_section_flowables(section, styles, max_width))
     if bibliography:
         story.append(Paragraph("References", styles["h1"]))
         for entry in bibliography:
             story.append(Paragraph(f"{entry.number}. {entry.formatted}", styles["bib"]))
+    if frontmatter:
+        story.extend(_frontmatter_statements(frontmatter, styles))
     doc.build(story)
     return buf.getvalue()

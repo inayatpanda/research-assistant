@@ -19,11 +19,15 @@ from typing import Any
 
 from ...db.models import (
     Abbreviation,
+    Affiliation,
     Analysis,
     AnalysisResult,
     Article,
     ArticleNote,
+    Author,
+    AuthorAffiliation,
     ConsortData,
+    Contribution,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
@@ -33,6 +37,7 @@ from ...db.models import (
     MetaAnalysis,
     MetaInput,
     Project,
+    ProjectFrontmatter,
     Review,
     RobAssessment,
     ScreeningRecord,
@@ -66,6 +71,12 @@ class BundleInputs:
     # Phase 7.5 additions
     meta_analyses: list[MetaAnalysis] = field(default_factory=list)
     meta_inputs: list[MetaInput] = field(default_factory=list)
+    # Phase 10 — ICMJE structured front-matter
+    authors: list[Author] = field(default_factory=list)
+    affiliations: list[Affiliation] = field(default_factory=list)
+    author_affiliations: list[AuthorAffiliation] = field(default_factory=list)
+    contributions: list[Contribution] = field(default_factory=list)
+    project_frontmatter: ProjectFrontmatter | None = None
 
 
 def _serialise(value: Any) -> Any:
@@ -127,4 +138,15 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         ),
         "meta_analyses": [_row_to_dict(m) for m in inputs.meta_analyses],
         "meta_inputs": [_row_to_dict(i) for i in inputs.meta_inputs],
+        "authors": [_row_to_dict(a) for a in inputs.authors],
+        "affiliations": [_row_to_dict(a) for a in inputs.affiliations],
+        "author_affiliations": [
+            _row_to_dict(a) for a in inputs.author_affiliations
+        ],
+        "contributions": [_row_to_dict(c) for c in inputs.contributions],
+        "project_frontmatter": (
+            _row_to_dict(inputs.project_frontmatter)
+            if inputs.project_frontmatter is not None
+            else None
+        ),
     }

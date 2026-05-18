@@ -1799,3 +1799,227 @@ export const journalTemplatesApi = {
     return z.array(JournalTemplateSchema).parse(r.data)
   },
 }
+
+// ── Phase 10: ICMJE structured front-matter ──────────────────────────────
+
+export const CreditRoleSchema = z.enum([
+  'Conceptualization',
+  'Data curation',
+  'Formal analysis',
+  'Funding acquisition',
+  'Investigation',
+  'Methodology',
+  'Project administration',
+  'Resources',
+  'Software',
+  'Supervision',
+  'Validation',
+  'Visualization',
+  'Writing – original draft',
+  'Writing – review & editing',
+])
+export type CreditRole = z.infer<typeof CreditRoleSchema>
+export const CREDIT_ROLES: readonly CreditRole[] = CreditRoleSchema.options
+
+export const AuthorReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  full_name: z.string(),
+  given_name: z.string(),
+  family_name: z.string(),
+  orcid: z.string().nullable(),
+  email: z.string().nullable(),
+  is_corresponding: z.boolean(),
+  position: z.number().int(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  affiliation_ids: z.array(z.string()),
+})
+export type AuthorRead = z.infer<typeof AuthorReadSchema>
+
+export const AuthorCreateSchema = z.object({
+  full_name: z.string().min(1),
+  given_name: z.string().optional(),
+  family_name: z.string().optional(),
+  orcid: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  is_corresponding: z.boolean().optional(),
+})
+export type AuthorCreate = z.infer<typeof AuthorCreateSchema>
+
+export type AuthorUpdate = Partial<AuthorCreate>
+
+export const AffiliationReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  name: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  country: z.string().nullable(),
+  position: z.number().int(),
+  created_at: z.string(),
+})
+export type AffiliationRead = z.infer<typeof AffiliationReadSchema>
+
+export const AffiliationCreateSchema = z.object({
+  name: z.string().min(1),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+})
+export type AffiliationCreate = z.infer<typeof AffiliationCreateSchema>
+export type AffiliationUpdate = Partial<AffiliationCreate>
+
+export const ContributionReadSchema = z.object({
+  id: z.string(),
+  author_id: z.string(),
+  role: CreditRoleSchema,
+})
+export type ContributionRead = z.infer<typeof ContributionReadSchema>
+
+export const FunderSchema = z.object({
+  name: z.string().min(1),
+  grant_id: z.string().nullable().optional(),
+})
+export type Funder = z.infer<typeof FunderSchema>
+
+export const StructuredAbstractSchema = z.object({
+  background: z.string(),
+  methods: z.string(),
+  results: z.string(),
+  conclusions: z.string(),
+})
+export type StructuredAbstractValue = z.infer<typeof StructuredAbstractSchema>
+
+export const ProjectFrontmatterSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  funding_statement: z.string().nullable(),
+  funders: z.array(FunderSchema),
+  ethics_irb: z.string().nullable(),
+  ethics_approval_number: z.string().nullable(),
+  ethics_consent: z.string().nullable(),
+  conflicts_statement: z.string().nullable(),
+  structured_abstract_enabled: z.boolean(),
+  structured_abstract: StructuredAbstractSchema,
+  updated_at: z.string(),
+})
+export type ProjectFrontmatter = z.infer<typeof ProjectFrontmatterSchema>
+
+export type ProjectFrontmatterUpdate = {
+  funding_statement?: string | null
+  funders?: Funder[]
+  ethics_irb?: string | null
+  ethics_approval_number?: string | null
+  ethics_consent?: string | null
+  conflicts_statement?: string | null
+  structured_abstract_enabled?: boolean
+  structured_abstract?: StructuredAbstractValue
+}
+
+export const frontmatterApi = {
+  authors: {
+    list: async (projectId: string): Promise<AuthorRead[]> => {
+      const r = await api.get(`/api/projects/${projectId}/authors`)
+      return z.array(AuthorReadSchema).parse(r.data)
+    },
+    create: async (projectId: string, body: AuthorCreate): Promise<AuthorRead> => {
+      const r = await api.post(`/api/projects/${projectId}/authors`, body)
+      return AuthorReadSchema.parse(r.data)
+    },
+    update: async (authorId: string, patch: AuthorUpdate): Promise<AuthorRead> => {
+      const r = await api.patch(`/api/authors/${authorId}`, patch)
+      return AuthorReadSchema.parse(r.data)
+    },
+    delete: async (authorId: string): Promise<void> => {
+      await api.delete(`/api/authors/${authorId}`)
+    },
+    reorder: async (projectId: string, orderedIds: string[]): Promise<AuthorRead[]> => {
+      const r = await api.post(`/api/projects/${projectId}/authors/reorder`, {
+        ordered_author_ids: orderedIds,
+      })
+      return z.array(AuthorReadSchema).parse(r.data)
+    },
+    setCorresponding: async (authorId: string): Promise<AuthorRead> => {
+      const r = await api.post(`/api/authors/${authorId}/set-corresponding`)
+      return AuthorReadSchema.parse(r.data)
+    },
+  },
+  affiliations: {
+    list: async (projectId: string): Promise<AffiliationRead[]> => {
+      const r = await api.get(`/api/projects/${projectId}/affiliations`)
+      return z.array(AffiliationReadSchema).parse(r.data)
+    },
+    create: async (
+      projectId: string,
+      body: AffiliationCreate,
+    ): Promise<AffiliationRead> => {
+      const r = await api.post(`/api/projects/${projectId}/affiliations`, body)
+      return AffiliationReadSchema.parse(r.data)
+    },
+    update: async (
+      affiliationId: string,
+      patch: AffiliationUpdate,
+    ): Promise<AffiliationRead> => {
+      const r = await api.patch(`/api/affiliations/${affiliationId}`, patch)
+      return AffiliationReadSchema.parse(r.data)
+    },
+    delete: async (affiliationId: string): Promise<void> => {
+      await api.delete(`/api/affiliations/${affiliationId}`)
+    },
+    reorder: async (
+      projectId: string,
+      orderedIds: string[],
+    ): Promise<AffiliationRead[]> => {
+      const r = await api.post(`/api/projects/${projectId}/affiliations/reorder`, {
+        ordered_affiliation_ids: orderedIds,
+      })
+      return z.array(AffiliationReadSchema).parse(r.data)
+    },
+  },
+  link: {
+    add: async (authorId: string, affiliationId: string): Promise<AuthorRead> => {
+      const r = await api.post(
+        `/api/authors/${authorId}/affiliations/${affiliationId}`,
+      )
+      return AuthorReadSchema.parse(r.data)
+    },
+    remove: async (
+      authorId: string,
+      affiliationId: string,
+    ): Promise<AuthorRead> => {
+      const r = await api.delete(
+        `/api/authors/${authorId}/affiliations/${affiliationId}`,
+      )
+      return AuthorReadSchema.parse(r.data)
+    },
+  },
+  contributions: {
+    list: async (authorId: string): Promise<ContributionRead[]> => {
+      const r = await api.get(`/api/authors/${authorId}/contributions`)
+      return z.array(ContributionReadSchema).parse(r.data)
+    },
+    set: async (authorId: string, role: CreditRole): Promise<ContributionRead> => {
+      const r = await api.post(`/api/authors/${authorId}/contributions`, { role })
+      return ContributionReadSchema.parse(r.data)
+    },
+    clear: async (authorId: string, role: CreditRole): Promise<void> => {
+      await api.delete(
+        `/api/authors/${authorId}/contributions/${encodeURIComponent(role)}`,
+      )
+    },
+  },
+  frontmatter: {
+    get: async (projectId: string): Promise<ProjectFrontmatter> => {
+      const r = await api.get(`/api/projects/${projectId}/frontmatter`)
+      return ProjectFrontmatterSchema.parse(r.data)
+    },
+    patch: async (
+      projectId: string,
+      body: ProjectFrontmatterUpdate,
+    ): Promise<ProjectFrontmatter> => {
+      const r = await api.patch(`/api/projects/${projectId}/frontmatter`, body)
+      return ProjectFrontmatterSchema.parse(r.data)
+    },
+  },
+}
