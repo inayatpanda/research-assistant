@@ -13,6 +13,11 @@ from typing import Iterable, Mapping, Protocol
 
 from ..citation_format import CitationStyle, bibliography_entry
 
+# Styles that order the reference list alphabetically by first author's
+# surname (case-insensitive). Numbered styles (Vancouver, IEEE) keep their
+# existing first-citation-of-appearance policy.
+_ALPHABETICAL_STYLES: frozenset[CitationStyle] = frozenset({"apa", "harvard"})
+
 CANONICAL_SECTION_ORDER: tuple[str, ...] = (
     "Abstract",
     "Introduction",
@@ -76,6 +81,39 @@ def collect_used_article_ids_in_order(
     return seen
 
 
+def _first_author_surname(article: _ArticleLike) -> str:
+    """Lowercased surname of the first author for alphabetical ordering.
+
+    Mirrors `citation_format._surname` (last whitespace token) but returns
+    the empty string for articles with no authors so they bucket consistently.
+    """
+    authors = list(article.authors or [])
+    if not authors:
+        return ""
+    first = (authors[0] or "").strip()
+    if not first:
+        return ""
+    return first.split()[-1].lower()
+
+
+def _alphabetical_sort_key(
+    article: _ArticleLike, *, fallback_position: int
+) -> tuple[str, int, str, int]:
+    """Sort key: (surname, year, title, fallback_position).
+
+    `fallback_position` is the first-citation index — used to stabilise the
+    sort when surname/year/title all tie (genuinely identical metadata
+    shouldn't happen, but the secondary key keeps the order deterministic).
+
+    Missing year sorts AFTER any concrete year by using a sentinel
+    `10**6` value (year 1,000,000 — outliers don't exist in our corpus).
+    """
+    surname = _first_author_surname(article)
+    year = article.year if article.year is not None else 10**6
+    title = (article.title or "").lower()
+    return (surname, year, title, fallback_position)
+
+
 def build_bibliography(
     *,
     articles_by_id: Mapping[str, _ArticleLike],
@@ -84,18 +122,48 @@ def build_bibliography(
 ) -> list[BibliographyEntry]:
     """Compose `collect_used_article_ids_in_order` + per-style entry rendering.
 
+    Per-style ordering policy:
+    - Vancouver / IEEE: first-citation-of-appearance (inline numbers match).
+    - APA / Harvard: alphabetical by first author's surname (case-insensitive),
+      ties broken by year ASC then title ASC. Inline format is author-year so
+      this re-order does not require renumbering inline citations.
+
     Article ids referenced by manuscript content but absent from
     `articles_by_id` are dropped silently — the integrity panel is the
     user-visible surface for orphan tokens.
     """
     ids = collect_used_article_ids_in_order(sections)
-    out: list[BibliographyEntry] = []
+
+    if style in _ALPHABETICAL_STYLES:
+        # Sort by (surname, year, title) but only across articles we have
+        # metadata for. Missing-metadata ids are still dropped.
+        resolvable: list[tuple[str, _ArticleLike, int]] = []
+        for pos, aid in enumerate(ids):
+            article = articles_by_id.get(aid)
+            if article is None:
+                continue
+            resolvable.append((aid, article, pos))
+        resolvable.sort(
+            key=lambda triple: _alphabetical_sort_key(
+                triple[1], fallback_position=triple[2],
+            )
+        )
+        out: list[BibliographyEntry] = []
+        next_number = 1
+        for aid, article, _pos in resolvable:
+            formatted = bibliography_entry(article, number=next_number, style=style)
+            out.append(BibliographyEntry(article_id=aid, number=next_number, formatted=formatted))
+            next_number += 1
+        return out
+
+    # Default: first-citation-of-appearance (Vancouver, IEEE).
+    out_v: list[BibliographyEntry] = []
     next_number = 1
     for aid in ids:
         article = articles_by_id.get(aid)
         if article is None:
             continue
         formatted = bibliography_entry(article, number=next_number, style=style)
-        out.append(BibliographyEntry(article_id=aid, number=next_number, formatted=formatted))
+        out_v.append(BibliographyEntry(article_id=aid, number=next_number, formatted=formatted))
         next_number += 1
-    return out
+    return out_v

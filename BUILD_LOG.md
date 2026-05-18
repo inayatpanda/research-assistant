@@ -5,6 +5,115 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 9 — Citation correctness + manuscript search ✅ COMPLETE
+
+**Plan:** `docs/superpowers/plans/2026-05-18-post-e2e-roadmap.md` (Mini-phase 9 section)
+
+**Items addressed:** #13, #14, #15, #16.
+
+**Backend changes**
+
+- `services/export/bibliography.py` — `build_bibliography` now branches on
+  citation style: Vancouver / IEEE keep first-citation-of-appearance;
+  APA / Harvard sort alphabetically by first author's surname
+  (case-insensitive), with `(year ASC, title ASC, first-citation-position)`
+  tie-break. Missing-year articles sort after concrete years via a
+  10**6 sentinel. Empty-authors articles bucket consistently.
+- `services/citation_format.py` — new `consolidate_inline_clusters(html, style)`
+  walks adjacent `<sup data-citation>` tokens (only whitespace between them
+  counts as adjacent) and:
+  - Vancouver/IEEE: `[1][2][3]` → `[1-3]` (range when ≥3 contiguous), `[1,2]`
+    for two-element runs, `[1,3,5]` for non-contiguous, `[1-3,5]` for mixed.
+    Sorts before range detection so `[3][1][2]` also folds to `[1-3]`.
+  - APA/Harvard: merges into a single paren with semicolon-separated entries,
+    deduped — `(Smith, 2024; Patel, 2022; Brown, 2021)`.
+  Cluster detection uses a single regex (`_CLUSTER_RE`) with a `(?:WS SUP)+`
+  repeat group so adjacent runs are captured in one match.
+- `routes/export.py` — new `_consolidate_sections` runs the consolidator on
+  every section right before passing them to `render_docx` / `render_pdf`.
+  Uses a lightweight `_ConsolidatedSection` slotted class so the ORM row is
+  never mutated.
+
+**Frontend changes**
+
+- New `components/manuscript/ManuscriptSearchPanel.tsx` — popover that opens
+  inside the editor pane, with a debounced (150 ms) input, hits grouped by
+  section, per-hit ~80 char preview with the match highlighted, Cmd-G / F3
+  next, Shift variants prev, Enter to jump, Esc to close. Strips
+  `<sup data-citation>…</sup>` blocks before searching so users do not match
+  `[N]` literals.
+- `routes/ManuscriptPage.tsx` — `useEffect` captures `keydown` in capture
+  phase; intercepts Cmd-F / Ctrl-F ONLY when the focused element is inside
+  the manuscript editor pane wrapper (so the browser's native Find stays
+  intact everywhere else). Wraps the editor in a `relative` div with a ref;
+  the search panel is rendered absolutely positioned inside that ref.
+  Click-to-jump walks the ProseMirror doc's text nodes, counts to the
+  match's `matchIndex`, places a TextSelection, and calls `scrollIntoView`.
+
+**Test deltas**
+
+- Backend: **1078 → 1122 (+44 tests)**:
+  - `tests/test_bibliography_ordering.py` (13) — parametrised across all 4
+    styles × multiple cite-order scenarios (alphabetical, case-insensitive,
+    year tie-break, title tie-break, missing year, empty authors).
+  - `tests/test_citation_cluster.py` (30) — 2/3/4-contiguous, gaps,
+    out-of-order, dedup, idempotency, trailing-period edge case, all 4
+    styles.
+  - `tests/test_export_route.py` (+1) — integration: adjacent numeric sups
+    collapse to `[1-3]` in DOCX output.
+- Frontend: **108 → 117 (+9 vitest)** — `ManuscriptSearchPanel.test.tsx`
+  covers `stripHtmlForSearch`, empty-query path, multi-section matches,
+  preview length cap, case-insensitivity, jump callback, Esc closes,
+  F3 / Shift-F3 navigation.
+
+**Decisions logged**
+
+- Cluster grouping window: ONLY whitespace adjacency counts. A trailing
+  period, comma, or any non-whitespace character breaks the cluster.
+- Sentence-end edge case: `[1][2].` — the period stays outside the cluster
+  because it never gets matched by `_CLUSTER_RE`; the consolidated sup
+  emits `[1,2].` correctly (verified by `test_consolidator_handles_trailing_period`).
+- Adversarial author-year strings (parens inside the inner text) are escaped
+  via the same `html.escape` pass used in `replace_cite_tokens_with_markup`
+  so a user-provided `Smith, "evil"` cannot break out of the `data-article-id`
+  attribute.
+- Cmd-F intercept condition: capture-phase keydown listener, `e.preventDefault`
+  ONLY when `document.activeElement` is inside the manuscript editor pane
+  wrapper. Outside that zone (sidebars, top nav, library page), the
+  browser's native Find runs normally.
+
+**Acceptance bar**
+
+- [x] APA + Harvard reference list orders alphabetically by first author surname.
+- [x] Vancouver + IEEE keep first-citation-of-appearance numbering.
+- [x] `[1][2][3]` → `[1-3]` for Vancouver/IEEE; `(Smith, 2024)(Patel, 2022)`
+  → `(Smith, 2024; Patel, 2022)` for APA/Harvard.
+- [x] Cmd-F opens the cross-section search panel only when focus is in
+  the manuscript editor; native browser Find preserved elsewhere.
+- [x] Cmd-G / F3 (next), Shift-Cmd-G / Shift-F3 (prev), Esc close.
+- [x] `cd apps/web && npx tsc -p tsconfig.app.json --noEmit` clean (the
+  pre-existing baseUrl deprecation warning is unrelated to this phase).
+
+**Files created**
+
+- `apps/api/tests/test_bibliography_ordering.py`
+- `apps/api/tests/test_citation_cluster.py`
+- `apps/web/src/components/manuscript/ManuscriptSearchPanel.tsx`
+- `apps/web/src/components/manuscript/__tests__/ManuscriptSearchPanel.test.tsx`
+
+**Files modified**
+
+- `apps/api/src/research_api/services/export/bibliography.py`
+- `apps/api/src/research_api/services/citation_format.py`
+- `apps/api/src/research_api/routes/export.py`
+- `apps/api/tests/test_export_route.py`
+- `apps/web/src/routes/ManuscriptPage.tsx`
+- `POLISH.md`
+
+**Git:** tagged `phase-9`.
+
+---
+
 ## 2026-05-18 · Phase 8.5 — Stats visualisation ✅ COMPLETE
 
 **Plan:** `docs/superpowers/plans/2026-05-18-phase-8p5-stats-visualisation.md`

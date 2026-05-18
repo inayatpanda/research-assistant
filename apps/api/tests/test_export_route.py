@@ -111,6 +111,31 @@ async def test_export_docx_works_with_empty_manuscript(client):
     assert r.content[:2] == b"PK"
 
 
+@pytest.mark.asyncio
+async def test_export_docx_consolidates_adjacent_numeric_citation_sups(client):
+    """Adjacent `<sup data-citation>[1][2][3]</sup>` tokens collapse to `[1-3]`
+    in DOCX output (BUG #15)."""
+    from docx import Document  # local import — only needed for this test
+
+    pid = await _make_project(client)
+    content = (
+        '<p>Multiple refs '
+        '<sup data-citation data-article-id="x1">[1]</sup>'
+        '<sup data-citation data-article-id="x2">[2]</sup>'
+        '<sup data-citation data-article-id="x3">[3]</sup>'
+        ' end.</p>'
+    )
+    await _seed_section(
+        project_id=pid, section_name="Introduction", content=content,
+    )
+    r = await client.post(f"/api/projects/{pid}/export/docx")
+    assert r.status_code == 200
+    doc = Document(io.BytesIO(r.content))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    # Collapsed range body appears; original [1] [2] [3] should NOT each appear.
+    assert "[1-3]" in text
+
+
 # ── PDF export ─────────────────────────────────────────────────────────
 
 

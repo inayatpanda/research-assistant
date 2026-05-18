@@ -56,6 +56,7 @@ from ..schemas.export import (
 from ..services.citation_format import (
     CitationStyle,
     bibliography_entry,
+    consolidate_inline_clusters,
     format_entry,
 )
 from ..services.export.bibliography import (
@@ -134,6 +135,33 @@ async def _build_bib_entries(
     return build_bibliography(articles_by_id=by_id, sections=sections, style=style)
 
 
+class _ConsolidatedSection:
+    """Lightweight stand-in for a ManuscriptSection used by render_docx/pdf.
+
+    Decoupled from the ORM class so we can safely mutate `content` without
+    poisoning the SQLAlchemy session-managed row.
+    """
+    __slots__ = ("section_name", "content")
+
+    def __init__(self, section_name: str, content: str) -> None:
+        self.section_name = section_name
+        self.content = content
+
+
+def _consolidate_sections(
+    sections: list[ManuscriptSection], style: CitationStyle
+) -> list[_ConsolidatedSection]:
+    """Return shallow copies of `sections` with inline citation clusters
+    consolidated per `style`. Original ORM rows are NOT mutated."""
+    return [
+        _ConsolidatedSection(
+            section_name=s.section_name,
+            content=consolidate_inline_clusters(s.content or "", style),
+        )
+        for s in sections
+    ]
+
+
 def _first_section_by_article(
     sections: list[ManuscriptSection],
 ) -> dict[str, str]:
@@ -167,7 +195,8 @@ async def export_docx(
     articles = await _load_articles(session, project_id, user_id)
     style = _coerce_style(None, project.citation_style)
     entries = await _build_bib_entries(sections, articles, style)
-    data = render_docx(project=project, sections=sections, bibliography=entries)
+    consolidated = _consolidate_sections(sections, style)
+    data = render_docx(project=project, sections=consolidated, bibliography=entries)
 
     slug = _slugify_filename(project.title)
     filename = f"{slug}-{_today()}.docx"
@@ -192,7 +221,8 @@ async def export_pdf(
     articles = await _load_articles(session, project_id, user_id)
     style = _coerce_style(None, project.citation_style)
     entries = await _build_bib_entries(sections, articles, style)
-    data = render_pdf(project=project, sections=sections, bibliography=entries)
+    consolidated = _consolidate_sections(sections, style)
+    data = render_pdf(project=project, sections=consolidated, bibliography=entries)
 
     slug = _slugify_filename(project.title)
     filename = f"{slug}-{_today()}.pdf"

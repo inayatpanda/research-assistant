@@ -427,6 +427,169 @@ def extract_used_citations(
     return seen
 
 
+# --- Inline-cluster consolidation --------------------------------------------
+
+# A single `<sup data-citation ...>...</sup>` token. Match the full element
+# non-greedily so we don't accidentally swallow surrounding markup. The inner
+# `[N]` or `(Author, YYYY)` text is captured for inspection.
+_SUP_TOKEN_RE = re.compile(
+    r'<sup\s+data-citation[^>]*>(?P<inner>[^<]*)</sup>',
+    re.DOTALL,
+)
+
+# An adjacent cluster: two or more `<sup data-citation>` tokens separated only
+# by whitespace. The `(?:WS SUP)+` repeat ensures we capture the full run in
+# a single match so the replacement re-emits a consolidated cluster.
+_CLUSTER_RE = re.compile(
+    r'(?P<cluster>'
+    r'<sup\s+data-citation[^>]*>[^<]*</sup>'
+    r'(?:\s*<sup\s+data-citation[^>]*>[^<]*</sup>)+'
+    r')',
+    re.DOTALL,
+)
+
+# Within a numeric sup, extract the integer. Allows "[3]" or just "3".
+_NUMERIC_INNER_RE = re.compile(r'-?\d+')
+
+
+def _format_numeric_ranges(numbers: list[int]) -> str:
+    """Render a sorted, deduped int list as a Vancouver/IEEE cluster body.
+
+    Single number:      "1"
+    Two consecutive:    "1,2"      (two-element runs are NOT collapsed)
+    Three+ consecutive: "1-3"      (range)
+    Non-contiguous:     "1,3,5"
+    Mixed:              "1-3,5"
+    """
+    if not numbers:
+        return ""
+    runs: list[list[int]] = [[numbers[0]]]
+    for n in numbers[1:]:
+        if n == runs[-1][-1] + 1:
+            runs[-1].append(n)
+        else:
+            runs.append([n])
+    parts: list[str] = []
+    for run in runs:
+        if len(run) >= 3:
+            parts.append(f"{run[0]}-{run[-1]}")
+        else:
+            parts.extend(str(n) for n in run)
+    return ",".join(parts)
+
+
+def _consolidate_numeric_cluster(tokens: list[tuple[str, str]]) -> str:
+    """Tokens: list of (article_id_attr, inner). Render as a single `<sup>`.
+
+    `article_id_attr` is the original `data-article-id` value for the FIRST
+    occurrence of each citation. The consolidated sup keeps `data-citation`
+    but emits the comma-joined article ids so downstream tooling can still
+    discover them.
+    """
+    # Preserve first-seen order for article-id mapping, but the displayed
+    # numbers sort ascending.
+    seen_aids: dict[int, str] = {}
+    numbers_in_order: list[int] = []
+    for aid, inner in tokens:
+        match = _NUMERIC_INNER_RE.search(inner)
+        if not match:
+            continue
+        n = int(match.group(0))
+        if n in seen_aids:
+            continue
+        seen_aids[n] = aid
+        numbers_in_order.append(n)
+    if not numbers_in_order:
+        return ""
+    numbers_in_order.sort()
+    body = _format_numeric_ranges(numbers_in_order)
+    # Single number: just re-emit the original sup form.
+    if len(numbers_in_order) == 1:
+        n = numbers_in_order[0]
+        aid = seen_aids[n]
+        attr = f' data-article-id="{escape(aid)}"' if aid else ""
+        return f'<sup data-citation{attr}>[{n}]</sup>'
+    # Multi-number cluster: keep ALL article ids (comma-joined) so the
+    # bibliography service can still discover each, but render the
+    # body as a range/list.
+    aids = ",".join(seen_aids[n] for n in numbers_in_order if seen_aids.get(n))
+    attr = f' data-article-id="{escape(aids)}"' if aids else ""
+    return f'<sup data-citation{attr}>[{body}]</sup>'
+
+
+def _consolidate_author_year_cluster(tokens: list[tuple[str, str]]) -> str:
+    """APA / Harvard: merge `(Smith, 2024)(Patel, 2022)` into
+    `(Smith, 2024; Patel, 2022)`, dedup, preserve adjacency order."""
+    seen: set[str] = set()
+    parts: list[str] = []
+    aid_order: list[str] = []
+    for aid, inner in tokens:
+        # Strip outer parens if present so we can join with semicolons.
+        body = inner.strip()
+        if body.startswith("(") and body.endswith(")"):
+            body = body[1:-1].strip()
+        if not body or body in seen:
+            continue
+        seen.add(body)
+        parts.append(body)
+        if aid and aid not in aid_order:
+            aid_order.append(aid)
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        # No actual merge happened; re-emit single sup with original aid.
+        aid = aid_order[0] if aid_order else ""
+        attr = f' data-article-id="{escape(aid)}"' if aid else ""
+        return f'<sup data-citation{attr}>({parts[0]})</sup>'
+    body = "; ".join(parts)
+    aids = ",".join(aid_order)
+    attr = f' data-article-id="{escape(aids)}"' if aids else ""
+    return f'<sup data-citation{attr}>({body})</sup>'
+
+
+_DATA_ARTICLE_ID_RE = re.compile(r'data-article-id="([^"]*)"')
+
+
+def _extract_tokens(cluster_html: str) -> list[tuple[str, str]]:
+    """Parse an adjacent run into (article_id, inner_text) tuples."""
+    out: list[tuple[str, str]] = []
+    for m in _SUP_TOKEN_RE.finditer(cluster_html):
+        full = m.group(0)
+        inner = m.group("inner") or ""
+        aid_m = _DATA_ARTICLE_ID_RE.search(full)
+        aid = aid_m.group(1) if aid_m else ""
+        out.append((aid, inner))
+    return out
+
+
+def consolidate_inline_clusters(html: str, style: CitationStyle) -> str:
+    """Collapse adjacent `<sup data-citation>` tokens into a single span.
+
+    Vancouver / IEEE (numeric):
+        `[1][2][3]` → `[1-3]`
+        `[1][2]`    → `[1,2]`  (two-token runs are NOT ranged)
+        `[3][1][2]` → `[1-3]`  (sorted before range detection)
+
+    APA / Harvard (author-year):
+        `(Smith, 2024)(Patel, 2022)` → `(Smith, 2024; Patel, 2022)`
+
+    Adjacency: only whitespace between two `<sup>` tokens counts. Any other
+    character — including a comma or a closing tag — breaks the cluster.
+    """
+    is_numeric_style = style in ("vancouver", "ieee")
+
+    def replace(match: re.Match[str]) -> str:
+        cluster_html = match.group("cluster")
+        tokens = _extract_tokens(cluster_html)
+        if len(tokens) <= 1:
+            return cluster_html
+        if is_numeric_style:
+            return _consolidate_numeric_cluster(tokens)
+        return _consolidate_author_year_cluster(tokens)
+
+    return _CLUSTER_RE.sub(replace, html)
+
+
 def replace_cite_tokens_with_markup(
     text: str,
     articles_by_tag: Mapping[str, _ArticleLike],
