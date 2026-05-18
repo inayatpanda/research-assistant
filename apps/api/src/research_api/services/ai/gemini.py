@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -25,6 +25,7 @@ from .prompts import (
     SECTION_DRAFT_PROMPT,
     SUMMARISE_PROMPT,
     WRITING_ASSIST_PROMPT,
+    build_result_interpretation_prompt,
     format_card_for_prompt,
 )
 from .schemas import CitationMetadata
@@ -155,9 +156,25 @@ class GeminiProvider(AIProvider):
         raw = (await self._generate_with_resilience(prompt)).strip()
         return raw
 
-    # Phase-deferred methods raise NotImplementedError until their phase ships.
-    async def interpret_result(self, test: str, output: dict) -> str:
-        raise NotImplementedError("interpret_result lands in Phase 6")
+    async def interpret_result(
+        self,
+        *,
+        test_label: str,
+        rationale: str,
+        summary: dict[str, Any],
+        assumptions: dict[str, Any] | None,
+        cite_token: str,
+    ) -> str:
+        if not cite_token or not cite_token.strip():
+            raise AISourceInsufficient("missing cite_token", provider="gemini")
+        prompt = build_result_interpretation_prompt(
+            test_label=test_label,
+            rationale=rationale,
+            summary=summary,
+            assumptions=assumptions,
+            cite_token=cite_token,
+        )
+        return (await self._generate_with_resilience(prompt)).strip()
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:
         if not text or len(text.strip()) < 5:

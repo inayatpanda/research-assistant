@@ -5,6 +5,8 @@ exactly like an outage. The /health endpoint reports `ok=False, reason="no key"`
 """
 from __future__ import annotations
 
+from typing import Any
+
 from .base import AIProvider, CardContext, SectionDraftContext, WritingAction
 from .errors import AIProviderUnavailable
 from .schemas import CitationMetadata
@@ -34,7 +36,15 @@ class UnconfiguredAIProvider(AIProvider):
     async def generate_section_draft(self, ctx: SectionDraftContext) -> str:
         raise AIProviderUnavailable("no API key configured", provider=self._name)
 
-    async def interpret_result(self, test: str, output: dict) -> str:
+    async def interpret_result(
+        self,
+        *,
+        test_label: str,
+        rationale: str,
+        summary: dict[str, Any],
+        assumptions: dict[str, Any] | None,
+        cite_token: str,
+    ) -> str:
         raise AIProviderUnavailable("no API key configured", provider=self._name)
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from .schemas import CitationMetadata
 
@@ -45,4 +45,12 @@ class AIProvider(Protocol):
 
     # Phase 5/6 stubs
     async def assist_writing(self, text: str, action: WritingAction) -> str: ...
-    async def interpret_result(self, test: str, output: dict) -> str: ...
+    async def interpret_result(
+        self,
+        *,
+        test_label: str,
+        rationale: str,
+        summary: dict[str, Any],
+        assumptions: dict[str, Any] | None,
+        cite_token: str,
+    ) -> str: ...

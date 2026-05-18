@@ -43,8 +43,20 @@ class FakeAIProvider(AIProvider):
     async def generate_section_draft(self, ctx: SectionDraftContext) -> str:
         return " ".join(f"Finding [CITE_{c.cite_tag}]." for c in ctx.cards)
 
-    async def interpret_result(self, test: str, output: dict) -> str:
-        return "AI interpretation"
+    async def interpret_result(
+        self,
+        *,
+        test_label: str,
+        rationale: str,
+        summary: dict,
+        assumptions: dict | None,
+        cite_token: str,
+    ) -> str:
+        self.calls.append("interpret_result")
+        return (
+            f"Test {test_label}: statistic={summary.get('statistic')}, "
+            f"p={summary.get('p_value')}. {cite_token}"
+        )
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:
         # Preserve CITE tokens verbatim (mirrors the prompt's preservation rule)
