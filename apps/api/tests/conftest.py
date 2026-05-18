@@ -62,6 +62,22 @@ class FakeAIProvider(AIProvider):
         # Preserve CITE tokens verbatim (mirrors the prompt's preservation rule)
         return f"[{action}] {text}"
 
+    async def suggest_screening(
+        self,
+        *,
+        eligibility_inclusion: str | None,
+        eligibility_exclusion: str | None,
+        pico: dict[str, str | None],
+        article_title: str,
+        article_abstract: str | None,
+    ) -> dict[str, str]:
+        self.calls.append("suggest_screening")
+        return {
+            "vote": "maybe",
+            "reason": "fake-ai screening reason",
+            "model": "fake-model",
+        }
+
 
 @pytest_asyncio.fixture
 async def session(tmp_path: Path) -> AsyncSession:

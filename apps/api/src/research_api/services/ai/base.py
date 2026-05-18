@@ -54,3 +54,14 @@ class AIProvider(Protocol):
         assumptions: dict[str, Any] | None,
         cite_token: str,
     ) -> str: ...
+
+    # Phase 7
+    async def suggest_screening(
+        self,
+        *,
+        eligibility_inclusion: str | None,
+        eligibility_exclusion: str | None,
+        pico: dict[str, str | None],
+        article_title: str,
+        article_abstract: str | None,
+    ) -> dict[str, str]: ...

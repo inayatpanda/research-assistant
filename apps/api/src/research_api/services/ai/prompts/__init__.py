@@ -4,6 +4,11 @@ from .result_interpretation import (
     RESULT_INTERPRETATION_PROMPT,
     build_result_interpretation_prompt,
 )
+from .screening_suggestion import (
+    SCREENING_SUGGESTION_SYSTEM_PROMPT,
+    SCREENING_SUGGESTION_USER_PROMPT,
+    build_screening_suggestion_prompt,
+)
 from .section_draft import SECTION_DRAFT_PROMPT, format_card_for_prompt
 from .writing_assist import WRITING_ASSIST_PROMPT
 
@@ -14,6 +19,9 @@ __all__ = [
     "SECTION_DRAFT_PROMPT",
     "WRITING_ASSIST_PROMPT",
     "RESULT_INTERPRETATION_PROMPT",
+    "SCREENING_SUGGESTION_SYSTEM_PROMPT",
+    "SCREENING_SUGGESTION_USER_PROMPT",
     "build_result_interpretation_prompt",
+    "build_screening_suggestion_prompt",
     "format_card_for_prompt",
 ]

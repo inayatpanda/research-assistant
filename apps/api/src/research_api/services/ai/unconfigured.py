@@ -49,3 +49,14 @@ class UnconfiguredAIProvider(AIProvider):
 
     async def assist_writing(self, text: str, action: WritingAction) -> str:
         raise AIProviderUnavailable("no API key configured", provider=self._name)
+
+    async def suggest_screening(
+        self,
+        *,
+        eligibility_inclusion: str | None,
+        eligibility_exclusion: str | None,
+        pico: dict[str, str | None],
+        article_title: str,
+        article_abstract: str | None,
+    ) -> dict[str, str]:
+        raise AIProviderUnavailable("no API key configured", provider=self._name)

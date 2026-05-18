@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from .base import AIProvider, CardContext, SectionDraftContext, WritingAction
 from .errors import (
+    AIError,
     AIProviderUnavailable,
     AIRateLimited,
     AISourceInsufficient,
@@ -26,6 +27,7 @@ from .prompts import (
     SUMMARISE_PROMPT,
     WRITING_ASSIST_PROMPT,
     build_result_interpretation_prompt,
+    build_screening_suggestion_prompt,
     format_card_for_prompt,
 )
 from .schemas import CitationMetadata
@@ -181,6 +183,63 @@ class GeminiProvider(AIProvider):
             raise AISourceInsufficient("text too short to assist", provider="gemini")
         prompt = WRITING_ASSIST_PROMPT.format(action=action, text=text)
         return (await self._generate_with_resilience(prompt)).strip()
+
+    async def suggest_screening(
+        self,
+        *,
+        eligibility_inclusion: str | None,
+        eligibility_exclusion: str | None,
+        pico: dict[str, str | None],
+        article_title: str,
+        article_abstract: str | None,
+    ) -> dict[str, str]:
+        if not (article_title or "").strip():
+            raise AISourceInsufficient("missing article title", provider="gemini")
+        system, user = build_screening_suggestion_prompt(
+            eligibility_inclusion=eligibility_inclusion,
+            eligibility_exclusion=eligibility_exclusion,
+            pico=pico,
+            article_title=article_title,
+            article_abstract=article_abstract,
+        )
+        raw = (await self._generate_with_resilience(f"{system}\n\n{user}")).strip()
+        vote, reason = _parse_screening_json(raw)
+        return {"vote": vote, "reason": reason, "model": self.active_model or "unknown"}
+
+
+_ALLOWED_SCREENING_VOTES = frozenset({"include", "exclude", "maybe"})
+
+
+def _parse_screening_json(raw: str) -> tuple[str, str]:
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            stripped = stripped[start : end + 1]
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise AIError(
+            f"could not parse JSON from model: {e}; raw[:200]={raw[:200]!r}",
+            provider="gemini",
+        ) from e
+    if not isinstance(data, dict):
+        raise AIError("screening output is not a JSON object", provider="gemini")
+    vote = data.get("vote")
+    reason = data.get("reason")
+    if not isinstance(vote, str) or not isinstance(reason, str):
+        raise AIError(
+            f"screening output missing required keys; got {list(data.keys())!r}",
+            provider="gemini",
+        )
+    vote_norm = vote.strip().lower()
+    if vote_norm not in _ALLOWED_SCREENING_VOTES:
+        raise AIError(
+            f"screening vote {vote!r} not in {sorted(_ALLOWED_SCREENING_VOTES)}",
+            provider="gemini",
+        )
+    return vote_norm, reason.strip()
 
 
 def _parse_citation_json(raw: str) -> CitationMetadata:
