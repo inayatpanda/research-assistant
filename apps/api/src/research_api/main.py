@@ -13,6 +13,7 @@ from .routes.highlights import router as highlights_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
 from .routes.projects import router as projects_router
+from .routes.reviews import router as reviews_router
 from .routes.writing import router as writing_router
 
 app = FastAPI(title="Research Manuscript Assistant API", version="0.0.1")
@@ -38,3 +39,4 @@ app.include_router(abbreviations_router, prefix="/api")
 app.include_router(writing_router, prefix="/api")
 app.include_router(datasets_router, prefix="/api")
 app.include_router(analyses_router, prefix="/api")
+app.include_router(reviews_router, prefix="/api")

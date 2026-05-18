@@ -14,6 +14,11 @@ from .manuscript_sections import (
 )
 from .notes import ArticleNoteRepository, SqliteArticleNoteRepository
 from .projects import ProjectRepository, SqliteProjectRepository
+from .reviews import (
+    ReviewRepository,
+    ScreeningArticleMismatch,
+    SqliteReviewRepository,
+)
 
 __all__ = [
     "ProjectRepository",
@@ -35,4 +40,7 @@ __all__ = [
     "SqliteDatasetRepository",
     "AnalysisRepository",
     "SqliteAnalysisRepository",
+    "ReviewRepository",
+    "SqliteReviewRepository",
+    "ScreeningArticleMismatch",
 ]
