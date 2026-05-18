@@ -20,6 +20,13 @@ dependencies = [
   "python-magic>=0.4",
   "rapidfuzz>=3.0",
   "tenacity>=8.2",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "scipy>=1.13",
+  "statsmodels>=0.14",
+  "pingouin>=0.5",
+  "lifelines>=0.29",
+  "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]

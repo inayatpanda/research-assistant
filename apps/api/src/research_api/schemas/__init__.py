@@ -1,4 +1,17 @@
 from .abbreviation import AbbreviationItem, AbbreviationRead, AbbreviationsReplace
+from .analysis import (
+    AnalysisCreate,
+    AnalysisRead,
+    AnalysisResultRead,
+    AnalysisStatus,
+    InterpretRequest,
+    InterpretResponse,
+    PushToManuscriptRequest,
+    QuestionType,
+    RecommendRequest,
+    RecommendResponse,
+    TestKey,
+)
 from .article import (
     ArticleCreate,
     ArticleFilters,
@@ -6,6 +19,12 @@ from .article import (
     ArticleUpdate,
     ReviewStatus,
     StorageRefSchema,
+)
+from .dataset import (
+    DatasetRead,
+    DatasetVariableRead,
+    DatasetVariableUpdate,
+    VariableType,
 )
 from .compilation import (
     CardDraftResponse,
@@ -65,6 +84,21 @@ __all__ = [
     "AbbreviationItem",
     "AbbreviationRead",
     "AbbreviationsReplace",
+    "DatasetRead",
+    "DatasetVariableRead",
+    "DatasetVariableUpdate",
+    "VariableType",
+    "AnalysisCreate",
+    "AnalysisRead",
+    "AnalysisResultRead",
+    "AnalysisStatus",
+    "InterpretRequest",
+    "InterpretResponse",
+    "PushToManuscriptRequest",
+    "QuestionType",
+    "RecommendRequest",
+    "RecommendResponse",
+    "TestKey",
     "HealthResponse",
     "ProviderStatus",
     "UploadResponse",

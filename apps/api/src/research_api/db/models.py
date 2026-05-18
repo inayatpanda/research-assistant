@@ -169,3 +169,87 @@ class Abbreviation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+    __table_args__ = (
+        Index("ix_datasets_user_project", "user_id", "project_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_ref: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    file_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    n_rows: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_columns: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DatasetVariable(Base):
+    __tablename__ = "dataset_variables"
+    __table_args__ = (
+        Index("uq_dataset_variable_dataset_name", "dataset_id", "name", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    inferred_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    user_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    n_missing: Mapped[int] = mapped_column(Integer, nullable=False)
+    sample_values: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
+
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+    __table_args__ = (
+        Index("ix_analyses_user_project", "user_id", "project_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    question_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    chosen_test: Mapped[str] = mapped_column(String(64), nullable=False)
+    recommendation_rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    variables: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AnalysisResult(Base):
+    __tablename__ = "analysis_results"
+    __table_args__ = (
+        Index("uq_analysis_results_analysis", "analysis_id", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    analysis_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False
+    )
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    assumptions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    chart: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    ai_interpretation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
