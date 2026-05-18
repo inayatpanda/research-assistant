@@ -3,11 +3,17 @@ import { motion } from 'framer-motion'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ExportCard } from '@/components/settings/ExportCard'
+import { HealthLink } from '@/components/settings/HealthLink'
+import { ImportDropzone } from '@/components/settings/ImportDropzone'
+import { StorageCard } from '@/components/settings/StorageCard'
 import { metaApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
+import { useActiveProject } from '@/lib/projectContext'
 
 export default function SettingsPage() {
   const { data } = useQuery({ queryKey: ['health'], queryFn: metaApi.health })
+  const projectId = useActiveProject((s) => s.projectId)
 
   return (
     <motion.div
@@ -65,25 +71,24 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-[15px]">Storage</CardTitle>
-        </CardHeader>
-        <CardContent className="text-[13px] text-muted-foreground">
-          <div>
-            Backend: <span className="font-mono text-foreground">{data?.storage_backend ?? '—'}</span>
-          </div>
-          <div className="mt-1">
-            DB:{' '}
-            <span className="font-mono text-foreground">
-              {data?.db_ok ? 'reachable' : 'unreachable'}
-            </span>
-          </div>
-          <div className="mt-1">
-            Version: <span className="font-mono text-foreground">{data?.version ?? '—'}</span>
-          </div>
-        </CardContent>
-      </Card>
+      <StorageCard health={data} />
+
+      {projectId ? (
+        <ExportCard projectId={projectId} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[15px]">Export project</CardTitle>
+          </CardHeader>
+          <CardContent className="text-[13px] text-muted-foreground">
+            Pick a project from the Dashboard to enable manuscript export.
+          </CardContent>
+        </Card>
+      )}
+
+      <ImportDropzone />
+
+      <HealthLink />
     </motion.div>
   )
 }

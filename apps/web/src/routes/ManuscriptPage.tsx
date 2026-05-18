@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 
+import { BibliographyPanel } from '@/components/bibliography/BibliographyPanel'
 import { AbbreviationsPanel } from '@/components/manuscript/AbbreviationsPanel'
 import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView'
 import { ManuscriptEditor } from '@/components/manuscript/ManuscriptEditor'
@@ -145,7 +146,8 @@ function ManuscriptInner({
         )}
       </div>
 
-      <aside className="hidden xl:flex shrink-0 w-[320px] flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
+      <aside className="hidden xl:flex shrink-0 w-[340px] flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
+        <BibliographyPanel projectId={projectId} />
         <ReferenceIntegrityPanel projectId={projectId} />
         <AbbreviationsPanel projectId={projectId} />
       </aside>

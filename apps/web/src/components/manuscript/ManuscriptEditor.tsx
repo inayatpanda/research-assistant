@@ -3,9 +3,10 @@ import Placeholder from '@tiptap/extension-placeholder'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { useManuscript } from '@/hooks/useManuscript'
-import { articlesApi, type Article, type ManuscriptSectionName } from '@/lib/api'
+import { articlesApi, type ManuscriptSectionName } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 
 import { Citation } from '@/lib/tiptap/extensions/Citation'
@@ -26,6 +27,7 @@ export function ManuscriptEditor({
 }) {
   const { html, setHtml, loading } = useManuscript(projectId, section)
   const setMap = useCitationNumbers((s) => s.setMap)
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: articles = [] } = useQuery({
     queryKey: ['articles', projectId],
     queryFn: () => articlesApi.list(projectId),
@@ -75,6 +77,39 @@ export function ManuscriptEditor({
     onWordsChange?.(editor.storage.characterCount.words())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, editor, html])
+
+  // Scroll-to-cite: deep links from the bibliography panel land with
+  // ?scrollTo=cite-<articleId>. After the editor is mounted with content,
+  // walk the doc, locate the first matching citation node, place the
+  // selection there, and scroll it into view. Strip the param after handling
+  // so refreshing the page does not re-scroll.
+  useEffect(() => {
+    if (!editor) return
+    if (loading) return
+    const scrollTo = searchParams.get('scrollTo')
+    if (!scrollTo) return
+    const match = /^cite-(.+)$/.exec(scrollTo)
+    if (!match) return
+    const targetId = match[1]
+    let pos: number | null = null
+    editor.state.doc.descendants((node, p) => {
+      if (pos != null) return false
+      if (node.type.name === 'citation' && node.attrs.articleId === targetId) {
+        pos = p
+        return false
+      }
+      return true
+    })
+    if (pos != null) {
+      editor.commands.setTextSelection(pos)
+      editor.commands.scrollIntoView()
+      editor.commands.focus()
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('scrollTo')
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, loading, html, searchParams])
 
   if (!editor) return null
 

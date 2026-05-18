@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  __internal,
   AIScreeningSuggestResponseSchema,
+  BibliographyResponseSchema,
   ExtractionFieldGroupSchema,
   ExtractionRecordSchema,
   PrismaResponseSchema,
@@ -130,6 +132,31 @@ describe('reviewsApi schemas', () => {
       updated_at: '2024-03-03T00:00:00Z',
     })
     expect(parsed.fields).toBeTypeOf('object')
+  })
+
+  it('parses a BibliographyResponse', () => {
+    const parsed = BibliographyResponseSchema.parse({
+      style: 'ieee',
+      entries: [
+        {
+          number: 1,
+          article_id: 'art-1',
+          formatted_entry: '[1] J. Doe, "Title," Journal, 2024.',
+          first_section: 'Introduction',
+        },
+      ],
+    })
+    expect(parsed.style).toBe('ieee')
+    expect(parsed.entries).toHaveLength(1)
+  })
+
+  it('parses Content-Disposition filenames', () => {
+    const p = __internal.parseContentDispositionFilename
+    expect(p('attachment; filename="report-2024-05-18.docx"')).toBe('report-2024-05-18.docx')
+    expect(p('inline; filename=plain.pdf')).toBe('plain.pdf')
+    expect(p("attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf")).toBe('résumé.pdf')
+    expect(p(null)).toBeNull()
+    expect(p('')).toBeNull()
   })
 
   it('parses a Prisma response', () => {

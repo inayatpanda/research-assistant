@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { queryClient } from '@/lib/query'
 import CompilePage from '@/routes/CompilePage'
 import DashboardPage from '@/routes/DashboardPage'
+import HealthPage from '@/routes/HealthPage'
 import LibraryPage from '@/routes/LibraryPage'
 import ManuscriptPage from '@/routes/ManuscriptPage'
 import ReaderPage from '@/routes/ReaderPage'
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="review" element={<SystematicReviewPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="health" element={<HealthPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

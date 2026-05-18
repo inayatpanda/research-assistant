@@ -21,12 +21,21 @@ api.interceptors.response.use(
 
 // --- Schemas (runtime + types) ---
 
+/** The 3 styles persistable on a project (server enforces).
+ * Bibliography fetching additionally accepts `ieee` as a transient override. */
+export const PersistedCitationStyleSchema = z.enum(['vancouver', 'apa', 'harvard'])
+export type PersistedCitationStyle = z.infer<typeof PersistedCitationStyleSchema>
+
+/** All styles supported by the bibliography endpoint + client-side formatters. */
+export const CitationStyleSchema = z.enum(['vancouver', 'apa', 'harvard', 'ieee'])
+export type CitationStyle = z.infer<typeof CitationStyleSchema>
+
 export const ProjectSchema = z.object({
   id: z.string(),
   user_id: z.string(),
   title: z.string(),
   study_type: z.string(),
-  citation_style: z.enum(['vancouver', 'apa', 'harvard']),
+  citation_style: PersistedCitationStyleSchema,
   ai_provider: z.enum(['gemini', 'claude', 'openai']),
   target_journal: z.string().nullable(),
   prospero_number: z.string().nullable(),
@@ -47,13 +56,23 @@ export const ProjectCreateSchema = z.object({
     'Retrospective Case Series',
     'Systematic Review',
   ]),
-  citation_style: z.enum(['vancouver', 'apa', 'harvard']).optional(),
+  citation_style: PersistedCitationStyleSchema.optional(),
   ai_provider: z.enum(['gemini', 'claude', 'openai']).optional(),
   target_journal: z.string().optional(),
   prospero_number: z.string().optional(),
   clinicaltrials_number: z.string().optional(),
 })
 export type ProjectCreate = z.infer<typeof ProjectCreateSchema>
+
+export const ProjectUpdateSchema = z.object({
+  title: z.string().min(1).max(500).optional(),
+  citation_style: PersistedCitationStyleSchema.optional(),
+  ai_provider: z.enum(['gemini', 'claude', 'openai']).optional(),
+  target_journal: z.string().nullable().optional(),
+  prospero_number: z.string().nullable().optional(),
+  clinicaltrials_number: z.string().nullable().optional(),
+})
+export type ProjectUpdate = z.infer<typeof ProjectUpdateSchema>
 
 export const HealthSchema = z.object({
   status: z.enum(['ok', 'degraded', 'down']),
@@ -84,6 +103,10 @@ export const projectsApi = {
   },
   create: async (data: ProjectCreate): Promise<Project> => {
     const r = await api.post('/api/projects', data)
+    return ProjectSchema.parse(r.data)
+  },
+  update: async (id: string, patch: ProjectUpdate): Promise<Project> => {
+    const r = await api.patch(`/api/projects/${id}`, patch)
     return ProjectSchema.parse(r.data)
   },
   delete: async (id: string): Promise<void> => {
@@ -1178,4 +1201,137 @@ export const extractionApi = {
     )
     return ManuscriptSectionSchema.parse(r.data)
   },
+}
+
+// --- Bibliography ---
+
+export const BibliographyEntrySchema = z.object({
+  number: z.number().int(),
+  article_id: z.string(),
+  formatted_entry: z.string(),
+  first_section: z.string(),
+})
+export type BibliographyEntry = z.infer<typeof BibliographyEntrySchema>
+
+export const BibliographyResponseSchema = z.object({
+  style: CitationStyleSchema,
+  entries: z.array(BibliographyEntrySchema),
+})
+export type BibliographyResponse = z.infer<typeof BibliographyResponseSchema>
+
+export const bibliographyApi = {
+  get: async (projectId: string, style?: CitationStyle): Promise<BibliographyResponse> => {
+    const r = await api.get(`/api/projects/${projectId}/bibliography`, {
+      params: style ? { style } : undefined,
+    })
+    return BibliographyResponseSchema.parse(r.data)
+  },
+}
+
+// --- Export / Import ---
+
+export const BundleImportResponseSchema = z.object({
+  project_id: z.string(),
+  counts: z.record(z.string(), z.number().int()),
+})
+export type BundleImportResponse = z.infer<typeof BundleImportResponseSchema>
+
+/** 50 MiB — must match the server-side cap in routes/export.py. */
+export const IMPORT_SIZE_CAP_BYTES = 50 * 1024 * 1024
+
+const FILENAME_STAR_RE = /filename\*\s*=\s*[^']*''([^;]+)/i
+const FILENAME_RE = /filename\s*=\s*("([^"]+)"|([^;]+))/i
+
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) return null
+  const starMatch = FILENAME_STAR_RE.exec(header)
+  if (starMatch?.[1]) {
+    try {
+      return decodeURIComponent(starMatch[1].trim())
+    } catch {
+      // fall through
+    }
+  }
+  const m = FILENAME_RE.exec(header)
+  if (m) return (m[2] ?? m[3] ?? '').trim()
+  return null
+}
+
+function todayStamp(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Defer to next tick — Safari needs the anchor to still be present briefly.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+async function postForBlob(
+  path: string,
+  fallbackFilename: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const r = await api.post(path, undefined, { responseType: 'blob' })
+  const filename =
+    parseContentDispositionFilename(
+      (r.headers['content-disposition'] as string | undefined) ?? null,
+    ) ?? fallbackFilename
+  return { blob: r.data as Blob, filename }
+}
+
+export const exportApi = {
+  downloadDocx: async (projectId: string, slug = 'manuscript'): Promise<string> => {
+    const { blob, filename } = await postForBlob(
+      `/api/projects/${projectId}/export/docx`,
+      `${slug}-${todayStamp()}.docx`,
+    )
+    triggerBlobDownload(blob, filename)
+    return filename
+  },
+  downloadPdf: async (projectId: string, slug = 'manuscript'): Promise<string> => {
+    const { blob, filename } = await postForBlob(
+      `/api/projects/${projectId}/export/pdf`,
+      `${slug}-${todayStamp()}.pdf`,
+    )
+    triggerBlobDownload(blob, filename)
+    return filename
+  },
+  downloadBundle: async (projectId: string, slug = 'manuscript'): Promise<string> => {
+    const { blob, filename } = await postForBlob(
+      `/api/projects/${projectId}/export/bundle`,
+      `${slug}-bundle-${todayStamp()}.json`,
+    )
+    triggerBlobDownload(blob, filename)
+    return filename
+  },
+  importBundle: async (file: File): Promise<BundleImportResponse> => {
+    if (file.size > IMPORT_SIZE_CAP_BYTES) {
+      throw new Error(
+        `Bundle exceeds ${IMPORT_SIZE_CAP_BYTES / (1024 * 1024)} MiB cap (got ${(
+          file.size /
+          (1024 * 1024)
+        ).toFixed(1)} MiB)`,
+      )
+    }
+    const fd = new FormData()
+    fd.append('file', file)
+    const r = await api.post('/api/projects/import/bundle', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000,
+    })
+    return BundleImportResponseSchema.parse(r.data)
+  },
+}
+
+// exposed for tests
+export const __internal = {
+  parseContentDispositionFilename,
+  triggerBlobDownload,
 }
