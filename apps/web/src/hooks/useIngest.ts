@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ingestApi,
   type ArticleMetadata,
+  type PubMedSearchFilters,
 } from '@/lib/api'
 
 export function useLookupDoi(projectId: string) {
@@ -19,8 +20,17 @@ export function useLookupDoi(projectId: string) {
 
 export function useSearchPubMed(projectId: string) {
   return useMutation({
-    mutationFn: ({ query, retmax }: { query: string; retmax?: number }) =>
-      ingestApi.searchPubMed(projectId, query, retmax),
+    mutationFn: ({
+      query,
+      retmax,
+      sort,
+      filters,
+    }: {
+      query: string
+      retmax?: number
+      sort?: 'relevance' | 'date'
+      filters?: PubMedSearchFilters
+    }) => ingestApi.searchPubMed(projectId, query, retmax, { sort, filters }),
   })
 }
 

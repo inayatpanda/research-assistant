@@ -3,6 +3,11 @@ import { motion } from 'framer-motion'
 import { useMemo } from 'react'
 import { toast } from 'sonner'
 
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable'
 import { ColourTabs, useActiveColour } from '@/components/compile/ColourTabs'
 import { CompiledCard } from '@/components/compile/CompiledCard'
 import { EmptySectionState } from '@/components/compile/EmptySectionState'
@@ -101,7 +106,7 @@ function CompileInner({
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-5xl mx-auto px-8 py-10 space-y-6"
+      className="max-w-7xl mx-auto px-8 py-10 space-y-6 h-[calc(100vh-56px)] flex flex-col"
     >
       <header>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
@@ -116,34 +121,49 @@ function CompileInner({
 
       <ColourTabs active={active} onChange={setActive} counts={tabCounts} />
 
-      <SectionDraftPanel projectId={projectId} colour={active} cardCount={cards.length} />
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="divider-widths-compile"
+        >
+          <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
+            <div className="pr-4 h-full overflow-y-auto space-y-3">
+              {isLoading && (
+                <div className="space-y-3">
+                  {[0, 1].map((i) => (
+                    <Skeleton key={i} className="h-[200px] rounded-lg" />
+                  ))}
+                </div>
+              )}
 
-      {isLoading && (
-        <div className="space-y-3">
-          {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-[200px] rounded-lg" />
-          ))}
-        </div>
-      )}
+              {!isLoading && cards.length === 0 && <EmptySectionState colour={active} />}
 
-      {!isLoading && cards.length === 0 && <EmptySectionState colour={active} />}
-
-      {!isLoading && cards.length > 0 && (
-        <SortableCardList
-          items={items}
-          onReorder={(newItems) => reorder.mutate(newItems)}
-          renderItem={(item, drag) => (
-            <CompiledCard
-              card={item}
-              projectId={projectId}
-              dragHandleProps={{
-                attributes: drag.attributes as unknown as Record<string, unknown>,
-                listeners: drag.listeners as unknown as Record<string, unknown> | undefined,
-              }}
-            />
-          )}
-        />
-      )}
+              {!isLoading && cards.length > 0 && (
+                <SortableCardList
+                  items={items}
+                  onReorder={(newItems) => reorder.mutate(newItems)}
+                  renderItem={(item, drag) => (
+                    <CompiledCard
+                      card={item}
+                      projectId={projectId}
+                      dragHandleProps={{
+                        attributes: drag.attributes as unknown as Record<string, unknown>,
+                        listeners: drag.listeners as unknown as Record<string, unknown> | undefined,
+                      }}
+                    />
+                  )}
+                />
+              )}
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
+            <div className="pl-4 h-full overflow-y-auto">
+              <SectionDraftPanel projectId={projectId} colour={active} cardCount={cards.length} />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
     </motion.div>
   )
 }

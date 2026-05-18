@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { useArticleNote } from '@/hooks/useArticleNote'
 import { useHighlights } from '@/hooks/useHighlights'
+import type { Highlight } from '@/lib/api'
 import { useReader } from '@/lib/readerStore'
 import { highlightColors, sectionLabels } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
@@ -13,14 +14,23 @@ import { cn } from '@/lib/utils'
  * main artefact in the Reader. General article notes get a collapsible panel
  * at the bottom (expanded by default but height-capped).
  */
-export function ArticleNotesRail({ articleId }: { articleId: string }) {
+export function ArticleNotesRail({
+  articleId,
+  onOpenHighlight,
+}: {
+  articleId: string
+  /** When set, clicking a highlight row in the rail opens the same popover
+   * that clicking the on-page highlight opens. The anchor is the rail-row
+   * element's bounding rect. */
+  onOpenHighlight?: (h: Highlight, anchorRect: DOMRect) => void
+}) {
   const { value, setValue, saving, savedAt } = useArticleNote(articleId)
   const { data: highlights = [] } = useHighlights(articleId)
   const setPage = useReader((s) => s.setCurrentPage)
   const [notesOpen, setNotesOpen] = useState(true)
 
   return (
-    <aside className="hidden lg:flex shrink-0 w-[320px] flex-col border-l border-border bg-white">
+    <aside className="flex h-full w-full flex-col border-l border-border bg-white">
       {/* HIGHLIGHTS — gets the bulk of the space */}
       <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between">
@@ -45,7 +55,16 @@ export function ArticleNotesRail({ articleId }: { articleId: string }) {
             return (
               <button
                 key={h.id}
-                onClick={() => setPage(h.page_number)}
+                data-highlight-row={h.id}
+                onClick={(e) => {
+                  setPage(h.page_number)
+                  if (onOpenHighlight) {
+                    const rect = (
+                      e.currentTarget as HTMLElement
+                    ).getBoundingClientRect()
+                    onOpenHighlight(h, rect)
+                  }
+                }}
                 className="w-full flex items-start gap-2 text-left p-2 rounded-md hover:bg-muted/60 transition-colors"
               >
                 <span

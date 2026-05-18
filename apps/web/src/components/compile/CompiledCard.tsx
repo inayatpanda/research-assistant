@@ -98,7 +98,7 @@ export function CompiledCard({
           </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Link
-              to={`/reader/${card.article_id}`}
+              to={`/projects/${projectId}/reader/${card.article_id}`}
               className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted"
               aria-label="Open in Reader"
             >
@@ -162,6 +162,8 @@ export function CompiledCard({
             pending={false}
             onAccept={handleAccept}
             onReject={() => setDraft(null)}
+            acceptLabel="Push to Manuscript"
+            acceptHint={`Appends this sentence to the ${COLOUR_TO_SECTION[card.colour]} section.`}
           />
         )}
         {generate.isPending && !draft && (

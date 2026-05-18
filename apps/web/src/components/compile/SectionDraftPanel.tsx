@@ -79,7 +79,7 @@ export function SectionDraftPanel({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            to={`/manuscript?tab=${colour}`}
+            to={`/projects/${projectId}/manuscript?tab=${colour}`}
             className="text-[12px] text-accent hover:underline px-2 py-1 rounded hover:bg-accent/5"
           >
             Open in Manuscript →
@@ -96,6 +96,12 @@ export function SectionDraftPanel({
           pending={false}
           onAccept={handleAccept}
           onReject={() => setDraft(null)}
+          acceptLabel="Push to Manuscript"
+          acceptHint={
+            msSection?.content
+              ? `Replaces the existing ${section} section (${msSection.word_count} words).`
+              : `Writes this paragraph into the ${section} section.`
+          }
         />
       )}
       {draft?.used_citations && draft.used_citations.length > 0 && (

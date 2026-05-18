@@ -1582,8 +1582,18 @@ export const ArticleMetadataSchema = z.object({
   pmid: z.string().nullable().optional(),
   abstract: z.string().nullable().optional(),
   source: ArticleSourceSchema,
+  mesh_terms: z.array(z.string()).default([]),
+  affiliations: z.array(z.string()).default([]),
+  article_types: z.array(z.string()).default([]),
 })
 export type ArticleMetadata = z.infer<typeof ArticleMetadataSchema>
+
+export type PubMedSearchFilters = {
+  date_from?: string | null
+  date_to?: string | null
+  article_types?: string[]
+  english_only?: boolean
+}
 
 export const DuplicateReasonSchema = z.enum([
   'doi_exact',
@@ -1623,11 +1633,18 @@ export const ingestApi = {
   searchPubMed: async (
     projectId: string,
     query: string,
-    retmax = 20,
+    retmax = 50,
+    options?: {
+      sort?: 'relevance' | 'date'
+      filters?: PubMedSearchFilters
+    },
   ): Promise<ArticleMetadata[]> => {
+    const body: Record<string, unknown> = { query, retmax }
+    if (options?.sort) body.sort = options.sort
+    if (options?.filters) body.filters = options.filters
     const r = await api.post(
       `/api/projects/${projectId}/articles/search-pubmed`,
-      { query, retmax },
+      body,
       { timeout: 30_000 },
     )
     return z.array(ArticleMetadataSchema).parse(r.data)

@@ -38,7 +38,7 @@ from ..schemas.ingest import (
 from ..services.ingest.bibtex import parse_bibtex
 from ..services.ingest.crossref import lookup_doi_metadata
 from ..services.ingest.dedup import DuplicateCandidate, find_duplicates
-from ..services.ingest.pubmed import search_pubmed
+from ..services.ingest.pubmed import PubMedFilters, search_pubmed
 from ..services.ingest.ris import parse_ris
 
 router = APIRouter(tags=["ingest"])
@@ -127,9 +127,21 @@ async def search_pubmed_route(
     user_id: str = Depends(_user_id),
 ) -> list[ArticleMetadata]:
     await _resolve_project(session, project_id, user_id)
+    filters = (
+        PubMedFilters(
+            date_from=body.filters.date_from,
+            date_to=body.filters.date_to,
+            article_types=list(body.filters.article_types),
+            english_only=body.filters.english_only,
+        )
+        if body.filters is not None
+        else None
+    )
     return await search_pubmed(
         body.query,
         retmax=body.retmax,
+        sort=body.sort,
+        filters=filters,
         api_key=container.settings.ncbi_api_key,
         email=container.settings.entrez_email,
     )

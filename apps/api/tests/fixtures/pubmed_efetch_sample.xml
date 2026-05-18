@@ -32,17 +32,38 @@
             <LastName>Chen</LastName>
             <ForeName>Wei</ForeName>
             <Initials>W</Initials>
+            <AffiliationInfo>
+              <Affiliation>Department of Orthopaedic Surgery, Stanford University, Stanford, CA, USA.</Affiliation>
+            </AffiliationInfo>
           </Author>
           <Author ValidYN="Y">
             <LastName>Nguyen</LastName>
             <ForeName>Linh</ForeName>
             <Initials>L</Initials>
+            <AffiliationInfo>
+              <Affiliation>Department of Biostatistics, Harvard T.H. Chan School of Public Health, Boston, MA, USA.</Affiliation>
+            </AffiliationInfo>
           </Author>
           <Author ValidYN="Y">
             <CollectiveName>THA Investigators Group</CollectiveName>
           </Author>
         </AuthorList>
+        <PublicationTypeList>
+          <PublicationType UI="D016428">Journal Article</PublicationType>
+          <PublicationType UI="D016449">Randomized Controlled Trial</PublicationType>
+        </PublicationTypeList>
       </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D019644" MajorTopicYN="Y">Arthroplasty, Replacement, Hip</DescriptorName>
+        </MeshHeading>
+        <MeshHeading>
+          <DescriptorName UI="D006801" MajorTopicYN="N">Humans</DescriptorName>
+        </MeshHeading>
+        <MeshHeading>
+          <DescriptorName UI="D013997" MajorTopicYN="N">Time Factors</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
     </MedlineCitation>
     <PubmedData>
       <ArticleIdList>
@@ -75,6 +96,10 @@
             <ForeName>Eva M.</ForeName>
           </Author>
         </AuthorList>
+        <PublicationTypeList>
+          <PublicationType UI="D016428">Journal Article</PublicationType>
+          <PublicationType UI="D016454">Review</PublicationType>
+        </PublicationTypeList>
       </Article>
     </MedlineCitation>
     <PubmedData>

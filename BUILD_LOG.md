@@ -5,6 +5,82 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-18 · Mini-phase 12.6 — Polish round ✅ COMPLETE
+
+**Scope**
+
+Four polish items landed in a single mini-phase:
+
+1. **PubMed search v2** — `services/ingest/pubmed.py` now passes
+   `sort=relevance` to esearch by default (overridable to `date`), bumps
+   default `retmax` from 20 → 50, and surfaces three previously-dropped XML
+   fields on every result: `mesh_terms`, `affiliations`, `article_types`.
+   The route accepts an optional `filters: {date_from, date_to,
+   article_types, english_only}` body that is composed into the esearch
+   `term=` via `build_esearch_term()` with `[dp]`, `[pt]`, `[lang]`
+   qualifiers. The frontend `PubMedSearchDialog` becomes a wider split-view
+   dialog: filter controls (date range / article-type pill multi-select /
+   English-only) above a results list (left) | preview pane (right). The
+   preview pane shows abstract + MeSH chips + affiliations + article-type
+   badges + a `View on PubMed →` external link pointing at
+   `https://pubmed.ncbi.nlm.nih.gov/<pmid>/`.
+
+2. **Paraphrase + notes persistence** — investigation showed the prompts
+   (`card_draft.py` + `section_draft.py`) already include `user_note`, and
+   both Compile flows (`CompiledCard.handleAccept` + `SectionDraftPanel
+   .handleAccept`) already write through to `manuscript_sections` via
+   `manuscriptApi.upsertSection`. The user-reported regression was actually
+   a labelling / discoverability issue: the AI suggestion block button said
+   "Accept" with no indication that it would push text into the manuscript.
+   Relabelled to `Push to Manuscript` (with an `acceptHint` caption clearly
+   stating which section receives the text). Also fixed two stale routes
+   (`/reader/<id>` → `/projects/<pid>/reader/<id>`, `/manuscript?tab=X` →
+   `/projects/<pid>/manuscript?tab=X`) that survived MP12.5. Added
+   `tests/test_compile_persistence.py` (3 tests) covering user_note
+   round-trip through the AI prompt, section content persistence via
+   upsert→GET, and `user_note` survival across `sort_order` patches.
+
+3. **Click highlight in Reader rail → opens HighlightNotePopover** —
+   `ReaderShell` now owns the popover-open state instead of `PdfViewer`,
+   passes it down to both `PdfViewer` (on-page click) and `ArticleNotesRail`
+   (rail-row click). Each rail row uses
+   `event.currentTarget.getBoundingClientRect()` as the popover anchor.
+
+4. **Resizable dividers** — installed `react-resizable-panels@^2.1.7` and
+   added a shadcn-style `components/ui/resizable.tsx` wrapper. Applied
+   `<ResizablePanelGroup>` to Reader (70/30 default · min 30/15 · max
+   85/70), Compile (50/50 · min 30/30 · max 70/70), Manuscript (70/30 ·
+   min 50/20), and Statistics (30/70 · min 20/50 · max 50). Width
+   persistence is delegated to the library via `autoSaveId="divider-widths
+   -<page>"` (Reader / Compile / Manuscript / Statistics) — the library
+   handles the localStorage round-trip with no per-page hook needed.
+
+**Tests**
+
+- Backend: **1332 / 1332 green** (1319 baseline + 13 new) — 10 in
+  `test_ingest_pubmed.py` covering sort=relevance, retmax=50,
+  `mesh_terms`/`affiliations`/`article_types` parsing, and the four
+  `build_esearch_term()` filter cases, plus 3 in
+  `test_compile_persistence.py`.
+- Frontend vitest: **169 / 169 green** (159 baseline + 10 new) — 3 in
+  `PubMedSearchDialog.test.tsx` (search → list, preview pane content,
+  empty-preview placeholder), 3 in `ArticleNotesRail.test.tsx` (rail
+  click fires `onOpenHighlight` with rect, no-callback no-op, empty
+  state), 2 in `resizable.test.tsx` (group + handle render, autoSaveId
+  forwarded), 2 in `ingestApi.test.ts` (new metadata fields parsed &
+  default to empty arrays).
+- `tsc --noEmit --ignoreDeprecations 6.0`: no NEW errors introduced;
+  the pre-existing 19-file backlog is unchanged.
+
+**Gotcha**
+
+`react-resizable-panels@4.x` (the default version `npm i` picked up) has
+a totally different API (`Group` / `Panel` / `Separator`) from the
+shadcn pattern that expects `PanelGroup` / `Panel` / `PanelResizeHandle`.
+Pinned to `^2.1.7` and the original wrapper compiled clean.
+
+---
+
 ## 2026-05-18 · Mini-phase 12.5 — URL-scoped project routing ✅ COMPLETE
 
 **Scope**

@@ -8,26 +8,27 @@ import { usePdfDocument } from '@/hooks/usePdfDocument'
 import type { Highlight } from '@/lib/api'
 import { useReader } from '@/lib/readerStore'
 
-import { HighlightNotePopover } from './HighlightNotePopover'
 import { HighlightOverlay } from './HighlightOverlay'
 import { SelectionCapture } from './SelectionCapture'
 
 type PageSize = { width: number; height: number }
-type OpenHighlight = { highlight: Highlight; anchorRect: DOMRect } | null
+export type OpenHighlight = { highlight: Highlight; anchorRect: DOMRect } | null
 
 export function PdfViewer({
   articleId,
   onNumPages,
+  onOpenHighlight,
 }: {
   articleId: string
   onNumPages: (n: number) => void
+  /** Lifted: the parent ReaderShell owns the popover state so the rail can also drive it. */
+  onOpenHighlight: (open: OpenHighlight) => void
 }) {
   const { data: pdfData, isLoading, isError, error } = usePdfDocument(articleId)
   const { data: highlights = [] } = useHighlights(articleId)
   const currentPage = useReader((s) => s.currentPage)
   const scale = useReader((s) => s.scale)
   const [pageSize, setPageSize] = useState<PageSize>({ width: 0, height: 0 })
-  const [open, setOpen] = useState<OpenHighlight>(null)
 
   const pageHighlights = useMemo(
     () => highlights.filter((h) => h.page_number === currentPage),
@@ -78,20 +79,14 @@ export function PdfViewer({
               highlights={pageHighlights}
               pageWidth={pageSize.width}
               pageHeight={pageSize.height}
-              onClickHighlight={(h, rect) => setOpen({ highlight: h, anchorRect: rect })}
+              onClickHighlight={(h, rect) => onOpenHighlight({ highlight: h, anchorRect: rect })}
             />
           </div>
         </Document>
       </div>
       <SelectionCapture
         articleId={articleId}
-        onCreated={(h, rect) => setOpen({ highlight: h, anchorRect: rect })}
-      />
-      <HighlightNotePopover
-        articleId={articleId}
-        highlight={open?.highlight ?? null}
-        anchorRect={open?.anchorRect ?? null}
-        onClose={() => setOpen(null)}
+        onCreated={(h, rect) => onOpenHighlight({ highlight: h, anchorRect: rect })}
       />
     </div>
   )

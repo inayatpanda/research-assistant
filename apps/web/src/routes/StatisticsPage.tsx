@@ -4,6 +4,11 @@ import { BarChart3 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable'
 import { AnalysisResultCard } from '@/components/statistics/AnalysisResultCard'
 import { DatasetDetail } from '@/components/statistics/DatasetDetail'
 import { DatasetList } from '@/components/statistics/DatasetList'
@@ -73,8 +78,52 @@ function StatisticsInner({ projectId }: { projectId: string }) {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <aside className="lg:col-span-4 space-y-4">
+      <div className="hidden lg:block min-h-[60vh]">
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="divider-widths-statistics"
+        >
+          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+            <aside className="pr-4 space-y-4 h-full overflow-y-auto">
+              <DatasetUpload projectId={projectId} compact />
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[0, 1].map((i) => (
+                    <Skeleton key={i} className="h-[68px] rounded-lg" />
+                  ))}
+                </div>
+              ) : (
+                <DatasetList
+                  projectId={projectId}
+                  activeId={activeDatasetId}
+                  onSelect={selectDataset}
+                />
+              )}
+            </aside>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={70} minSize={50}>
+            <section className="pl-4 space-y-6 h-full overflow-y-auto">
+              {activeDatasetId ? (
+                <ActiveDatasetPanel
+                  projectId={projectId}
+                  datasetId={activeDatasetId}
+                  onNewAnalysis={(d) => {
+                    setWizardDataset(d)
+                    setWizardOpen(true)
+                  }}
+                />
+              ) : (
+                <EmptyHero />
+              )}
+            </section>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+
+      {/* Below-lg fallback: stack vertically (no resizing on small screens) */}
+      <div className="lg:hidden space-y-6">
+        <aside className="space-y-4">
           <DatasetUpload projectId={projectId} compact />
           {isLoading ? (
             <div className="space-y-2">
@@ -90,8 +139,7 @@ function StatisticsInner({ projectId }: { projectId: string }) {
             />
           )}
         </aside>
-
-        <section className="lg:col-span-8 space-y-6">
+        <section className="space-y-6">
           {activeDatasetId ? (
             <ActiveDatasetPanel
               projectId={projectId}

@@ -16,11 +16,17 @@ export function AISuggestionBlock({
   pending,
   onAccept,
   onReject,
+  acceptLabel = 'Push to Manuscript',
+  acceptHint,
 }: {
   text: string | null
   pending: boolean
   onAccept: (text: string) => void
   onReject: () => void
+  /** Visible label on the primary action button (default: "Push to Manuscript"). */
+  acceptLabel?: string
+  /** Optional one-line caption under the action row clarifying where the text lands. */
+  acceptHint?: string
 }) {
   const [state, setState] = useState<State>(pending ? 'pending' : text ? 'review' : 'pending')
   const [editedText, setEditedText] = useState(text ?? '')
@@ -70,64 +76,78 @@ export function AISuggestionBlock({
       )}
 
       {state === 'review' && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            onClick={() => {
-              setState('accepted')
-              onAccept(editedText)
-            }}
-            className="h-7 text-[12px] bg-ai hover:bg-ai/90 text-white"
-          >
-            Accept
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setState('edit')}
-            className="h-7 text-[12px]"
-          >
-            <Pencil className="h-3 w-3 mr-1" />
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setState('rejected')
-              onReject()
-            }}
-            className="h-7 text-[12px]"
-          >
-            Reject
-          </Button>
-        </div>
+        <>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                setState('accepted')
+                onAccept(editedText)
+              }}
+              className="h-7 text-[12px] bg-ai hover:bg-ai/90 text-white"
+            >
+              {acceptLabel}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setState('edit')}
+              className="h-7 text-[12px]"
+            >
+              <Pencil className="h-3 w-3 mr-1" />
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setState('rejected')
+                onReject()
+              }}
+              className="h-7 text-[12px]"
+            >
+              Discard
+            </Button>
+          </div>
+          {acceptHint && (
+            <div className="mt-1.5 text-[11px] text-muted-foreground italic">
+              {acceptHint}
+            </div>
+          )}
+        </>
       )}
 
       {state === 'edit' && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            onClick={() => {
-              setState('accepted')
-              onAccept(editedText)
-            }}
-            className="h-7 text-[12px] bg-ai hover:bg-ai/90 text-white"
-          >
-            Save & Accept
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setEditedText(text ?? '')
-              setState('review')
-            }}
-            className="h-7 text-[12px]"
-          >
-            Cancel edit
-          </Button>
-        </div>
+        <>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                setState('accepted')
+                onAccept(editedText)
+              }}
+              className="h-7 text-[12px] bg-ai hover:bg-ai/90 text-white"
+            >
+              Save &amp; {acceptLabel}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setEditedText(text ?? '')
+                setState('review')
+              }}
+              className="h-7 text-[12px]"
+            >
+              Cancel edit
+            </Button>
+          </div>
+          {acceptHint && (
+            <div className="mt-1.5 text-[11px] text-muted-foreground italic">
+              {acceptHint}
+            </div>
+          )}
+        </>
       )}
     </motion.div>
   )

@@ -34,6 +34,10 @@ class ArticleMetadata(BaseModel):
     pmid: str | None = None
     abstract: str | None = None
     source: ArticleSource
+    # PubMed-only enrichment (defaults to empty for non-PubMed sources)
+    mesh_terms: list[str] = Field(default_factory=list)
+    affiliations: list[str] = Field(default_factory=list)
+    article_types: list[str] = Field(default_factory=list)
 
 
 class ImportFromMetadataRequest(BaseModel):
@@ -62,9 +66,20 @@ class DoiLookupRequest(BaseModel):
     doi: str = Field(min_length=1)
 
 
+class PubMedSearchFilters(BaseModel):
+    """Optional structured filters appended to the PubMed esearch term."""
+
+    date_from: str | None = Field(default=None, max_length=20)
+    date_to: str | None = Field(default=None, max_length=20)
+    article_types: list[str] = Field(default_factory=list)
+    english_only: bool = False
+
+
 class PubMedSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
-    retmax: int = Field(default=20, ge=1, le=100)
+    retmax: int = Field(default=50, ge=1, le=100)
+    sort: Literal["relevance", "date"] = "relevance"
+    filters: PubMedSearchFilters | None = None
 
 
 __all__ = [
@@ -77,4 +92,5 @@ __all__ = [
     "MergeRequest",
     "DoiLookupRequest",
     "PubMedSearchRequest",
+    "PubMedSearchFilters",
 ]

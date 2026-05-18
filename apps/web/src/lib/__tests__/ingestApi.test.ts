@@ -89,6 +89,31 @@ describe('ingestApi schemas (Phase 8.6)', () => {
     expect(resp.duplicate_groups[0].reason).toBe('title_fuzzy')
   })
 
+  it('ArticleMetadata accepts MP12.6 PubMed enrichment fields', () => {
+    const meta = ArticleMetadataSchema.parse({
+      title: 'X',
+      authors: ['A'],
+      source: 'pubmed',
+      mesh_terms: ['Humans', 'Hip Arthroplasty'],
+      affiliations: ['Stanford'],
+      article_types: ['Randomized Controlled Trial'],
+    })
+    expect(meta.mesh_terms).toEqual(['Humans', 'Hip Arthroplasty'])
+    expect(meta.affiliations).toEqual(['Stanford'])
+    expect(meta.article_types).toEqual(['Randomized Controlled Trial'])
+  })
+
+  it('ArticleMetadata defaults the v2 list fields to empty arrays', () => {
+    const meta = ArticleMetadataSchema.parse({
+      title: 'X',
+      authors: [],
+      source: 'doi',
+    })
+    expect(meta.mesh_terms).toEqual([])
+    expect(meta.affiliations).toEqual([])
+    expect(meta.article_types).toEqual([])
+  })
+
   it('ArticleSchema defaults source to upload when omitted', () => {
     const a = ArticleSchema.parse({
       id: 'a1',

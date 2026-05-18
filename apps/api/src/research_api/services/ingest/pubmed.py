@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -23,6 +24,16 @@ _DEFAULT_TIMEOUT = 15.0
 _DEFAULT_EMAIL = "noreply@research-assistant.local"
 
 
+@dataclass
+class PubMedFilters:
+    """Optional filter knobs the route layer can pass through to esearch."""
+
+    date_from: str | None = None  # YYYY or YYYY/MM/DD
+    date_to: str | None = None
+    article_types: list[str] = field(default_factory=list)
+    english_only: bool = False
+
+
 def _shared_params(*, email: str, api_key: str | None) -> dict[str, str]:
     params: dict[str, str] = {
         "db": "pubmed",
@@ -33,6 +44,30 @@ def _shared_params(*, email: str, api_key: str | None) -> dict[str, str]:
     if api_key:
         params["api_key"] = api_key
     return params
+
+
+def build_esearch_term(query: str, filters: PubMedFilters | None) -> str:
+    """Compose a PubMed `term=` query string with optional [dp]/[pt]/[lang] qualifiers.
+
+    Pure function — exported so tests can pin the exact composition.
+    """
+    base = (query or "").strip()
+    if filters is None:
+        return base
+    parts: list[str] = [base] if base else []
+    if filters.date_from or filters.date_to:
+        d_from = (filters.date_from or "1800").strip()
+        d_to = (filters.date_to or "3000").strip()
+        parts.append(f"({d_from}[dp] : {d_to}[dp])")
+    if filters.article_types:
+        ors = " OR ".join(
+            f'"{t.strip()}"[pt]' for t in filters.article_types if t.strip()
+        )
+        if ors:
+            parts.append(f"({ors})")
+    if filters.english_only:
+        parts.append("english[lang]")
+    return " AND ".join(p for p in parts if p)
 
 
 async def _get_with_retry(
@@ -67,7 +102,9 @@ async def _get_with_retry(
 async def search_pubmed(
     query: str,
     *,
-    retmax: int = 20,
+    retmax: int = 50,
+    sort: str = "relevance",
+    filters: PubMedFilters | None = None,
     api_key: str | None = None,
     email: str = _DEFAULT_EMAIL,
     http_client: httpx.AsyncClient | None = None,
@@ -85,8 +122,10 @@ async def search_pubmed(
     client = http_client or httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
     try:
         params = _shared_params(email=email, api_key=api_key)
-        params["term"] = q
+        params["term"] = build_esearch_term(q, filters)
         params["retmax"] = str(retmax)
+        if sort:
+            params["sort"] = sort
         r = await _get_with_retry(
             client, ESEARCH_URL, params, retry_sleep=retry_sleep
         )
@@ -189,12 +228,21 @@ def _parse_article(article: ET.Element) -> ArticleMetadata:
 
     # Authors — skip CollectiveName-only entries
     authors: list[str] = []
+    affiliations: list[str] = []
+    seen_affiliations: set[str] = set()
     for author in article.iter("Author"):
         last = _findtext(author, "LastName") or ""
         fore = _findtext(author, "ForeName") or ""
         full = f"{fore} {last}".strip()
         if full:
             authors.append(full)
+        # Affiliations: any AffiliationInfo/Affiliation under this author.
+        # Collect at the article level (deduped, order-preserving).
+        for aff in author.iter("Affiliation"):
+            text = (aff.text or "").strip()
+            if text and text not in seen_affiliations:
+                seen_affiliations.add(text)
+                affiliations.append(text)
 
     # Abstract — join multi-segment AbstractText. Prefer label-prefixed form
     # whenever the segment carries a Label attribute.
@@ -206,6 +254,20 @@ def _parse_article(article: ET.Element) -> ArticleMetadata:
         label = el.get("Label")
         abstract_parts.append(f"{label}: {segment}" if label else segment)
     abstract = " ".join(abstract_parts) if abstract_parts else None
+
+    # MeSH descriptor terms
+    mesh_terms: list[str] = []
+    for desc in article.iter("DescriptorName"):
+        t = (desc.text or "").strip()
+        if t:
+            mesh_terms.append(t)
+
+    # Publication types
+    article_types: list[str] = []
+    for pt in article.iter("PublicationType"):
+        t = (pt.text or "").strip()
+        if t and t not in article_types:
+            article_types.append(t)
 
     # DOI from ArticleIdList
     doi: str | None = None
@@ -226,6 +288,9 @@ def _parse_article(article: ET.Element) -> ArticleMetadata:
         pmid=pmid,
         abstract=abstract,
         source="pubmed",
+        mesh_terms=mesh_terms,
+        affiliations=affiliations,
+        article_types=article_types,
     )
 
 
@@ -241,6 +306,8 @@ def _findtext(el: ET.Element | None, path: str) -> str | None:
 __all__ = [
     "ESEARCH_URL",
     "EFETCH_URL",
+    "PubMedFilters",
+    "build_esearch_term",
     "search_pubmed",
     "fetch_pmid_metadata",
 ]

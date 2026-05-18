@@ -3,6 +3,11 @@ import { motion } from 'framer-motion'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable'
 import { BibliographyPanel } from '@/components/bibliography/BibliographyPanel'
 import { FiguresPanel } from '@/components/figures/FiguresPanel'
 import { FrontMatterPanel } from '@/components/frontmatter/FrontMatterPanel'
@@ -203,10 +208,15 @@ function ManuscriptInner({
       initial="initial"
       animate="animate"
       exit="exit"
-      className="flex h-[calc(100vh-56px)]"
+      className="h-[calc(100vh-56px)]"
     >
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="px-6 py-3 border-b border-border">
+      <ResizablePanelGroup
+        direction="horizontal"
+        autoSaveId="divider-widths-manuscript"
+      >
+        <ResizablePanel defaultSize={70} minSize={50}>
+          <div className="h-full min-w-0 flex flex-col">
+            <header className="px-6 py-3 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
               Manuscript · {project?.title ?? 'Loading…'}
@@ -250,35 +260,39 @@ function ManuscriptInner({
           )}
         </div>
 
-        {!isFinal && !isFrontMatter && (
-          <WordCountBar
-            sectionWords={sectionWords || wordCounts[tab] || 0}
-            totalWords={total}
-            saving={false}
-            savedAt={activeSavedAt}
-            templateKey={project?.template_journal ?? null}
-            activeSectionName={tab as string}
-          />
-        )}
-      </div>
-
-      <aside className="hidden xl:flex shrink-0 w-[340px] flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
-        <FiguresPanel projectId={projectId} editor={editor} />
-        <BibliographyPanel projectId={projectId} />
-        <ReferenceIntegrityPanel projectId={projectId} />
-        <AbbreviationsPanel projectId={projectId} />
-        <VersionPanel projectId={projectId} />
-        <SubmissionPackageDialog projectId={projectId} />
-        {!isFinal && !isFrontMatter ? (
-          <CommentsRail
-            projectId={projectId}
-            activeSection={tab as CommentSection}
-            editor={editor}
-          />
-        ) : (
-          <CommentsRail projectId={projectId} />
-        )}
-      </aside>
+            {!isFinal && !isFrontMatter && (
+              <WordCountBar
+                sectionWords={sectionWords || wordCounts[tab] || 0}
+                totalWords={total}
+                saving={false}
+                savedAt={activeSavedAt}
+                templateKey={project?.template_journal ?? null}
+                activeSectionName={tab as string}
+              />
+            )}
+          </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={30} minSize={20} className="hidden xl:block">
+          <aside className="flex h-full flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
+            <FiguresPanel projectId={projectId} editor={editor} />
+            <BibliographyPanel projectId={projectId} />
+            <ReferenceIntegrityPanel projectId={projectId} />
+            <AbbreviationsPanel projectId={projectId} />
+            <VersionPanel projectId={projectId} />
+            <SubmissionPackageDialog projectId={projectId} />
+            {!isFinal && !isFrontMatter ? (
+              <CommentsRail
+                projectId={projectId}
+                activeSection={tab as CommentSection}
+                editor={editor}
+              />
+            ) : (
+              <CommentsRail projectId={projectId} />
+            )}
+          </aside>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </motion.div>
   )
 }
