@@ -16,6 +16,9 @@ class ManuscriptSectionRepository(Protocol):
     async def get(
         self, *, project_id: str, section_name: str, user_id: str
     ) -> ManuscriptSection | None: ...
+    async def list_for_project(
+        self, project_id: str, user_id: str
+    ) -> list[ManuscriptSection]: ...
     async def upsert(
         self, *, project_id: str, section_name: str, content: str, user_id: str
     ) -> ManuscriptSection: ...
@@ -34,6 +37,15 @@ class SqliteManuscriptSectionRepository:
             ManuscriptSection.user_id == user_id,
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def list_for_project(
+        self, project_id: str, user_id: str
+    ) -> list[ManuscriptSection]:
+        stmt = select(ManuscriptSection).where(
+            ManuscriptSection.project_id == project_id,
+            ManuscriptSection.user_id == user_id,
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
 
     async def upsert(
         self, *, project_id: str, section_name: str, content: str, user_id: str

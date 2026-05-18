@@ -7,6 +7,7 @@ from .routes.analyses import router as analyses_router
 from .routes.articles import router as articles_router
 from .routes.compilation import router as compilation_router
 from .routes.datasets import router as datasets_router
+from .routes.export import router as export_router
 from .routes.files import router as files_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
@@ -40,3 +41,4 @@ app.include_router(writing_router, prefix="/api")
 app.include_router(datasets_router, prefix="/api")
 app.include_router(analyses_router, prefix="/api")
 app.include_router(reviews_router, prefix="/api")
+app.include_router(export_router, prefix="/api")
