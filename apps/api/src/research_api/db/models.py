@@ -86,6 +86,7 @@ class Article(Base):
     __table_args__ = (
         Index("ix_articles_user_project", "user_id", "project_id"),
         Index("ix_articles_doi", "doi"),
+        Index("ix_articles_pmid", "pmid"),
     )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
@@ -111,6 +112,10 @@ class Article(Base):
     review_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     exclusion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     conflict_of_interest: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Phase 8.6 — ingestion provenance + PubMed cross-reference
+    pmid: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), default="upload", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

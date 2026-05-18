@@ -39,6 +39,10 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]
 
+    # Phase 8.6 — ingestion / external metadata APIs
+    ncbi_api_key: str | None = None
+    entrez_email: str = "noreply@research-assistant.local"
+
 
 _DEFAULT_SECRET = "change-me-before-deploy"
 
