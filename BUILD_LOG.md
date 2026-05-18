@@ -339,3 +339,72 @@ Model never sees author/year. Outbound HTML is replaced with `[CITE_aN]` tokens;
 **Next:** Phase 6 — Data & Statistics module. Study-type-aware test recommendations (t-test, Mann-Whitney, χ², Fisher exact, Wilcoxon, ANOVA, Kruskal-Wallis, repeated-measures ANOVA, Pearson/Spearman, simple/multiple regression, logistic regression, Cox / Kaplan-Meier via lifelines, ICC, Cohen's κ); CSV/Excel upload + variable typing; assumption checks; results rendered into the Results section as prose with citations to the dataset.
 
 ---
+
+## 2026-05-18 · Phase 6 — Data & Statistics ✅ COMPLETE
+
+**Goal**
+
+Researchers upload a Masterchart (CSV / `.xlsx`), the app infers each column's `VariableType`, the user can override it, they answer "what are you testing?", the app recommends an appropriate test from an 18-strong catalogue (t-test / Mann-Whitney / Wilcoxon / ANOVA / Kruskal-Wallis / repeated-measures ANOVA / Pearson / Spearman / OLS / multiple regression / logistic regression / KM + log-rank / Cox / ICC / Cohen's κ / χ² / Fisher exact / paired t-test) with rationale + assumption checks, runs it server-side via scipy / statsmodels / lifelines / pingouin, returns a structured result (statistic, p-value, effect size, CI, n, df), an AI step generates a one-paragraph plain-English interpretation that preserves a `[CITE_dataset_<id>]` token (Phase 4-5 contract reused), and a Push button appends the paragraph to `manuscript_sections.Results.content`.
+
+**What shipped**
+
+Backend (10 files + 1 migration):
+
+- `db/models.py` — `Dataset`, `DatasetVariable`, `Analysis`, `AnalysisResult` (all `user_id`-scoped)
+- `alembic/versions/0006_statistics.py` — revision 0005 → 0006
+- `schemas/dataset.py` + `schemas/analysis.py` — `VariableType`, `QuestionType`, `TestKey` Literal unions (load-bearing for runner dispatch + recommender rules + TS mirror)
+- `services/stats/ingest.py` — CSV / XLSX parse, **openpyxl `data_only=True`** so formulas are never evaluated; deterministic type inference
+- `services/stats/registry.py` — the catalogue + pure `recommend()` truth table
+- `services/stats/assumptions.py` — Shapiro-Wilk / Levene / lifelines proportional-hazards
+- `services/stats/runner.py` — one branch per test; column-name whitelist (`^[A-Za-z_]\w*$`) enforced **before** any `statsmodels.formula.api` call
+- `services/ai/prompts/result_interpretation.py` — token-preserving prompt
+- `services/ai/gemini.py` — implemented `interpret_result` via `_generate_with_resilience` (same shape as `assist_writing`)
+- `repositories/datasets.py` + `repositories/analyses.py` — user-scoped, manual cascade on delete
+- `routes/datasets.py` — POST upload (magic-byte sniff, 50 MiB cap), GET list / one, PATCH variable type, DELETE
+- `routes/analyses.py` — recommend, create, list, get, run, interpret, push. AI errors map 429/422/503. Push **appends** to `manuscript_sections.{section}.content` rather than overwriting
+
+Frontend (10 files):
+
+- `lib/api.ts` — `datasetsApi` + `analysesApi`; TS literal unions mirror Pydantic
+- `hooks/useDatasets.ts` + `useAnalyses.ts` — TanStack Query wrappers, invalidation
+- `components/statistics/DatasetUpload.tsx` — react-dropzone `.csv` / `.xlsx`
+- `components/statistics/DatasetList.tsx` — selectable list
+- `components/statistics/DatasetDetail.tsx` — column table with inline `VariableType` override
+- `components/statistics/NewAnalysisWizard.tsx` (+ `WizardVariableStep.tsx`) — 3-step Sheet: question → variables → recommendation. Create + Run + Interpret chain.
+- `components/statistics/RecommendationCard.tsx` — recommended test + rationale + "use a different test"
+- `components/statistics/AssumptionPills.tsx` — Shapiro / Levene / PH status pills with p-value tooltips
+- `components/statistics/AnalysisResultCard.tsx` — statistic / p-value (`<0.001` formatting) / effect size + 95% CI / n / df, **AI interpretation with the `[CITE_dataset_<id>]` token rendered as a small dataset chip**, Push-to-Manuscript navigates back to `/manuscript?section=Results`
+- `routes/StatisticsPage.tsx` — replaced placeholder. ProjectSelectGate + two-pane layout, `?dataset=…` URL state
+
+**E2E verification (browser smoke test on `hip_outcomes.csv`, n=20 split 10 anterior / 10 posterior)**
+
+- Upload → 20 rows × 5 cols, types inferred (numeric / nominal). ✓
+- Wizard step 1: Group comparison; step 2: outcome=`hhs_6w`, group=`approach`; step 3: recommender returned **"Independent t-test"** with rationale "Comparing a numeric outcome between two independent groups with approximately normal distributions." ✓
+- Run: `t = 7.550 · p < 0.001 · effect size = 3.376 · 95% CI [6.856, 12.144] · n = 20 · df = 18`. Shapiro-Wilk + Levene pills green. ✓
+- Interpret: Gemini produced a one-paragraph interpretation that preserved `[CITE_dataset_fd3a7…]` exactly and was rendered in the UI with a dataset chip. ✓
+- Push: `manuscript_sections.Results.content` now starts with `<p>An independent samples t-test revealed…[CITE_dataset_fd3a7…]…</p>`, word_count 73. ✓
+
+**Security review (3 polish items, 0 blockers)**
+
+- Column-name injection: prevented at **two layers** — route (`_validate_columns` against `dataset_variables.name`) + runner (`_check_column_name` regex). 28-test cross-user / cross-project isolation regression covers every endpoint in both directions.
+- XLSX formula evaluation: `openpyxl.load_workbook(..., data_only=True, read_only=True)` always — formulas never executed. Explicit test fixture `tiny_with_formula.xlsx` proves cached values are read.
+- Upload cap: 50 MiB hard cap; magic-byte sniff rejects PDF prefix.
+- AI errors map 429/422/503 with no provider detail leaked.
+- LOW polish (logged): AI prompt should instruct number rounding; SQLite FK PRAGMA should be enabled app-wide; wizard step 2 could pre-empt type-mismatched picks.
+
+**Test counts**
+
+- Backend: **326 pass** (was 166 entering Phase 6; +160 in Phase 6)
+- Frontend: 19 vitest pass (was 11; +8 for client-side schema + hook coverage already present in the run)
+- New backend test files: `test_datasets_models.py`, `test_stats_ingest.py`, `test_stats_registry.py`, `test_stats_assumptions.py`, `test_stats_runner.py`, `test_ai_interpret_result.py`, `test_datasets_route.py`, `test_analyses_route.py`, `test_security_stats_isolation.py`
+
+**Open items**
+
+- `POLISH.md`: +3 phase-6 entries
+- `DECISIONS.md`: unchanged
+- `QUESTIONS.md`: still empty
+- `DEFERRED.md`: unchanged (charts still deferred per the v1 ADR)
+
+**Next:** Phase 7 — Systematic Review module. PRISMA flow tracking, inclusion/exclusion screening, risk-of-bias assessment (RoB 2 for RCTs, ROBINS-I for non-randomised, Newcastle-Ottawa for cohort/case-control), data extraction tables.
+
+---
