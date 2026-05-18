@@ -505,3 +505,119 @@ async def test_cross_project_push_analysis_404(client):
         f"/api/projects/{project_y}/analyses/{a['id']}/push", json={}
     )
     assert r.status_code == 404
+
+
+# ── Phase 13 — PSM endpoint isolation ───────────────────────────────────
+
+
+PSM_CSV_BYTES = (
+    b"age,sex,t,outcome\n"
+    b"45,0,0,1.2\n50,1,1,2.1\n55,0,0,1.5\n60,1,1,2.5\n"
+    b"42,1,0,0.9\n48,0,1,2.3\n52,1,0,1.7\n58,0,1,2.6\n"
+    b"40,0,0,1.0\n65,1,1,2.8\n44,1,0,1.4\n62,0,1,2.4\n"
+    b"46,0,1,2.0\n49,1,0,1.6\n51,1,1,2.2\n54,0,0,1.3\n"
+)
+
+
+@pytest.mark.asyncio
+async def test_psm_cross_user_404(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    files = {"file": ("psm.csv", PSM_CSV_BYTES, "text/csv")}
+    ru = await client.post(f"/api/projects/{project_a}/datasets", files=files)
+    assert ru.status_code == 201
+    ds = ru.json()
+
+    _switch_user("user-b")
+    r = await client.post(
+        f"/api/projects/{project_a}/datasets/{ds['id']}/psm",
+        json={
+            "treatment_col": "t",
+            "covariate_cols": ["age", "sex"],
+            "caliper_sd": 0.2,
+        },
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_psm_cross_project_404(client):
+    project_x = await _make_project(client, title="X")
+    project_y = await _make_project(client, title="Y")
+    files = {"file": ("psm.csv", PSM_CSV_BYTES, "text/csv")}
+    ru = await client.post(f"/api/projects/{project_x}/datasets", files=files)
+    assert ru.status_code == 201
+    ds = ru.json()
+
+    r = await client.post(
+        f"/api/projects/{project_y}/datasets/{ds['id']}/psm",
+        json={
+            "treatment_col": "t",
+            "covariate_cols": ["age", "sex"],
+            "caliper_sd": 0.2,
+        },
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_psm_unknown_project_404(client):
+    r = await client.post(
+        "/api/projects/does-not-exist/datasets/abc/psm",
+        json={
+            "treatment_col": "t",
+            "covariate_cols": ["age", "sex"],
+            "caliper_sd": 0.2,
+        },
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_psm_rejects_unknown_treatment_column(client):
+    project_a = await _make_project(client, title="A")
+    files = {"file": ("psm.csv", PSM_CSV_BYTES, "text/csv")}
+    ru = await client.post(f"/api/projects/{project_a}/datasets", files=files)
+    ds = ru.json()
+
+    r = await client.post(
+        f"/api/projects/{project_a}/datasets/{ds['id']}/psm",
+        json={
+            "treatment_col": "no_such_col",
+            "covariate_cols": ["age"],
+            "caliper_sd": 0.2,
+        },
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_psm_persists_matched_dataset_linked_back(client):
+    project_a = await _make_project(client, title="A")
+    files = {"file": ("psm.csv", PSM_CSV_BYTES, "text/csv")}
+    ru = await client.post(f"/api/projects/{project_a}/datasets", files=files)
+    src = ru.json()
+
+    r = await client.post(
+        f"/api/projects/{project_a}/datasets/{src['id']}/psm",
+        json={
+            "treatment_col": "t",
+            "covariate_cols": ["age", "sex"],
+            "caliper_sd": 1.0,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    new_id = body["matched_dataset_id"]
+    assert new_id != src["id"]
+
+    # The new dataset is visible under the same project + carries the
+    # derived_from FK + metadata JSON.
+    get_r = await client.get(f"/api/projects/{project_a}/datasets/{new_id}")
+    assert get_r.status_code == 200
+    fetched = get_r.json()
+    assert fetched["derived_from_dataset_id"] == src["id"]
+    assert "psm" in fetched["dataset_metadata"]
+    psm_meta = fetched["dataset_metadata"]["psm"]
+    assert psm_meta["source_dataset_id"] == src["id"]
+    assert psm_meta["caliper_sd"] == 1.0

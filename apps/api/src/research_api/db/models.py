@@ -196,6 +196,15 @@ class Dataset(Base):
     file_type: Mapped[str] = mapped_column(String(64), nullable=False)
     n_rows: Mapped[int] = mapped_column(Integer, nullable=False)
     n_columns: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Phase 13 — PSM: a matched-output dataset points back to its source.
+    # Nullable; SET NULL on source delete to preserve the matched row.
+    derived_from_dataset_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("datasets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Phase 13 — PSM: covariate-balance JSON (smd_before / smd_after / params).
+    dataset_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

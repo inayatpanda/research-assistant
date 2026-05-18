@@ -20,7 +20,9 @@ from .routes.ingest import router as ingest_router
 from .routes.journal_templates import router as journal_templates_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
+from .routes.power import router as power_router
 from .routes.projects import router as projects_router
+from .routes.psm import router as psm_router
 from .routes.reviewer_response import router as reviewer_response_router
 from .routes.reviews import router as reviews_router
 from .routes.reviews_meta import router as reviews_meta_router
@@ -62,3 +64,5 @@ app.include_router(snapshots_router, prefix="/api")
 app.include_router(comments_router, prefix="/api")
 app.include_router(cover_letter_router, prefix="/api")
 app.include_router(reviewer_response_router, prefix="/api")
+app.include_router(power_router, prefix="/api")
+app.include_router(psm_router, prefix="/api")

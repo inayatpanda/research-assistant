@@ -239,6 +239,9 @@ async def _do_import(
         await session.flush()
 
     dataset_map: dict[str, str] = {}
+    # First pass: assign new ids without resolving derived_from links yet so
+    # we can remap source pointers after every row's new id is known.
+    pending_psm: list[tuple[str, str | None]] = []  # (new_ds_id, old_source_id)
     for ds in bundle.get("datasets") or []:
         new_ds_id = _new_id()
         # File payloads are not in the bundle; mark file_ref as missing so the
@@ -255,11 +258,25 @@ async def _do_import(
             file_type=ds.get("file_type") or "text/csv",
             n_rows=ds.get("n_rows") or 0,
             n_columns=ds.get("n_columns") or 0,
+            dataset_metadata=ds.get("dataset_metadata"),
         ))
         if ds.get("id"):
             dataset_map[ds["id"]] = new_ds_id
+        pending_psm.append((new_ds_id, ds.get("derived_from_dataset_id")))
         counts["datasets"] += 1
     if counts["datasets"]:
+        await session.flush()
+        # Second pass — remap derived_from_dataset_id pointers now that all
+        # new ids exist in dataset_map.
+        for new_ds_id, old_source in pending_psm:
+            if not old_source:
+                continue
+            mapped = dataset_map.get(old_source)
+            if mapped is None:
+                continue
+            row = await session.get(Dataset, new_ds_id)
+            if row is not None:
+                row.derived_from_dataset_id = mapped
         await session.flush()
 
     for v in bundle.get("dataset_variables") or []:

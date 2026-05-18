@@ -69,9 +69,45 @@ def run(
     handler = _DISPATCH[test_key]
     result = handler(df, variables)
     chart = select_and_render(test_key=test_key, df=df, variables=variables)
+    # Phase 13 — OLS diagnostic panels merged into chart for OLS-family tests.
+    if test_key in {"linear_regression", "multiple_linear"}:
+        panels = _ols_diagnostic_panels(df, variables)
+        if panels is not None:
+            chart = chart or {}
+            chart = {**chart, "panels": panels}
     if chart is not None:
         result = replace(result, chart=chart)
     return result
+
+
+def _ols_diagnostic_panels(
+    df: pd.DataFrame, variables: dict[str, Any]
+) -> dict[str, str] | None:
+    """Render the 4-panel OLS diagnostic PNGs as base64 data URIs.
+
+    Returns None (and logs a warning) on any failure rather than breaking
+    the primary analysis result.
+    """
+    import base64
+    import logging
+
+    from .diagnostics import ols_diagnostic_plots
+
+    outcome = variables.get("outcome")
+    predictors = variables.get("predictors")
+    if not isinstance(outcome, str) or not predictors:
+        return None
+    if isinstance(predictors, str):
+        predictors = [predictors]
+    try:
+        png_panels = ols_diagnostic_plots(df, outcome, list(predictors))
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("OLS diagnostics failed: %s", exc)
+        return None
+    return {
+        name: "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
+        for name, raw in png_panels.items()
+    }
 
 
 def _iter_column_refs(variables: dict[str, Any]) -> list[str]:

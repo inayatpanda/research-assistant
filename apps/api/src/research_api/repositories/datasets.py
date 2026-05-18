@@ -126,6 +126,54 @@ class SqliteDatasetRepository:
         await self.session.refresh(existing)
         return existing
 
+    async def create_derived(
+        self,
+        *,
+        project_id: str,
+        filename: str,
+        file_ref: dict,
+        file_type: str,
+        n_rows: int,
+        n_columns: int,
+        variables: Iterable[InferredColumn],
+        user_id: str,
+        derived_from_dataset_id: str,
+        dataset_metadata: dict | None,
+    ) -> Dataset:
+        """Phase 13 — Create a dataset that points to a source via the
+        derived_from_dataset_id FK and carries PSM balance JSON.
+        """
+        ds = Dataset(
+            id=new_id(),
+            user_id=user_id,
+            project_id=project_id,
+            filename=filename,
+            file_ref=file_ref,
+            file_type=file_type,
+            n_rows=n_rows,
+            n_columns=n_columns,
+            derived_from_dataset_id=derived_from_dataset_id,
+            dataset_metadata=dataset_metadata,
+        )
+        self.session.add(ds)
+        await self.session.flush()
+        for col in variables:
+            row = DatasetVariable(
+                id=new_id(),
+                user_id=user_id,
+                dataset_id=ds.id,
+                name=col.name,
+                position=col.position,
+                inferred_type=col.inferred_type,
+                user_type=None,
+                n_missing=col.n_missing,
+                sample_values=list(col.sample_values),
+            )
+            self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(ds)
+        return ds
+
     async def delete(self, dataset_id: str, user_id: str) -> None:
         # Manually cascade since SQLite FK PRAGMA isn't always on in tests.
         ds = await self.get(dataset_id, user_id)

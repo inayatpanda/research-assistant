@@ -165,6 +165,9 @@ _TESTS_WITHOUT_CHART = {"icc", "cohen_kappa"}
 # ---- Tests ------------------------------------------------------------------
 
 
+_OLS_TESTS_WITH_PANELS = {"linear_regression", "multiple_linear"}
+
+
 @pytest.mark.parametrize("test_key", list(_CASES.keys()))
 def test_runner_dispatch_produces_chart_or_none(test_key: str) -> None:
     df, variables = _CASES[test_key]
@@ -173,7 +176,22 @@ def test_runner_dispatch_produces_chart_or_none(test_key: str) -> None:
         assert result.chart is None
     else:
         assert isinstance(result.chart, dict)
-        assert set(result.chart.keys()) == {"format", "data_uri", "byte_size"}
+        expected_keys = {"format", "data_uri", "byte_size"}
+        if test_key in _OLS_TESTS_WITH_PANELS:
+            # Phase 13 — OLS chart shape extends with a 4-panel diagnostic dict.
+            expected_keys = expected_keys | {"panels"}
+            panels = result.chart["panels"]
+            assert isinstance(panels, dict)
+            assert set(panels.keys()) == {
+                "residuals_vs_fitted",
+                "qq",
+                "scale_location",
+                "residuals_vs_leverage",
+            }
+            for v in panels.values():
+                assert isinstance(v, str)
+                assert v.startswith("data:image/png;base64,")
+        assert set(result.chart.keys()) == expected_keys
         assert result.chart["format"] == "png"
         assert result.chart["data_uri"].startswith("data:image/png;base64,")
 

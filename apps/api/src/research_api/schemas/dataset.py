@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -43,3 +43,7 @@ class DatasetRead(BaseModel):
     n_columns: int
     created_at: datetime
     variables: list[DatasetVariableRead] = []
+    # Phase 13 — PSM-derived datasets point back to their source + carry
+    # the covariate-balance JSON.
+    derived_from_dataset_id: str | None = None
+    dataset_metadata: dict[str, Any] | None = None
