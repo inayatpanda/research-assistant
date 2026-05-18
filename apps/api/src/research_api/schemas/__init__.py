@@ -101,6 +101,17 @@ from .export import (
     BundleImportResponse,
     ExportFormat,
 )
+from .ingest import (
+    ArticleMetadata,
+    ArticleSource,
+    DoiLookupRequest,
+    DuplicateGroup,
+    DuplicateReason,
+    ImportFromMetadataRequest,
+    ImportFromMetadataResponse,
+    MergeRequest,
+    PubMedSearchRequest,
+)
 from .upload import ExtractionSource, UploadResponse
 
 __all__ = [

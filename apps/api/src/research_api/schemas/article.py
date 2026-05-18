@@ -59,12 +59,15 @@ class ArticleRead(BaseModel):
     issue: str | None
     pages: str | None
     doi: str | None
+    pmid: str | None = None
     file_ref: dict | None
     file_type: str | None
+    abstract: str | None = None
     study_design: str | None
     review_status: ReviewStatus
     exclusion_reason: str | None
     conflict_of_interest: str | None
+    source: str = "upload"
     created_at: datetime
     # Optional signed URL filled in by route layer; not from DB
     file_url: str | None = None
