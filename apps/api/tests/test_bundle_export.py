@@ -233,3 +233,72 @@ def test_build_bundle_handles_review_absent():
     assert out["screening_records"] == []
     assert out["rob_assessments"] == []
     assert out["extraction_records"] == []
+
+
+# ── Bug 2: figures / consort / meta_analyses / meta_inputs round-trip ─
+
+
+def test_build_bundle_includes_figures_consort_meta():
+    from research_api.db.models import (
+        ConsortData,
+        Figure,
+        MetaAnalysis,
+        MetaInput,
+        Review,
+    )
+    p = _mk_project()
+    a = _mk_article()
+    fig = Figure(
+        id="fig1", user_id="user-a", project_id="proj1",
+        file_ref={"backend": "local", "key": "k.png"}, file_type="image/png",
+        figure_number=1, caption="A caption", alt_text="alt", byte_size=1234,
+    )
+    fig.created_at = datetime(2025, 1, 20, tzinfo=timezone.utc)
+    fig.updated_at = datetime(2025, 1, 20, tzinfo=timezone.utc)
+    consort = ConsortData(
+        id="con1", user_id="user-a", project_id="proj1",
+        enrollment_assessed=120, randomised=80,
+    )
+    consort.created_at = datetime(2025, 1, 21, tzinfo=timezone.utc)
+    consort.updated_at = datetime(2025, 1, 21, tzinfo=timezone.utc)
+    review = Review(id="rv1", user_id="user-a", project_id="proj1")
+    review.created_at = datetime(2025, 1, 11, tzinfo=timezone.utc)
+    review.updated_at = datetime(2025, 1, 11, tzinfo=timezone.utc)
+    meta = MetaAnalysis(
+        id="m1", user_id="user-a", review_id="rv1",
+        effect_metric="md", model="fixed",
+        pooled_estimate=0.5, ci_low=0.1, ci_high=0.9,
+        status="completed",
+    )
+    meta.created_at = datetime(2025, 1, 22, tzinfo=timezone.utc)
+    meta.updated_at = datetime(2025, 1, 22, tzinfo=timezone.utc)
+    mi = MetaInput(
+        id="mi1", user_id="user-a", meta_id="m1", article_id="art1",
+        mean_a=1.0, sd_a=0.5, n_a=20,
+        mean_b=0.5, sd_b=0.5, n_b=20,
+    )
+    mi.created_at = datetime(2025, 1, 22, tzinfo=timezone.utc)
+    mi.updated_at = datetime(2025, 1, 22, tzinfo=timezone.utc)
+
+    out = build_bundle(BundleInputs(
+        project=p, articles=[a], review=review,
+        figures=[fig], consort_data=consort,
+        meta_analyses=[meta], meta_inputs=[mi],
+    ))
+    assert len(out["figures"]) == 1
+    assert out["figures"][0]["caption"] == "A caption"
+    assert out["consort_data"] is not None
+    assert out["consort_data"]["randomised"] == 80
+    assert len(out["meta_analyses"]) == 1
+    assert out["meta_analyses"][0]["effect_metric"] == "md"
+    assert len(out["meta_inputs"]) == 1
+    assert out["meta_inputs"][0]["article_id"] == "art1"
+
+
+def test_build_bundle_no_phase_75_87_when_absent():
+    p = _mk_project()
+    out = build_bundle(BundleInputs(project=p))
+    assert out["figures"] == []
+    assert out["consort_data"] is None
+    assert out["meta_analyses"] == []
+    assert out["meta_inputs"] == []

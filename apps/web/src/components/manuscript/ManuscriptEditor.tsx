@@ -14,6 +14,7 @@ import { articlesApi, type ManuscriptSectionName } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 
 import { Citation } from '@/lib/tiptap/extensions/Citation'
+import { EmbeddedFigure } from '@/lib/tiptap/extensions/EmbeddedFigure'
 import { Figure } from '@/lib/tiptap/extensions/Figure'
 import { numberCitationsFromHtml } from '@/lib/tiptap/citationEngine'
 import { useCitationNumbers } from '@/lib/tiptap/citationNumbers'
@@ -53,6 +54,7 @@ export function ManuscriptEditor({
         CharacterCount.configure({ limit: 200_000 }),
         Citation,
         Figure,
+        EmbeddedFigure,
         Table.configure({ resizable: true, HTMLAttributes: { class: 'rma-table' } }),
         TableRow,
         TableHeader,

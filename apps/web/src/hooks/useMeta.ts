@@ -71,6 +71,11 @@ export function useInterpretMeta(projectId: string) {
   return useMutation({
     mutationFn: (metaId: string) => metaAnalysisApi.interpret(projectId, metaId),
     onSuccess: (_data, metaId) => {
+      // Refresh both the list and the per-meta detail so any consumer of
+      // either query (list panel + detail page) sees the new
+      // `ai_interpretation`.  Without the list refresh users saw the
+      // "Interpreting…" pending state until a hard reload.
+      qc.invalidateQueries({ queryKey: ['meta', projectId] })
       qc.invalidateQueries({ queryKey: ['meta', projectId, metaId] })
     },
   })

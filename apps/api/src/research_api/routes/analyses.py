@@ -31,6 +31,10 @@ from ..services.ai import (
     AIRateLimited,
     AISourceInsufficient,
 )
+from ..services.citation_format import (
+    CitationStyle,
+    replace_cite_tokens_with_markup,
+)
 from ..services.stats import assumptions as assumptions_svc
 from ..services.stats.ingest import read_table
 from ..services.stats.registry import CATALOGUE, recommend
@@ -495,6 +499,30 @@ async def interpret_analysis(
     return _hydrate_analysis(analysis, fresh_result)
 
 
+class _DatasetSyntheticArticle:
+    """Article-like adapter so a Dataset can be cited via the standard
+    `[CITE_dataset_<id>]` pipeline.  The bibliography panel resolves
+    `data-article-id="dataset_<id>"` against this same shape via the
+    project's articles repository when the dataset id is registered.
+    """
+
+    def __init__(self, dataset) -> None:  # type: ignore[no-untyped-def]
+        self.title = dataset.filename or "Dataset"
+        # Synthetic single-author so author/year inline formatters render
+        # `Dataset, <year>` rather than `Unknown source`.
+        self.authors = ["Dataset"]
+        # `created_at` is timezone-aware; fall back to None if unset.
+        year_val: int | None = None
+        if getattr(dataset, "created_at", None) is not None:
+            year_val = dataset.created_at.year
+        self.year = year_val
+        self.journal = None
+        self.doi = None
+        self.volume = None
+        self.issue = None
+        self.pages = None
+
+
 @router.post(
     "/projects/{project_id}/analyses/{analysis_id}/push",
     response_model=ManuscriptSectionRead,
@@ -516,13 +544,33 @@ async def push_to_manuscript(
             status_code=422,
             detail="Analysis must be interpreted before pushing to manuscript",
         )
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Resolve the dataset CITE token (and any other tokens the AI emitted)
+    # before persisting so the manuscript never carries raw `[CITE_xxx]`.
+    ds_repo = SqliteDatasetRepository(session)
+    dataset = await ds_repo.get(analysis.dataset_id, user_id)
+    style: CitationStyle = (
+        project.citation_style if project.citation_style in ("vancouver", "apa", "harvard", "ieee")
+        else "vancouver"
+    )  # type: ignore[assignment]
+    articles_by_tag: dict[str, _DatasetSyntheticArticle] = {}
+    if dataset is not None:
+        articles_by_tag[f"dataset_{dataset.id}"] = _DatasetSyntheticArticle(dataset)
+    resolved = replace_cite_tokens_with_markup(
+        result.ai_interpretation,
+        articles_by_tag,
+        style=style,
+    )
 
     section_name = "Results"
     sec_repo = SqliteManuscriptSectionRepository(session)
     existing = await sec_repo.get(
         project_id=project_id, section_name=section_name, user_id=user_id
     )
-    paragraph = f"<p>{result.ai_interpretation}</p>"
+    paragraph = f"<p>{resolved}</p>"
     new_content = paragraph if existing is None or not existing.content else (
         existing.content + paragraph
     )

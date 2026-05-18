@@ -148,6 +148,28 @@ async def test_bibliography_rejects_invalid_style(client):
 
 
 @pytest.mark.asyncio
+async def test_bibliography_accepts_apa7_alias(client):
+    """Bug 6: the UI label 'APA 7' implies `apa7` should be a wire-key
+    alias for the canonical `apa` style."""
+    pid = await _make_project(client, style="vancouver")
+    a1 = await _seed_article(
+        title="Alpha", project_id=pid, authors=["John Doe"],
+    )
+    await _seed_section(
+        project_id=pid, section_name="Introduction",
+        content=f"<p>[CITE_{a1}]</p>",
+    )
+    r1 = await client.get(f"/api/projects/{pid}/bibliography?style=apa7")
+    assert r1.status_code == 200
+    body1 = r1.json()
+    # The canonical style key is normalised on the way out.
+    assert body1["style"] == "apa"
+    # Should equal the canonical `?style=apa` response.
+    r2 = await client.get(f"/api/projects/{pid}/bibliography?style=apa")
+    assert r2.json() == body1
+
+
+@pytest.mark.asyncio
 async def test_bibliography_ieee_style_uses_brackets(client):
     pid = await _make_project(client)
     a1 = await _seed_article(title="Alpha", project_id=pid)

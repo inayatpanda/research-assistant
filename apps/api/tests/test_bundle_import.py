@@ -261,6 +261,8 @@ async def test_import_full_round_trip_lossless(session):
         "analyses": 1, "analysis_results": 1,
         "reviews": 1, "search_records": 1, "screening_records": 1,
         "rob_assessments": 1, "extraction_records": 1,
+        "figures": 0, "consort_data": 0,
+        "meta_analyses": 0, "meta_inputs": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).
@@ -398,3 +400,118 @@ async def test_import_large_bundle_completes_in_reasonable_time(session):
     elapsed = time.perf_counter() - t0
     assert counts["articles"] == 200
     assert elapsed < 5.0, f"import took {elapsed:.2f}s"
+
+
+# ── Bug 2: figures / consort / meta_analyses / meta_inputs round-trip ─
+
+
+@pytest.mark.asyncio
+async def test_import_round_trips_figures_consort_meta(session):
+    from research_api.db.models import (
+        ConsortData,
+        Figure,
+        MetaAnalysis,
+        MetaInput,
+    )
+
+    p = Project(
+        id="proj-orig", user_id="user-a", title="P", study_type="Systematic Review",
+        citation_style="vancouver", ai_provider="gemini",
+    )
+    p.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    p.updated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    art = Article(
+        id="art1", user_id="user-a", project_id="proj-orig",
+        title="A", authors=["Doe J"], year=2024,
+    )
+    art.created_at = datetime(2025, 1, 2, tzinfo=timezone.utc)
+    fig = Figure(
+        id="fig1", user_id="user-a", project_id="proj-orig",
+        file_ref={"backend": "local", "key": "k.png"}, file_type="image/png",
+        figure_number=1, caption="cap1", alt_text="alt1", byte_size=100,
+    )
+    fig.created_at = datetime(2025, 1, 3, tzinfo=timezone.utc)
+    fig.updated_at = datetime(2025, 1, 3, tzinfo=timezone.utc)
+    consort = ConsortData(
+        id="con1", user_id="user-a", project_id="proj-orig",
+        randomised=42,
+    )
+    consort.created_at = datetime(2025, 1, 4, tzinfo=timezone.utc)
+    consort.updated_at = datetime(2025, 1, 4, tzinfo=timezone.utc)
+    review = Review(id="rv1", user_id="user-a", project_id="proj-orig")
+    review.created_at = datetime(2025, 1, 5, tzinfo=timezone.utc)
+    review.updated_at = datetime(2025, 1, 5, tzinfo=timezone.utc)
+    meta = MetaAnalysis(
+        id="m1", user_id="user-a", review_id="rv1",
+        effect_metric="md", model="random",
+        pooled_estimate=0.42, status="completed",
+    )
+    meta.created_at = datetime(2025, 1, 6, tzinfo=timezone.utc)
+    meta.updated_at = datetime(2025, 1, 6, tzinfo=timezone.utc)
+    mi = MetaInput(
+        id="mi1", user_id="user-a", meta_id="m1", article_id="art1",
+        mean_a=1.0, sd_a=0.5, n_a=10,
+        mean_b=0.5, sd_b=0.5, n_b=10,
+    )
+    mi.created_at = datetime(2025, 1, 6, tzinfo=timezone.utc)
+    mi.updated_at = datetime(2025, 1, 6, tzinfo=timezone.utc)
+
+    bundle = build_bundle(BundleInputs(
+        project=p, articles=[art], review=review,
+        figures=[fig], consort_data=consort,
+        meta_analyses=[meta], meta_inputs=[mi],
+    ))
+    counts = await import_bundle(bundle, target_user_id="user-b", session=session)
+    assert counts["figures"] == 1
+    assert counts["consort_data"] == 1
+    assert counts["meta_analyses"] == 1
+    assert counts["meta_inputs"] == 1
+
+    fig_rows = (await session.execute(select(Figure))).scalars().all()
+    assert len(fig_rows) == 1
+    assert fig_rows[0].user_id == "user-b"
+    assert fig_rows[0].id != "fig1"
+    assert fig_rows[0].caption == "cap1"
+
+    con_rows = (await session.execute(select(ConsortData))).scalars().all()
+    assert len(con_rows) == 1
+    assert con_rows[0].user_id == "user-b"
+    assert con_rows[0].randomised == 42
+
+    meta_rows = (await session.execute(select(MetaAnalysis))).scalars().all()
+    assert len(meta_rows) == 1
+    assert meta_rows[0].user_id == "user-b"
+    assert meta_rows[0].effect_metric == "md"
+
+    mi_rows = (await session.execute(select(MetaInput))).scalars().all()
+    assert len(mi_rows) == 1
+    assert mi_rows[0].user_id == "user-b"
+    # FK rewiring: meta_id and article_id should reference the *new* PKs.
+    assert mi_rows[0].meta_id == meta_rows[0].id
+    assert mi_rows[0].meta_id != "m1"
+
+
+@pytest.mark.asyncio
+async def test_import_meta_inputs_skipped_when_meta_orphan(session):
+    """Defensive: a meta_input that references a missing/orphan meta_id
+    must be silently dropped rather than crashing the import."""
+    from research_api.db.models import MetaInput
+
+    p = Project(
+        id="proj-orig", user_id="user-a", title="P", study_type="Systematic Review",
+        citation_style="vancouver", ai_provider="gemini",
+    )
+    p.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    p.updated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    bundle = build_bundle(BundleInputs(project=p))
+    # Manually inject an orphan meta_input (no review, no meta_analyses, no
+    # articles). Import must not raise.
+    bundle["meta_inputs"] = [{
+        "id": "mi_orphan", "user_id": "user-a",
+        "meta_id": "missing", "article_id": "missing",
+        "mean_a": 1.0,
+    }]
+    counts = await import_bundle(bundle, target_user_id="user-b", session=session)
+    assert counts["meta_inputs"] == 0
+    mi_rows = (await session.execute(select(MetaInput))).scalars().all()
+    assert mi_rows == []

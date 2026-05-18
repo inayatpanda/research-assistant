@@ -760,6 +760,32 @@ async def test_prisma_push_replaces_previous_figure(client):
     assert r2.status_code == 200
     second = r2.json()["content"]
     assert second.count('class="prisma-flow"') == 1
+    # Bug 3 regression: SVG <img> must survive a re-push (was previously
+    # stripped, leaving only the figcaption).
+    assert "data:image/svg+xml;base64," in second
+    assert "<figcaption>PRISMA 2020 flow diagram." in second
+
+
+@pytest.mark.asyncio
+async def test_prisma_push_keeps_svg_after_methodology_already_populated(client):
+    """Bug 3 regression: pre-existing prose in Methodology must not interfere
+    with the SVG `<img>` landing in the pushed figure block."""
+    pid = await _make_project_via_api(client)
+    await client.post(f"/api/projects/{pid}/reviews/search", json=_search_body(n=4))
+    # Seed Methodology with unrelated prose so the strip-then-append path is
+    # exercised against a non-empty section.
+    await client.put(
+        f"/api/projects/{pid}/sections/Methodology",
+        json={"section_name": "Methodology", "content": "<p>Other prose.</p>"},
+    )
+    r = await client.post(f"/api/projects/{pid}/reviews/prisma/push")
+    assert r.status_code == 200
+    content = r.json()["content"]
+    assert "<p>Other prose.</p>" in content
+    assert 'data:image/svg+xml;base64,' in content
+    enc = content.split("base64,")[1].split('"')[0]
+    decoded = base64.b64decode(enc).decode("utf-8")
+    assert "<svg" in decoded
 
 
 @pytest.mark.asyncio

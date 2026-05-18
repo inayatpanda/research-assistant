@@ -23,11 +23,15 @@ from ...db.models import (
     AnalysisResult,
     Article,
     ArticleNote,
+    ConsortData,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
+    Figure,
     Highlight,
     ManuscriptSection,
+    MetaAnalysis,
+    MetaInput,
     Project,
     Review,
     RobAssessment,
@@ -56,6 +60,12 @@ class BundleInputs:
     screening_records: list[ScreeningRecord] = field(default_factory=list)
     rob_assessments: list[RobAssessment] = field(default_factory=list)
     extraction_records: list[ExtractionRecord] = field(default_factory=list)
+    # Phase 8.7 additions
+    figures: list[Figure] = field(default_factory=list)
+    consort_data: ConsortData | None = None
+    # Phase 7.5 additions
+    meta_analyses: list[MetaAnalysis] = field(default_factory=list)
+    meta_inputs: list[MetaInput] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -111,4 +121,10 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "screening_records": [_row_to_dict(r) for r in inputs.screening_records],
         "rob_assessments": [_row_to_dict(r) for r in inputs.rob_assessments],
         "extraction_records": [_row_to_dict(r) for r in inputs.extraction_records],
+        "figures": [_row_to_dict(f) for f in inputs.figures],
+        "consort_data": (
+            _row_to_dict(inputs.consort_data) if inputs.consort_data is not None else None
+        ),
+        "meta_analyses": [_row_to_dict(m) for m in inputs.meta_analyses],
+        "meta_inputs": [_row_to_dict(i) for i in inputs.meta_inputs],
     }

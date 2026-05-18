@@ -29,6 +29,12 @@ from ..services.ai import (
     AIRateLimited,
     AISourceInsufficient,
 )
+from ..services.citation_format import (
+    CitationStyle,
+    replace_cite_tokens_with_markup,
+)
+from ..services.export.bibliography import collect_used_article_ids_in_order
+from ..repositories.manuscript_sections import SqliteManuscriptSectionRepository
 from ..services.meta import effect_sizes as es
 from ..services.meta.forest_plot import ForestRow, render_forest_png
 from ..services.meta.funnel_plot import render_funnel_png
@@ -652,6 +658,43 @@ async def push_meta_to_results(
         )
         tokens = " ".join(f"[CITE_{escape(inp.article_id)}]" for inp in inputs)
         caption_html = f"{escape(caption)} <small>{tokens}</small>"
+
+    # Resolve `[CITE_<aid>]` tokens carried in the AI prose (or the
+    # deterministic fallback) so the manuscript never persists raw tokens.
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    style: CitationStyle = (
+        project.citation_style if project is not None
+        and project.citation_style in ("vancouver", "apa", "harvard", "ieee")
+        else "vancouver"
+    )  # type: ignore[assignment]
+    art_repo = SqliteArticleRepository(session)
+    articles_by_tag: dict[str, object] = {}
+    for inp in inputs:
+        art = await art_repo.get(inp.article_id, user_id)
+        if art is not None:
+            articles_by_tag[inp.article_id] = art
+
+    numbering: dict[str, int] | None = None
+    if style == "ieee":
+        # Number based on existing Results-section content so re-pushes keep
+        # the same N for already-cited articles, and new pooled studies pick
+        # up the next free numbers.
+        sec_repo = SqliteManuscriptSectionRepository(session)
+        prior = await sec_repo.list_for_project(project_id, user_id)
+        existing_ids = collect_used_article_ids_in_order(prior)
+        numbering = {aid: i + 1 for i, aid in enumerate(existing_ids)}
+        next_n = len(existing_ids) + 1
+        for inp in inputs:
+            if inp.article_id not in numbering and inp.article_id in articles_by_tag:
+                numbering[inp.article_id] = next_n
+                next_n += 1
+
+    caption_html = replace_cite_tokens_with_markup(
+        caption_html,
+        articles_by_tag,
+        style=style,
+        numbering=numbering,
+    )
 
     html = (
         '<figure class="meta-analysis-forest">'

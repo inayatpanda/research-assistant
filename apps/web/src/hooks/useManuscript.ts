@@ -21,8 +21,13 @@ export function useManuscript(
 
   const mutation = useMutation({
     mutationFn: (html: string) => manuscriptApi.upsertSection(projectId!, section, html),
-    onSuccess: (saved) =>
-      qc.setQueryData(['manuscript-section', projectId, section], saved),
+    onSuccess: (saved) => {
+      qc.setQueryData(['manuscript-section', projectId, section], saved)
+      // Citations live inside section content; the bibliography is derived
+      // from every section's HTML, so any successful save must re-fetch it.
+      // Same for the reference-integrity panel (keyed on section data).
+      qc.invalidateQueries({ queryKey: ['bibliography', projectId] })
+    },
   })
 
   const [local, setLocal] = useState<string>('')

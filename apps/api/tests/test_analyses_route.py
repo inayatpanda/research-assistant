@@ -216,7 +216,10 @@ async def test_push_to_manuscript_appends_paragraph(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["section_name"] == "Results"
-    assert f"[CITE_dataset_{ds['id']}]" in body["content"]
+    # Raw CITE token is resolved at push time; the bibliography-discoverable
+    # `data-article-id` attribute lands in the section content.
+    assert f"[CITE_dataset_{ds['id']}]" not in body["content"]
+    assert f'data-article-id="dataset_{ds["id"]}"' in body["content"]
     assert body["word_count"] > 0
 
 
@@ -243,7 +246,8 @@ async def test_push_to_manuscript_appends_not_overwrite(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert "Existing content." in body["content"]
-    assert f"[CITE_dataset_{ds['id']}]" in body["content"]
+    assert f"[CITE_dataset_{ds['id']}]" not in body["content"]
+    assert f'data-article-id="dataset_{ds["id"]}"' in body["content"]
 
 
 @pytest.mark.asyncio
@@ -266,3 +270,66 @@ async def test_delete_analysis(client):
     assert r.status_code == 204
     r2 = await client.get(f"/api/projects/{project_id}/analyses/{a['id']}")
     assert r2.status_code == 404
+
+
+# ── Bug 1: CITE token resolution on push (vancouver / apa / ieee) ──────
+
+
+async def _interpret_and_push(client, project_id: str, ds_id: str):
+    a = await _make_analysis(client, project_id, ds_id)
+    await client.post(f"/api/projects/{project_id}/analyses/{a['id']}/run")
+    await client.post(f"/api/projects/{project_id}/analyses/{a['id']}/interpret")
+    r = await client.post(
+        f"/api/projects/{project_id}/analyses/{a['id']}/push", json={}
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.mark.asyncio
+async def test_push_resolves_dataset_cite_token_vancouver(client):
+    """Vancouver style: token replaced with `(<dataset label>, <year>)`.
+
+    The raw `[CITE_dataset_xxx]` token must NOT survive to the manuscript.
+    """
+    project_id = await _make_project(client)
+    ds = await _upload_dataset(client, project_id)
+    body = await _interpret_and_push(client, project_id, ds["id"])
+    content = body["content"]
+    # Token must be replaced, not preserved raw.
+    assert f"[CITE_dataset_{ds['id']}]" not in content
+    # Vancouver inline uses author/year format. The dataset's synthetic
+    # author is "Dataset" so the rendered citation contains "Dataset".
+    assert "Dataset" in content
+
+
+@pytest.mark.asyncio
+async def test_push_resolves_dataset_cite_token_apa(client):
+    project_id = await _make_project(client)
+    # APA style project.
+    r = await client.post(
+        "/api/projects",
+        json={
+            "title": "APA Stats P",
+            "study_type": "Outcome Study",
+            "citation_style": "apa",
+        },
+    )
+    project_id = r.json()["id"]
+    ds = await _upload_dataset(client, project_id)
+    body = await _interpret_and_push(client, project_id, ds["id"])
+    content = body["content"]
+    assert f"[CITE_dataset_{ds['id']}]" not in content
+    assert "Dataset" in content
+
+
+@pytest.mark.asyncio
+async def test_push_dataset_token_carries_data_article_id(client):
+    """The pushed paragraph must include `data-article-id="dataset_<id>"`
+    (or equivalent attribute) so the bibliography panel can surface the
+    dataset reference."""
+    project_id = await _make_project(client)
+    ds = await _upload_dataset(client, project_id)
+    body = await _interpret_and_push(client, project_id, ds["id"])
+    content = body["content"]
+    assert f'data-article-id="dataset_{ds["id"]}"' in content

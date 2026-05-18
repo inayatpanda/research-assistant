@@ -22,11 +22,15 @@ from ...db.models import (
     AnalysisResult,
     Article,
     ArticleNote,
+    ConsortData,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
+    Figure,
     Highlight,
     ManuscriptSection,
+    MetaAnalysis,
+    MetaInput,
     Project,
     Review,
     RobAssessment,
@@ -108,6 +112,8 @@ async def _do_import(
         "analyses": 0, "analysis_results": 0,
         "reviews": 0, "search_records": 0, "screening_records": 0,
         "rob_assessments": 0, "extraction_records": 0,
+        "figures": 0, "consort_data": 0,
+        "meta_analyses": 0, "meta_inputs": 0,
     }
 
     proj_in = bundle["project"]
@@ -386,6 +392,123 @@ async def _do_import(
         if any(counts[k] for k in (
             "search_records", "screening_records", "rob_assessments", "extraction_records"
         )):
+            await session.flush()
+
+    # ── Figures (Phase 8.7) ────────────────────────────────────────────
+    for fig in bundle.get("figures") or []:
+        ref = fig.get("file_ref") or {}
+        if not ref:
+            # File payloads aren't carried in the bundle — keep a "missing"
+            # marker so the figures UI can render a placeholder.
+            ref = {"backend": "missing", "key": ""}
+        session.add(Figure(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            file_ref=ref,
+            file_type=fig.get("file_type") or "image/png",
+            figure_number=fig.get("figure_number") or (counts["figures"] + 1),
+            caption=fig.get("caption") or "",
+            alt_text=fig.get("alt_text") or "",
+            width_px=fig.get("width_px"),
+            height_px=fig.get("height_px"),
+            byte_size=fig.get("byte_size") or 0,
+        ))
+        counts["figures"] += 1
+    if counts["figures"]:
+        await session.flush()
+
+    # ── CONSORT data (Phase 8.7) ───────────────────────────────────────
+    consort_in = bundle.get("consort_data")
+    if isinstance(consort_in, dict):
+        session.add(ConsortData(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            enrollment_assessed=consort_in.get("enrollment_assessed"),
+            enrollment_excluded=consort_in.get("enrollment_excluded"),
+            enrollment_excluded_reasons=consort_in.get("enrollment_excluded_reasons"),
+            randomised=consort_in.get("randomised"),
+            allocated_intervention=consort_in.get("allocated_intervention"),
+            allocated_control=consort_in.get("allocated_control"),
+            intervention_received=consort_in.get("intervention_received"),
+            control_received=consort_in.get("control_received"),
+            intervention_lost_followup=consort_in.get("intervention_lost_followup"),
+            control_lost_followup=consort_in.get("control_lost_followup"),
+            intervention_discontinued=consort_in.get("intervention_discontinued"),
+            control_discontinued=consort_in.get("control_discontinued"),
+            intervention_analysed=consort_in.get("intervention_analysed"),
+            control_analysed=consort_in.get("control_analysed"),
+        ))
+        await session.flush()
+        counts["consort_data"] = 1
+
+    # ── Meta-analyses + inputs (Phase 7.5) ─────────────────────────────
+    meta_map: dict[str, str] = {}
+    if new_review_id is not None:
+        for m in bundle.get("meta_analyses") or []:
+            new_meta_id = _new_id()
+            session.add(MetaAnalysis(
+                id=new_meta_id,
+                user_id=target_user_id,
+                review_id=new_review_id,
+                title=m.get("title"),
+                effect_metric=m.get("effect_metric") or "md",
+                model=m.get("model") or "fixed",
+                subgroup_variable=m.get("subgroup_variable"),
+                pooled_estimate=m.get("pooled_estimate"),
+                pooled_se=m.get("pooled_se"),
+                ci_low=m.get("ci_low"),
+                ci_high=m.get("ci_high"),
+                z_value=m.get("z_value"),
+                p_value=m.get("p_value"),
+                q_value=m.get("q_value"),
+                q_df=m.get("q_df"),
+                q_p=m.get("q_p"),
+                i2=m.get("i2"),
+                tau2=m.get("tau2"),
+                subgroup_summary=m.get("subgroup_summary"),
+                ai_interpretation=m.get("ai_interpretation"),
+                status=m.get("status") or "draft",
+            ))
+            if m.get("id"):
+                meta_map[m["id"]] = new_meta_id
+            counts["meta_analyses"] += 1
+        if counts["meta_analyses"]:
+            await session.flush()
+
+        for mi in bundle.get("meta_inputs") or []:
+            new_meta = meta_map.get(mi.get("meta_id"))
+            new_art = article_map.get(mi.get("article_id"))
+            if new_meta is None or new_art is None:
+                continue  # orphan input
+            session.add(MetaInput(
+                id=_new_id(),
+                user_id=target_user_id,
+                meta_id=new_meta,
+                article_id=new_art,
+                study_label=mi.get("study_label"),
+                subgroup=mi.get("subgroup"),
+                mean_a=mi.get("mean_a"),
+                sd_a=mi.get("sd_a"),
+                n_a=mi.get("n_a"),
+                mean_b=mi.get("mean_b"),
+                sd_b=mi.get("sd_b"),
+                n_b=mi.get("n_b"),
+                events_a=mi.get("events_a"),
+                n_a_total=mi.get("n_a_total"),
+                events_b=mi.get("events_b"),
+                n_b_total=mi.get("n_b_total"),
+                log_hr=mi.get("log_hr"),
+                se_log_hr=mi.get("se_log_hr"),
+                hr=mi.get("hr"),
+                hr_ci_low=mi.get("hr_ci_low"),
+                hr_ci_high=mi.get("hr_ci_high"),
+                r=mi.get("r"),
+                n_r=mi.get("n_r"),
+            ))
+            counts["meta_inputs"] += 1
+        if counts["meta_inputs"]:
             await session.flush()
 
     return counts

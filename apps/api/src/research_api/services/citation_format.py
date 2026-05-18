@@ -425,3 +425,40 @@ def extract_used_citations(
         if formatted not in seen:
             seen.append(formatted)
     return seen
+
+
+def replace_cite_tokens_with_markup(
+    text: str,
+    articles_by_tag: Mapping[str, _ArticleLike],
+    *,
+    style: CitationStyle = "vancouver",
+    numbering: Mapping[str, int] | None = None,
+) -> str:
+    """Replace `[CITE_xxx]` tokens with `<sup data-citation>` markup.
+
+    Like `replace_cite_tokens`, but the substituted citation is wrapped in
+    a `<sup data-citation data-article-id="xxx">…</sup>` element so the
+    bibliography service can discover the referenced article via its
+    canonical `data-article-id` attribute (mirrors the TipTap Citation
+    node's serialised HTML).
+
+    Unknown tags (article id not in `articles_by_tag`) are left UNTOUCHED
+    so reviewers see the broken reference rather than silently swallow it.
+    For IEEE style, tags without an entry in `numbering` are also left
+    untouched.
+    """
+    def sub(m: re.Match[str]) -> str:
+        tag = m.group(1)
+        article = articles_by_tag.get(tag)
+        if article is None:
+            return m.group(0)
+        if style == "ieee":
+            n = (numbering or {}).get(tag)
+            if n is None:
+                return m.group(0)
+            inner = ieee_inline(n)
+        else:
+            inner = f"({format_inline(style, article)})"
+        return f'<sup data-citation data-article-id="{escape(tag)}">{inner}</sup>'
+
+    return _CITE_RE.sub(sub, text)

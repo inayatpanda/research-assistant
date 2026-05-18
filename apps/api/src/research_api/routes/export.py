@@ -29,11 +29,15 @@ from ..db.models import (
     AnalysisResult,
     Article,
     ArticleNote,
+    ConsortData,
     Dataset,
     DatasetVariable,
     ExtractionRecord,
+    Figure,
     Highlight,
     ManuscriptSection,
+    MetaAnalysis,
+    MetaInput,
     Project,
     Review,
     RobAssessment,
@@ -67,6 +71,9 @@ router = APIRouter(tags=["export"])
 log = logging.getLogger("research_api.export")
 
 _ALLOWED_STYLES: tuple[CitationStyle, ...] = ("vancouver", "apa", "harvard", "ieee")
+# UI-facing aliases; the user sees "APA 7" so `?style=apa7` must be accepted
+# and resolved to the canonical `apa`.
+_STYLE_ALIASES: dict[str, CitationStyle] = {"apa7": "apa"}
 _IMPORT_SIZE_CAP_BYTES = 50 * 1024 * 1024  # 50 MiB
 _FILENAME_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
@@ -101,6 +108,8 @@ def _today() -> str:
 
 def _coerce_style(style: str | None, project_style: str) -> CitationStyle:
     s = style or project_style
+    # Map aliases (e.g. `apa7` → `apa`) before validating.
+    s = _STYLE_ALIASES.get(s, s)
     if s not in _ALLOWED_STYLES:
         raise HTTPException(status_code=422, detail=f"Unsupported citation style: {s!r}")
     return s  # type: ignore[return-value]
@@ -271,6 +280,8 @@ async def _collect_bundle_inputs(
     screening_records: list[ScreeningRecord] = []
     rob_assessments: list[RobAssessment] = []
     extraction_records: list[ExtractionRecord] = []
+    meta_analyses: list[MetaAnalysis] = []
+    meta_inputs: list[MetaInput] = []
     if review is not None:
         search_records = list((await session.execute(
             select(SearchRecord).where(
@@ -296,6 +307,34 @@ async def _collect_bundle_inputs(
                 ExtractionRecord.user_id == user_id,
             )
         )).scalars().all())
+        meta_analyses = list((await session.execute(
+            select(MetaAnalysis).where(
+                MetaAnalysis.review_id == review.id,
+                MetaAnalysis.user_id == user_id,
+            )
+        )).scalars().all())
+        meta_ids = [m.id for m in meta_analyses]
+        if meta_ids:
+            meta_inputs = list((await session.execute(
+                select(MetaInput).where(
+                    MetaInput.user_id == user_id,
+                    MetaInput.meta_id.in_(meta_ids),
+                )
+            )).scalars().all())
+
+    figures = list((await session.execute(
+        select(Figure).where(
+            Figure.project_id == project_id,
+            Figure.user_id == user_id,
+        )
+    )).scalars().all())
+
+    consort_data = (await session.execute(
+        select(ConsortData).where(
+            ConsortData.project_id == project_id,
+            ConsortData.user_id == user_id,
+        )
+    )).scalar_one_or_none()
 
     return BundleInputs(
         project=project,
@@ -313,6 +352,10 @@ async def _collect_bundle_inputs(
         screening_records=screening_records,
         rob_assessments=rob_assessments,
         extraction_records=extraction_records,
+        figures=figures,
+        consort_data=consort_data,
+        meta_analyses=meta_analyses,
+        meta_inputs=meta_inputs,
     )
 
 
