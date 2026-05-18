@@ -408,3 +408,65 @@ Frontend (10 files):
 **Next:** Phase 7 — Systematic Review module. PRISMA flow tracking, inclusion/exclusion screening, risk-of-bias assessment (RoB 2 for RCTs, ROBINS-I for non-randomised, Newcastle-Ottawa for cohort/case-control), data extraction tables.
 
 ---
+
+## 2026-05-18 · Phase 7 — Systematic Review ✅ COMPLETE
+
+**Goal**
+
+Researchers running a Systematic Review log their search strategy across databases, screen articles in two stages (title/abstract → full text), assess Risk of Bias with the tool appropriate to each study's design (RoB 2 / ROBINS-I / Newcastle-Ottawa / AMSTAR-2), extract structured study-level data, and watch a PRISMA 2020 flow diagram count itself. Any artefact — PRISMA SVG, search log, RoB summary, extraction table — pushes into the Manuscript with `[CITE_<article_id>]` tokens for included studies (Phase 5 token contract reused).
+
+**What shipped**
+
+Backend (15 files + 1 migration):
+
+- `db/models.py`: `Review` (one per project), `SearchRecord`, `ScreeningRecord` (UNIQUE per article/stage), `RobAssessment` (UNIQUE per tool), `ExtractionRecord` (UNIQUE per article). All `user_id`-scoped. Additive `articles.abstract Text NULL` column.
+- `alembic/versions/0007_systematic_review.py`: 0006 → 0007.
+- `schemas/review.py`: `ReviewStage`, `ScreeningDecision`, `ExclusionCategory`, `RoBTool`, `RoBJudgement`, `DatabaseName` Literal unions — load-bearing for service + TS mirror.
+- `services/review/prisma.py`: pure `count_flow()` + no-dep `render_prisma_svg()` (XML-escaped, viewBox 800×720).
+- `services/review/rob_rules.py`: declarative catalogues for all four tools + `derive_overall()`. AMSTAR-2's yes/partial-yes/no vocabulary explicitly inverted via `AMSTAR2_UNIFIED_MAPPING`.
+- `services/review/extraction_schema.py`: seven-group schema + `validate()`.
+- `services/ai/prompts/screening_suggestion.py` + `gemini.py::suggest_screening`: title+abstract-only, JSON-output, advisory-only framing. `FakeAIProvider.suggest_screening` deterministic.
+- `repositories/reviews.py`: `SqliteReviewRepository` covering all five resources. `upsert_screening` rejects cross-project articles via `ScreeningArticleMismatch`.
+- `routes/reviews.py`: ~20 endpoints under `/api/projects/{pid}/reviews/...`. Auto-creates the one-per-project review on first GET. `/reviews/rob/tools` + `/reviews/extraction/schema` serve catalogues so the frontend doesn't duplicate them. AI suggest stores `ai_suggestion` but **never mutates `decision`** — load-bearing invariant covered by isolation tests. Four pushes: PRISMA → Methodology; search log table → Methodology; RoB traffic-light table → Results with `[CITE_<id>]` tokens; extraction table → Results with `[CITE_<id>]` tokens.
+- `tests/test_security_review_isolation.py`: 29 tests proving zero leak across users or projects on every endpoint, including the AI-doesn't-mutate-decision invariant.
+
+Frontend (19 files):
+
+- `lib/api.ts`: `reviewsApi`/`searchApi`/`screeningApi`/`robApi`/`extractionApi`. TS Literal unions mirror Pydantic.
+- `lib/rob.ts`: TS port of `derive_overall` for live RoB preview; server is still source of truth.
+- `hooks/useReviews.ts`: TanStack Query wrappers with invalidation chains.
+- `components/review/`: 10 components — `ReviewHeader` (PICO/eligibility edit), `SearchLog`, `ScreeningStageTabs` + `ScreeningTable` + `ScreeningRowActions` (advisory AI suggest button never overwrites user decision), `RoBToolPicker`, `RoBAssessmentForm` (live overall preview), `RoBSummaryFigure` (traffic-light SVG), `ExtractionTable`, `PRISMAFlowChart`, `EmptyReviewState`.
+- `routes/SystematicReviewPage.tsx`: ProjectSelectGate → study-type guard → 5 tabs (URL `?tab=`).
+- `App.tsx` + `nav-items.ts`: `/review` route + sidebar nav.
+
+**E2E verification (browser smoke on a fresh Systematic Review project)**
+
+Created two search records (PubMed n=412, Embase n=278 → identified=690). Inserted 2 articles. Title/abstract screening: included the RCT, excluded the editorial (reason "Editorial — not a primary study"). Full-text screening: included the RCT. RoB 2 assessment on the RCT (`measurement=some_concerns`, all others `low`) → `overall_auto = some_concerns`. Extraction with full structured fields persisted. PRISMA: `identified=690, after_dedupe=690, screened=2, excluded_title=1, full_text_assessed=1, included=1`. All four pushes returned 200; Methodology now contains the PRISMA SVG (base64 `<img>`) + search log table; Results contains the RoB traffic-light table (5 domain cells, overall column) and the extraction table — both with `[CITE_01a2ab7…]` token for the included study, exactly matching the Phase 5 contract.
+
+**Two test-run bugs discovered, both UX-only**
+
+Initial test pushes returned 422 because: (a) the RoB 2 catalogue uses `randomisation` (UK) / `missing_outcome` / `reporting` rather than the US/colloquial keys I first sent; (b) extraction schema requires `first_author` (not `author`) and the `notes` group must be an object (not bare string). Both are correct per the catalogue endpoints (`/reviews/rob/tools`, `/reviews/extraction/schema`) — the frontend wizard already builds forms from those catalogues so the user never sees these keys. Logged to POLISH as "document required shape on the schema endpoints."
+
+**Security review (3 polish items, 0 blockers)**
+
+- AI suggest never mutates `decision` — proven via two dedicated tests in the security regression.
+- Two layers of project scoping on every route: `_resolve_review` does the project ownership check, the repo's `user_id` filter is defence-in-depth.
+- PRISMA SVG injected with XML-escaped integers only; ProseMirror's schema parser strips any unknown attrs in the pushed `<table>` / `<img>` HTML.
+- Push endpoints **append** rather than overwrite — a re-push will stack duplicate tables in the section. Logged as polish (low: replace-by-class-hook or a `mode=replace|append` query param).
+
+**Test counts**
+
+- Backend: **488 pass** (was 326 entering Phase 7; +162 in Phase 7)
+- Frontend: 44 vitest pass (was 19; +25)
+- New backend test files: `test_review_models`, `test_review_prisma`, `test_review_rob_rules`, `test_review_extraction_schema`, `test_ai_suggest_screening`, `test_reviews_route`, `test_security_review_isolation`
+
+**Open items**
+
+- `POLISH.md`: +3 phase-7 entries
+- `DECISIONS.md`: unchanged
+- `QUESTIONS.md`: still empty
+- `DEFERRED.md`: unchanged (meta-analysis + GRADE + PubMed direct-search deferred to Phase 7.5 / Phase 8)
+
+**Next:** Phase 8 — bibliography polish, export (DOCX + PDF + JSON), full-app polish, deploy targets (Vercel for static / Fly.io for API). Phase 9 (Electron desktop) remains paused per the user's directive — autonomous runs end after Phase 8.
+
+---
