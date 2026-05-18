@@ -648,6 +648,63 @@ Frontend (10 files):
 
 ---
 
+## 2026-05-18 · Phase 8.6 — Ingestion (PubMed / Crossref / RIS / BibTeX / dedup) ✅ COMPLETE
+
+**Goal:** populate the Library by metadata, not just by PDF upload. Four ingest surfaces + a duplicate-resolution workflow.
+
+**Backend (one new pip dep — `bibtexparser>=1.4,<2`; dev: `respx>=0.21`)**
+
+- `services/ingest/crossref.py`: thin wrapper around the existing `services/crossref.py` that strips JATS abstract tags and returns `ArticleMetadata(source='doi')`.
+- `services/ingest/pubmed.py`: NCBI E-utilities `esearch` + `efetch`; stdlib `ElementTree` parser; 15 s timeout; single automatic 429 retry; never raises (returns `[]` on any failure).
+- `services/ingest/ris.py`: pure RIS line parser (TI/T1, AU/A1, JO/JF/T2/JT, PY/Y1/DA, VL, IS, SP/EP, DO, AB/N2). Tolerates CRLF/LF/mixed newlines.
+- `services/ingest/bibtex.py`: `bibtexparser` v1 wrapper, `@article` only (journals); brace-armour stripped from titles; `Last, First` → `First Last` author normalisation.
+- `services/ingest/dedup.py`: 3-stage group finder — DOI exact (lowercase) > PMID exact > rapidfuzz `token_set_ratio ≥ 0.92` AND `|Δyear| ≤ 1`, with union-find so transitive matches collapse to one group.
+- `schemas/ingest.py`: `ArticleMetadata` (uniform shape across all ingest surfaces) + `DuplicateGroup` + `MergeRequest` + `ImportFromMetadataRequest/Response` + `DoiLookupRequest` + `PubMedSearchRequest`.
+- `db/models.Article.pmid` (indexed) + `Article.source` (`upload | doi | pubmed | ris | bibtex | manual`), Alembic `0009_ingestion` back-fills existing rows to `source='upload'`.
+- `repositories/articles.merge(keep_id, drop_ids, user_id)`: rewires every article FK across highlights / article_notes / screening_records / rob_assessments / extraction_records / **meta_inputs** (Phase 7.5 cross-link) to the keep row, then deletes the drops. Composite-UNIQUE-bearing tables get a per-row collision check — keep wins, drop is deleted instead of UPDATE-rewired. Refuses cross-user / cross-project / same-id. Single transaction.
+- `routes/ingest.py`: 7 endpoints (`POST /lookup-doi`, `POST /search-pubmed`, `POST /import-from-metadata`, `POST /import-ris`, `POST /import-bibtex`, `GET /duplicates`, `POST /merge-duplicates`). RIS/BibTeX uploads: 2 MiB cap, magic-byte sniff (`TY  -` / `@`).
+
+**Frontend (no new npm deps)**
+
+- `lib/api.ts`: `ArticleSourceSchema`, `ArticleMetadataSchema`, `DuplicateGroupSchema`, `ImportFromMetadataResponseSchema` + `ingestApi` (7 methods). `ArticleSchema` extended with `pmid` + `abstract` + `source`.
+- `hooks/useIngest.ts`: 7 TanStack hooks. Successful imports / merges invalidate both `['articles', projectId]` and `['duplicates', projectId]`.
+- 5 new components — `AddByDoiInline`, `PubMedSearchDialog`, `RisBibtexDropzone` (existing `react-dropzone`), shared `ImportPreviewDialog`, `DuplicatesPanel` (per-group radio-pick keep + merge action).
+- `LibraryPage`: three-action row above `UploadZone`; `DuplicatesPanel` rendered when groups exist.
+
+**Test deltas**
+
+- Backend: 970 pass (was 849 entering 8.6; **+121 across 11 new test files**)
+  - `test_ingest_schema.py` (3) · `test_ingest_crossref.py` (8) · `test_ingest_pubmed.py` (13) · `test_ingest_ris.py` (11) · `test_ingest_bibtex.py` (12) · `test_ingest_dedup.py` (12) · `test_articles_merge.py` (15) · `test_ingest_route_doi.py` (5) · `test_ingest_route_pubmed.py` (5) · `test_ingest_route_import_metadata.py` (7) · `test_ingest_route_ris.py` (5) · `test_ingest_route_bibtex.py` (5) · `test_ingest_route_duplicates.py` (9) · `test_security_ingest_isolation.py` (11)
+- Frontend: 86 pass (was 81; +5 in `ingestApi.test.ts`).
+
+**Acceptance bar**
+
+- ✅ DOI lookup via Crossref (preview before persist).
+- ✅ PubMed esearch + efetch with API-key polite-pool support.
+- ✅ RIS & BibTeX upload + preview (no persist on parse).
+- ✅ Bulk add via `/import-from-metadata` with DOI/PMID dedup-against-existing.
+- ✅ Fuzzy dedup over project library (DOI > PMID > title-fuzzy + year ± 1).
+- ✅ Merge with full FK rewiring (highlights / notes / screening / RoB / extraction / meta-inputs).
+- ✅ Cross-user / cross-project isolation regression (11 tests).
+
+**Decisions**
+
+- **No AI extraction for metadata-only ingest sources** — DOI/PubMed/RIS/BibTeX results are trusted verbatim; the PDF-upload pipeline keeps its existing AI → Crossref enrichment merge.
+- **ImportPreviewDialog two-step gate** — every metadata source funnels through the same preview dialog so users can deselect anything they don't want before persistence.
+- **Union-find for fuzzy duplicates** — transitive matches (A~B, B~C) collapse to one group of three.
+- **`bibtexparser` v1 pin** — v2 introduces a breaking parser rewrite; we pin `<2` until v2 stabilises.
+
+**Out of scope (deferred)**
+
+- EMBASE / Scopus / Web of Science search.
+- Author disambiguation via ORCID.
+- AI-assisted dedup ("are these the same paper?").
+- Auto-attach PDFs from unpaywall on DOI lookup.
+- `defusedxml` hardening (the PubMed XML wire format is bounded by NCBI; no user-controlled XML reaches `ElementTree`).
+- Bulk background re-dedup over the entire library — runs synchronously on every import in v1.
+
+---
+
 ## Phase 9 readiness checklist (autonomous run STOPS here — user check-in required)
 
 Before starting Phase 9 (Electron desktop packaging), the user should decide on / acknowledge:
