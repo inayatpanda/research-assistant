@@ -596,6 +596,7 @@ def replace_cite_tokens_with_markup(
     *,
     style: CitationStyle = "vancouver",
     numbering: Mapping[str, int] | None = None,
+    tag_to_article_id: Mapping[str, str] | None = None,
 ) -> str:
     """Replace `[CITE_xxx]` tokens with `<sup data-citation>` markup.
 
@@ -609,6 +610,12 @@ def replace_cite_tokens_with_markup(
     so reviewers see the broken reference rather than silently swallow it.
     For IEEE style, tags without an entry in `numbering` are also left
     untouched.
+
+    `tag_to_article_id` lets the caller pin the emitted `data-article-id`
+    to a real Article PK when the AI's CITE tag is a short surrogate
+    (e.g. `a1`, `a2`). Without this map the tag itself is used as the
+    attribute value (back-compat behaviour for callers like the
+    statistics push, which use the article id directly as the tag).
     """
     def sub(m: re.Match[str]) -> str:
         tag = m.group(1)
@@ -622,6 +629,7 @@ def replace_cite_tokens_with_markup(
             inner = ieee_inline(n)
         else:
             inner = f"({format_inline(style, article)})"
-        return f'<sup data-citation data-article-id="{escape(tag)}">{inner}</sup>'
+        article_id = (tag_to_article_id or {}).get(tag, tag)
+        return f'<sup data-citation data-article-id="{escape(article_id)}">{inner}</sup>'
 
     return _CITE_RE.sub(sub, text)

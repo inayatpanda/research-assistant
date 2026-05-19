@@ -52,7 +52,11 @@ export function SectionDraftPanel({
       if (!confirm(`${section} already has content. Replace it with this draft?`)) return
     }
     try {
-      await manuscriptApi.upsertSection(projectId, section, text)
+      // E2E-sweep #C1: the server-side draft contains
+      // `<sup data-citation data-article-id="…">` markup. Wrap the
+      // paragraph so the section persists as valid block-level HTML.
+      const paragraph = text.trim().startsWith('<p>') ? text : `<p>${text}</p>`
+      await manuscriptApi.upsertSection(projectId, section, paragraph)
       qc.invalidateQueries({ queryKey: ['manuscript-section', projectId, section] })
       toast.success(`${section} updated`)
       setDraft(null)

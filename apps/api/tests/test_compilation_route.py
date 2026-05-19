@@ -89,10 +89,32 @@ async def test_card_draft_replaces_cite_token(client):
     body = r.json()
     assert body["highlight_id"] == h["id"]
     # FakeAI returns 'This study reported on the topic [CITE_a1].'
-    # The server must have replaced [CITE_a1] → (Author, Year)
+    # The server must have replaced [CITE_a1] → a <sup data-citation>(Author, Year)</sup>
+    # markup so the manuscript bibliography panel can resolve the article.
     assert "[CITE_" not in body["draft"]
     assert "(" in body["draft"] and ")" in body["draft"]
     assert body["used_citation"]
+
+
+# E2E-sweep #C1 — Compile→Manuscript citation regression.
+@pytest.mark.asyncio
+async def test_card_draft_emits_citation_markup_with_real_article_id(client):
+    """The card draft must emit `<sup data-citation data-article-id="…">`
+    markup using the real article PK, not the surrogate cite tag, so the
+    bibliography panel discovers the article when the user pushes the
+    draft into a manuscript section."""
+    project_id, a1, _ = await _setup_two_articles(client)
+    h = (
+        await client.post(
+            f"/api/articles/{a1['id']}/highlights", json=_payload("anterior faster")
+        )
+    ).json()
+    r = await client.post(f"/api/highlights/{h['id']}/draft")
+    assert r.status_code == 200, r.text
+    draft = r.json()["draft"]
+    assert "<sup data-citation" in draft
+    assert f'data-article-id="{a1["id"]}"' in draft
+    assert "[CITE_" not in draft
 
 
 @pytest.mark.asyncio
@@ -109,6 +131,27 @@ async def test_section_draft_aggregates_all_cards(client):
     body = r.json()
     assert "[CITE_" not in body["draft"]
     assert len(body["used_citations"]) == 2
+
+
+# E2E-sweep #C1 — Compile→Manuscript citation regression for section drafts.
+@pytest.mark.asyncio
+async def test_section_draft_emits_citation_markup_with_real_article_ids(client):
+    project_id, a1, a2 = await _setup_two_articles(client)
+    await client.post(
+        f"/api/articles/{a1['id']}/highlights", json=_payload("finding A")
+    )
+    await client.post(
+        f"/api/articles/{a2['id']}/highlights", json=_payload("finding B")
+    )
+    r = await client.post(f"/api/projects/{project_id}/compilation/results/draft")
+    assert r.status_code == 200
+    draft = r.json()["draft"]
+    assert "<sup data-citation" in draft
+    # Both real article PKs must appear in the markup — surrogate tags
+    # (`a1`, `a2`) must not leak through.
+    assert f'data-article-id="{a1["id"]}"' in draft
+    assert f'data-article-id="{a2["id"]}"' in draft
+    assert 'data-article-id="a1"' not in draft
 
 
 @pytest.mark.asyncio

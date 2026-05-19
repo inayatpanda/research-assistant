@@ -39,7 +39,7 @@ from ..services.ai import (
 from ..services.citation_format import (
     extract_used_citations,
     format_inline,
-    replace_cite_tokens,
+    replace_cite_tokens_with_markup,
     tag_for_index,
 )
 
@@ -189,7 +189,16 @@ async def card_draft(
         journal=article.journal,
         doi=article.doi,
     )
-    draft = replace_cite_tokens(raw_draft, {tag: article_for_cite}, style=style)  # type: ignore[arg-type]
+    # E2E-sweep #C1: emit `<sup data-citation data-article-id="…">` markup
+    # rather than plain `(Author, Year)` text so the bibliography panel can
+    # discover the referenced article when the user pushes this draft into
+    # the manuscript. The cite tag (`a1`) is mapped to the real article PK.
+    draft = replace_cite_tokens_with_markup(
+        raw_draft,
+        {tag: article_for_cite},  # type: ignore[dict-item]
+        style=style,
+        tag_to_article_id={tag: article.id},
+    )
     return CardDraftResponse(
         highlight_id=highlight_id,
         draft=draft,
@@ -241,7 +250,18 @@ async def section_draft(
         raise HTTPException(status_code=503, detail="AI provider unavailable") from None
 
     style = project.citation_style
-    draft = replace_cite_tokens(raw_draft, tag_to_article, style=style)  # type: ignore[arg-type]
+    # E2E-sweep #C1: emit `<sup data-citation>` markup with real article
+    # PKs as `data-article-id` so the bibliography panel + reference
+    # integrity panel pick up citations when the user pushes this draft
+    # into a manuscript section. The cite tags (`a1`, `a2`…) are
+    # surrogates that we re-map back to the underlying article ids here.
+    tag_to_article_id = {tag: r.article_id for tag, r in tag_to_row.items()}
+    draft = replace_cite_tokens_with_markup(
+        raw_draft,
+        tag_to_article,  # type: ignore[arg-type]
+        style=style,
+        tag_to_article_id=tag_to_article_id,
+    )
     used = extract_used_citations(raw_draft, tag_to_article, style=style)  # type: ignore[arg-type]
     return SectionDraftResponse(
         project_id=project_id,

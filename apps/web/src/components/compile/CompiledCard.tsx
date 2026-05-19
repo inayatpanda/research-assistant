@@ -63,7 +63,17 @@ export function CompiledCard({
     const section = COLOUR_TO_SECTION[card.colour]
     try {
       const current = await manuscriptApi.getSection(projectId, section)
-      const next = current.content ? `${current.content.trim()} ${text}` : text
+      // E2E-sweep #C1: the server-side draft now contains
+      // `<sup data-citation data-article-id="…">…</sup>` markup. Wrap
+      // each pushed sentence in a `<p>` so the manuscript stays valid
+      // HTML and the new content appears as its own paragraph (not
+      // smushed into the prior one). The bibliography + reference
+      // integrity panels both walk `sup[data-citation]` nodes and will
+      // therefore pick up the article id.
+      const paragraph = `<p>${text}</p>`
+      const next = current.content
+        ? `${current.content.trim()}${paragraph}`
+        : paragraph
       await manuscriptApi.upsertSection(projectId, section, next)
       qc.invalidateQueries({ queryKey: ['manuscript-section', projectId, section] })
       toast.success(`Added to ${section}`)
