@@ -89,9 +89,88 @@ export function IRRPanel({ projectId, datasetId }: Props) {
       <button onClick={() => runMutation.mutate()} disabled={!text || runMutation.isPending}>
         Compute
       </button>
-      {runMutation.data ? (
-        <pre data-testid="irr-result">{JSON.stringify(runMutation.data, null, 2)}</pre>
+      {runMutation.error ? (
+        <div
+          role="alert"
+          data-testid="irr-error"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: '6px 10px',
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          {(runMutation.error as Error).message}
+        </div>
       ) : null}
+      {runMutation.data ? (
+        <IRRResultPanel method={method} data={runMutation.data} />
+      ) : null}
+    </div>
+  )
+}
+
+function IRRResultPanel({
+  method,
+  data,
+}: {
+  method: 'fleiss' | 'krippendorff' | 'weighted_kappa'
+  data: Record<string, unknown>
+}) {
+  // Render the key stats with formatted numbers + a collapsed raw blob.
+  const stat = (k: string): string => {
+    const v = data[k]
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      return Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(2)
+    }
+    return String(v ?? '—')
+  }
+  return (
+    <div data-testid="irr-result" style={{ marginTop: 8 }}>
+      {method === 'fleiss' ? (
+        <dl>
+          <dt>Fleiss κ</dt>
+          <dd>{stat('kappa')}</dd>
+          <dt>Subjects</dt>
+          <dd>{stat('n_subjects')}</dd>
+          <dt>Raters</dt>
+          <dd>{stat('n_raters')}</dd>
+        </dl>
+      ) : null}
+      {method === 'krippendorff' ? (
+        <dl>
+          <dt>Krippendorff α</dt>
+          <dd>{stat('alpha')}</dd>
+          <dt>Level</dt>
+          <dd>{stat('level')}</dd>
+          <dt>Units (subjects)</dt>
+          <dd>{stat('n_units')}</dd>
+        </dl>
+      ) : null}
+      {method === 'weighted_kappa' ? (
+        <dl>
+          <dt>Weighted κ</dt>
+          <dd>{stat('kappa')}</dd>
+          <dt>Weights</dt>
+          <dd>{stat('weights')}</dd>
+          <dt>95% CI</dt>
+          <dd>
+            {typeof data.ci_low === 'number' && typeof data.ci_high === 'number'
+              ? `[${(data.ci_low as number).toFixed(3)}, ${(data.ci_high as number).toFixed(3)}]`
+              : '—'}
+          </dd>
+        </dl>
+      ) : null}
+      <details style={{ marginTop: 6 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12 }}>
+          Raw output
+        </summary>
+        <pre style={{ fontSize: 11, marginTop: 4 }}>
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </details>
     </div>
   )
 }

@@ -54,14 +54,34 @@ export function CACEPanel({ projectId, analysisId, variables }: Props) {
       >
         Compute CACE
       </button>
+      {runMutation.error ? (
+        <div
+          role="alert"
+          data-testid="cace-error"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: '6px 10px',
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          {(runMutation.error as Error).message}
+        </div>
+      ) : null}
       {runMutation.data ? (
-        <dl>
+        <dl data-testid="cace-result">
           <dt>CACE estimate</dt>
           <dd>{runMutation.data.cace_estimate.toFixed(3)}</dd>
           <dt>SE</dt>
           <dd>{runMutation.data.se.toFixed(3)}</dd>
           <dt>p</dt>
-          <dd>{runMutation.data.p.toFixed(4)}</dd>
+          <dd>
+            {runMutation.data.p < 0.001
+              ? '<0.001'
+              : runMutation.data.p.toFixed(4)}
+          </dd>
           <dt>Compliance rate</dt>
           <dd>{(runMutation.data.compliance_rate * 100).toFixed(1)}%</dd>
         </dl>

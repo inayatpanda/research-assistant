@@ -87,6 +87,22 @@ export function SensitivityAnalysisPanel({ projectId, analysisId, variables }: P
       >
         Run
       </button>
+      {runMutation.error ? (
+        <div
+          role="alert"
+          data-testid="sensitivity-error"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: '6px 10px',
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          {(runMutation.error as Error).message}
+        </div>
+      ) : null}
       {runMutation.data ? (
         <div data-testid="sensitivity-result">
           <p>{runMutation.data.note}</p>
@@ -97,7 +113,12 @@ export function SensitivityAnalysisPanel({ projectId, analysisId, variables }: P
             <p>Effect estimate: {runMutation.data.effect_estimate.toFixed(3)}</p>
           ) : null}
           {runMutation.data.p_value !== null ? (
-            <p>p-value: {runMutation.data.p_value.toFixed(4)}</p>
+            <p>
+              p-value:{' '}
+              {runMutation.data.p_value < 0.001
+                ? '<0.001'
+                : runMutation.data.p_value.toFixed(4)}
+            </p>
           ) : null}
         </div>
       ) : null}

@@ -95,10 +95,24 @@ export function ImputationCard({ projectId, datasetId, numericColumns }: Props) 
       >
         Run imputation
       </button>
+      {runMutation.error ? (
+        <div
+          role="alert"
+          data-testid="imputation-error"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: '6px 10px',
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          {(runMutation.error as Error).message}
+        </div>
+      ) : null}
       {runMutation.data ? (
-        <pre data-testid="imputation-result">
-          {JSON.stringify(runMutation.data.pooled_summary, null, 2)}
-        </pre>
+        <ImputationResultPanel pooled={runMutation.data.pooled_summary} />
       ) : null}
       {history ? (
         <details>
@@ -112,6 +126,66 @@ export function ImputationCard({ projectId, datasetId, numericColumns }: Props) 
           </ul>
         </details>
       ) : null}
+    </div>
+  )
+}
+
+function ImputationResultPanel({ pooled }: { pooled: Record<string, unknown> }) {
+  // ``pooled_summary`` from the backend is a dict of column → {pooled_mean,
+  // total_variance, df}. Render as a table; collapse the raw JSON for power
+  // users who want the original blob.
+  const entries = Object.entries(pooled ?? {}).filter(
+    ([, v]) => v && typeof v === 'object',
+  ) as Array<[string, Record<string, unknown>]>
+  if (entries.length === 0) {
+    return (
+      <p data-testid="imputation-result" style={{ marginTop: 8, fontSize: 12 }}>
+        No pooled summary returned.
+      </p>
+    )
+  }
+  const fmt = (v: unknown): string => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return '—'
+    return Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)
+  }
+  return (
+    <div data-testid="imputation-result" style={{ marginTop: 8 }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Column</th>
+            <th style={{ textAlign: 'right', padding: '2px 6px' }}>
+              Pooled mean
+            </th>
+            <th style={{ textAlign: 'right', padding: '2px 6px' }}>
+              Total variance
+            </th>
+            <th style={{ textAlign: 'right', padding: '2px 6px' }}>df</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(([col, summary]) => (
+            <tr key={col}>
+              <td style={{ padding: '2px 6px' }}>{col}</td>
+              <td style={{ textAlign: 'right', padding: '2px 6px' }}>
+                {fmt(summary.pooled_mean)}
+              </td>
+              <td style={{ textAlign: 'right', padding: '2px 6px' }}>
+                {fmt(summary.total_variance)}
+              </td>
+              <td style={{ textAlign: 'right', padding: '2px 6px' }}>
+                {fmt(summary.df)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <details style={{ marginTop: 6 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 11 }}>Raw output</summary>
+        <pre style={{ fontSize: 10, marginTop: 4 }}>
+          {JSON.stringify(pooled, null, 2)}
+        </pre>
+      </details>
     </div>
   )
 }
