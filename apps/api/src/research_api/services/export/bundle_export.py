@@ -43,8 +43,11 @@ from ...db.models import (
     ManuscriptComment,
     ManuscriptSection,
     ManuscriptSnapshot,
+    MeshTerm,
     MetaAnalysis,
     MetaInput,
+    NarrativeSynthesisEntry,
+    OutcomeInstrument,
     Project,
     ProjectFrontmatter,
     ProsperoDraft,
@@ -53,6 +56,7 @@ from ...db.models import (
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
+    SearchStrategy,
 )
 
 SCHEMA_VERSION = 1
@@ -106,6 +110,14 @@ class BundleInputs:
     # Phase 15 (MP15) — Living review job (hits intentionally excluded; they're
     # transient and reset on import).
     living_review_job: LivingReviewJob | None = None
+    # Phase 19 (MP19) — SR depth: MeSH cache + search strategies + narrative
+    # synthesis + outcome instruments.
+    mesh_terms: list[MeshTerm] = field(default_factory=list)
+    search_strategies: list[SearchStrategy] = field(default_factory=list)
+    narrative_synthesis_entries: list[NarrativeSynthesisEntry] = field(
+        default_factory=list
+    )
+    outcome_instruments: list[OutcomeInstrument] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -213,4 +225,14 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
             if inputs.living_review_job is not None
             else None
         ),
+        "mesh_terms": [_row_to_dict(m) for m in inputs.mesh_terms],
+        "search_strategies": [
+            _row_to_dict(s) for s in inputs.search_strategies
+        ],
+        "narrative_synthesis_entries": [
+            _row_to_dict(n) for n in inputs.narrative_synthesis_entries
+        ],
+        "outcome_instruments": [
+            _row_to_dict(o) for o in inputs.outcome_instruments
+        ],
     }

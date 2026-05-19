@@ -11,7 +11,20 @@ ExclusionCategory = Literal[
     "population", "intervention", "outcome",
     "study_design", "language", "duplicate", "other",
 ]
-RoBTool = Literal["rob2", "robins_i", "nos", "amstar2"]
+RoBTool = Literal[
+    "rob2",
+    "robins_i",
+    "nos",
+    "amstar2",
+    # Phase 19 (MP19) — 7 JBI critical appraisal tools.
+    "jbi_case_series",
+    "jbi_case_report",
+    "jbi_cohort",
+    "jbi_cross_sectional",
+    "jbi_quasi_experimental",
+    "jbi_diagnostic_accuracy",
+    "jbi_prevalence",
+]
 RoBJudgement = Literal["low", "some_concerns", "high", "critical", "unclear"]
 DatabaseName = Literal[
     "PubMed", "Embase", "Cochrane", "Scopus",
@@ -30,6 +43,8 @@ class ReviewRead(BaseModel):
     pico_outcome: str | None
     eligibility_inclusion: str | None
     eligibility_exclusion: str | None
+    # Phase 19 (MP19) — Mixed-design RoB.
+    tool_per_study: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -41,6 +56,7 @@ class ReviewUpdate(BaseModel):
     pico_outcome: str | None = None
     eligibility_inclusion: str | None = None
     eligibility_exclusion: str | None = None
+    tool_per_study: bool | None = None
 
 
 class SearchRecordCreate(BaseModel):

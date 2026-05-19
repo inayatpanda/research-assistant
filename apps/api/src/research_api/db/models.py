@@ -322,6 +322,10 @@ class Review(Base):
     pico_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
     eligibility_inclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
     eligibility_exclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 19 (MP19) — Mixed-design SR: per-study RoB tool selection.
+    tool_per_study: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1240,4 +1244,158 @@ class ManuscriptComment(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+
+class MeshTerm(Base):
+    """Phase 19 (MP19) — Cached NCBI MeSH descriptor.
+
+    Each project keeps its own cache; the descriptor_ui (e.g. ``D013313``)
+    is unique within a project. Source distinguishes between user-typed
+    custom terms and NCBI lookups so the UI can flag deprecated cache rows
+    for refresh.
+    """
+
+    __tablename__ = "mesh_terms"
+    __table_args__ = (
+        Index(
+            "uq_mesh_terms_project_ui",
+            "project_id", "descriptor_ui",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    descriptor_ui: Mapped[str] = mapped_column(String(32), nullable=False)
+    descriptor_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    scope_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tree_numbers: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    entry_terms: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), default="ncbi_lookup", nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SearchStrategy(Base):
+    """Phase 19 (MP19) — Per-review query builder row.
+
+    ``database`` is one of the canonical literal set (validated at the
+    Pydantic boundary). ``mesh_term_ids`` is a list of ``mesh_terms.id``
+    that the user pinned into this query. ``translated_from_id`` is a
+    self-FK that tracks cross-DB translation lineage (e.g. an Embase
+    query auto-derived from a PubMed source). ``warnings`` captures
+    untranslatable fragments from the cross-DB translator so the UI can
+    surface them before the user runs the query.
+    """
+
+    __tablename__ = "search_strategies"
+    __table_args__ = (
+        Index("ix_search_strategies_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    database: Mapped[str] = mapped_column(String(32), nullable=False)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    mesh_term_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    translated_from_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("search_strategies.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    warnings: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class NarrativeSynthesisEntry(Base):
+    """Phase 19 (MP19) — Per-outcome qualitative summary row.
+
+    ``study_citations`` is a JSON list of article_ids cited in this row.
+    ``narrative_html`` carries trusted HTML edited by the user (the same
+    sanitisation rules as manuscript sections — DOMPurify on the FE).
+    """
+
+    __tablename__ = "narrative_synthesis_entries"
+    __table_args__ = (
+        Index("ix_narrative_synthesis_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    outcome_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    instrument: Mapped[str] = mapped_column(String(255), nullable=False)
+    range_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    direction: Mapped[str] = mapped_column(
+        String(20), default="neutral", nullable=False
+    )
+    narrative_html: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    study_citations: Mapped[list[str]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class OutcomeInstrument(Base):
+    """Phase 19 (MP19) — Studies x instruments many-to-many comparison row.
+
+    ``study_values`` is a list of
+    ``{article_id, group_label, value, sd_or_ci, n}`` entries so a single
+    instrument row can carry multiple per-study cells without spawning a
+    second-level table.
+    """
+
+    __tablename__ = "outcome_instruments"
+    __table_args__ = (
+        Index("ix_outcome_instruments_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    outcome_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    instrument_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    score_range_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_range_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mid: Mapped[float | None] = mapped_column(Float, nullable=True)
+    study_values: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -3017,3 +3017,433 @@ export const livingReviewApi = {
     return ArticleSchema.parse(r.data)
   },
 }
+
+// ── Phase 19 (MP19): MeSH + Search strategies + Narrative synthesis + Outcome instruments + Meta extensions ──
+
+export const MeshSearchHitSchema = z.object({
+  descriptor_ui: z.string(),
+  descriptor_name: z.string(),
+  scope_note: z.string().nullable().optional(),
+  tree_numbers: z.array(z.string()).default([]),
+  entry_terms: z.array(z.string()).default([]),
+})
+export type MeshSearchHit = z.infer<typeof MeshSearchHitSchema>
+
+export const MeshSearchResponseSchema = z.object({
+  query: z.string(),
+  hits: z.array(MeshSearchHitSchema),
+})
+export type MeshSearchResponse = z.infer<typeof MeshSearchResponseSchema>
+
+export const MeshTermReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  descriptor_ui: z.string(),
+  descriptor_name: z.string(),
+  scope_note: z.string().nullable(),
+  tree_numbers: z.array(z.string()),
+  entry_terms: z.array(z.string()),
+  source: z.string(),
+  created_at: z.string(),
+})
+export type MeshTermRead = z.infer<typeof MeshTermReadSchema>
+
+export type MeshTermCreate = {
+  descriptor_ui: string
+  descriptor_name: string
+  scope_note?: string | null
+  tree_numbers: string[]
+  entry_terms: string[]
+  source?: 'user_added' | 'ncbi_lookup'
+}
+
+export const meshApi = {
+  search: async (
+    projectId: string,
+    q: string,
+    retmax = 20,
+    cache = true,
+  ): Promise<MeshSearchResponse> => {
+    const r = await api.get(`/api/projects/${projectId}/review/mesh/search`, {
+      params: { q, retmax, cache },
+    })
+    return MeshSearchResponseSchema.parse(r.data)
+  },
+  suggest: async (
+    projectId: string,
+    body: Partial<{
+      population: string
+      intervention: string
+      comparator: string
+      outcome: string
+    }> = {},
+    retmax = 10,
+  ): Promise<MeshSearchResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/mesh/suggest`,
+      body,
+      { params: { retmax } },
+    )
+    return MeshSearchResponseSchema.parse(r.data)
+  },
+  listCache: async (projectId: string): Promise<MeshTermRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/review/mesh/cache`)
+    return z.array(MeshTermReadSchema).parse(r.data)
+  },
+  upsertCache: async (
+    projectId: string,
+    body: MeshTermCreate,
+  ): Promise<MeshTermRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/mesh/cache`,
+      body,
+    )
+    return MeshTermReadSchema.parse(r.data)
+  },
+  deleteCache: async (projectId: string, meshId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/review/mesh/cache/${meshId}`)
+  },
+}
+
+export const SearchDatabaseSchema = z.enum([
+  'PubMed',
+  'Embase',
+  'Cochrane',
+  'Web of Science',
+  'Scopus',
+  'Other',
+])
+export type SearchDatabase = z.infer<typeof SearchDatabaseSchema>
+
+export const SearchStrategyReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  review_id: z.string(),
+  name: z.string(),
+  database: z.string(),
+  query_text: z.string(),
+  mesh_term_ids: z.array(z.string()),
+  translated_from_id: z.string().nullable(),
+  is_locked: z.boolean(),
+  warnings: z.array(z.string()).nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type SearchStrategyRead = z.infer<typeof SearchStrategyReadSchema>
+
+export type SearchStrategyCreate = {
+  name: string
+  database: SearchDatabase
+  query_text: string
+  mesh_term_ids: string[]
+  translated_from_id?: string | null
+  is_locked?: boolean
+}
+
+export type SearchStrategyUpdate = Partial<{
+  name: string
+  database: SearchDatabase
+  query_text: string
+  mesh_term_ids: string[]
+  is_locked: boolean
+}>
+
+export const TranslationTargetSchema = z.enum(['embase', 'cochrane', 'wos'])
+export type TranslationTarget = z.infer<typeof TranslationTargetSchema>
+
+export const TranslateResponseSchema = z.object({
+  translated_query: z.string(),
+  warnings: z.array(z.string()),
+  target: TranslationTargetSchema,
+})
+export type TranslateResponse = z.infer<typeof TranslateResponseSchema>
+
+export const searchStrategiesApi = {
+  list: async (projectId: string): Promise<SearchStrategyRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/review/search-strategies`,
+    )
+    return z.array(SearchStrategyReadSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: SearchStrategyCreate,
+  ): Promise<SearchStrategyRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/search-strategies`,
+      body,
+    )
+    return SearchStrategyReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    id: string,
+    body: SearchStrategyUpdate,
+  ): Promise<SearchStrategyRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/review/search-strategies/${id}`,
+      body,
+    )
+    return SearchStrategyReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string, id: string): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/review/search-strategies/${id}`,
+    )
+  },
+  translate: async (
+    projectId: string,
+    id: string,
+    to: TranslationTarget,
+    persist = false,
+  ): Promise<TranslateResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/search-strategies/${id}/translate`,
+      null,
+      { params: { to, persist } },
+    )
+    return TranslateResponseSchema.parse(r.data)
+  },
+}
+
+export const NarrativeDirectionSchema = z.enum([
+  'higher_better',
+  'lower_better',
+  'neutral',
+])
+export type NarrativeDirection = z.infer<typeof NarrativeDirectionSchema>
+
+export const NarrativeSynthesisReadSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  outcome_label: z.string(),
+  instrument: z.string(),
+  range_text: z.string().nullable(),
+  direction: z.string(),
+  narrative_html: z.string(),
+  study_citations: z.array(z.string()),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type NarrativeSynthesisRead = z.infer<typeof NarrativeSynthesisReadSchema>
+
+export type NarrativeSynthesisCreate = {
+  outcome_label: string
+  instrument: string
+  range_text?: string | null
+  direction?: NarrativeDirection
+  narrative_html?: string
+  study_citations: string[]
+}
+
+export type NarrativeSynthesisUpdate = Partial<NarrativeSynthesisCreate>
+
+export const narrativeSynthesisApi = {
+  list: async (projectId: string): Promise<NarrativeSynthesisRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/review/narrative-synthesis`,
+    )
+    return z.array(NarrativeSynthesisReadSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: NarrativeSynthesisCreate,
+  ): Promise<NarrativeSynthesisRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/narrative-synthesis`,
+      body,
+    )
+    return NarrativeSynthesisReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    id: string,
+    body: NarrativeSynthesisUpdate,
+  ): Promise<NarrativeSynthesisRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/review/narrative-synthesis/${id}`,
+      body,
+    )
+    return NarrativeSynthesisReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string, id: string): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/review/narrative-synthesis/${id}`,
+    )
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/narrative-synthesis/push`,
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const StudyValueEntrySchema = z.object({
+  article_id: z.string(),
+  group_label: z.string(),
+  value: z.number().nullable().optional(),
+  sd_or_ci: z.string().nullable().optional(),
+  n: z.number().int().nullable().optional(),
+})
+export type StudyValueEntry = z.infer<typeof StudyValueEntrySchema>
+
+export const OutcomeInstrumentReadSchema = z.object({
+  id: z.string(),
+  review_id: z.string(),
+  outcome_label: z.string(),
+  instrument_name: z.string(),
+  score_range_low: z.number().nullable(),
+  score_range_high: z.number().nullable(),
+  mid: z.number().nullable(),
+  study_values: z.array(z.record(z.string(), z.unknown())),
+  created_at: z.string(),
+})
+export type OutcomeInstrumentRead = z.infer<typeof OutcomeInstrumentReadSchema>
+
+export type OutcomeInstrumentCreate = {
+  outcome_label: string
+  instrument_name: string
+  score_range_low?: number | null
+  score_range_high?: number | null
+  mid?: number | null
+  study_values: StudyValueEntry[]
+}
+
+export type OutcomeInstrumentUpdate = Partial<OutcomeInstrumentCreate>
+
+export const outcomeInstrumentsApi = {
+  list: async (projectId: string): Promise<OutcomeInstrumentRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/review/outcome-instruments`,
+    )
+    return z.array(OutcomeInstrumentReadSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: OutcomeInstrumentCreate,
+  ): Promise<OutcomeInstrumentRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/outcome-instruments`,
+      body,
+    )
+    return OutcomeInstrumentReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    id: string,
+    body: OutcomeInstrumentUpdate,
+  ): Promise<OutcomeInstrumentRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/review/outcome-instruments/${id}`,
+      body,
+    )
+    return OutcomeInstrumentReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string, id: string): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/review/outcome-instruments/${id}`,
+    )
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/outcome-instruments/push`,
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+export const PublicationBiasTestSchema = z.object({
+  method: z.string(),
+  statistic: z.number().nullable(),
+  p: z.number().nullable(),
+  note: z.string().nullable().optional(),
+})
+export type PublicationBiasTest = z.infer<typeof PublicationBiasTestSchema>
+
+export const PublicationBiasResponseSchema = z.object({
+  metric: z.string(),
+  k: z.number().int(),
+  recommended: z.string(),
+  tests: z.array(PublicationBiasTestSchema),
+})
+export type PublicationBiasResponse = z.infer<typeof PublicationBiasResponseSchema>
+
+export const LeaveOneOutRowSchema = z.object({
+  excluded_id: z.string(),
+  pooled_effect: z.number(),
+  ci_low: z.number(),
+  ci_high: z.number(),
+  i2: z.number(),
+})
+export type LeaveOneOutRow = z.infer<typeof LeaveOneOutRowSchema>
+
+export const LeaveOneOutResponseSchema = z.object({
+  model: z.string(),
+  metric: z.string(),
+  k: z.number().int(),
+  rows: z.array(LeaveOneOutRowSchema),
+})
+export type LeaveOneOutResponse = z.infer<typeof LeaveOneOutResponseSchema>
+
+export const SubgroupInteractionResponseSchema = z.object({
+  q_between: z.number(),
+  df: z.number().int(),
+  p_interaction: z.number(),
+})
+export type SubgroupInteractionResponse = z.infer<typeof SubgroupInteractionResponseSchema>
+
+export const MetaRegressionResponseSchema = z.object({
+  intercept: z.number(),
+  coef: z.number(),
+  se: z.number(),
+  p: z.number(),
+  r2: z.number(),
+  n: z.number().int(),
+  bubble_plot_png_base64: z.string(),
+})
+export type MetaRegressionResponse = z.infer<typeof MetaRegressionResponseSchema>
+
+export const metaExtensionsApi = {
+  publicationBias: async (
+    projectId: string,
+    metaId: string,
+  ): Promise<PublicationBiasResponse> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/publication-bias`,
+    )
+    return PublicationBiasResponseSchema.parse(r.data)
+  },
+  leaveOneOut: async (
+    projectId: string,
+    metaId: string,
+  ): Promise<LeaveOneOutResponse> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/leave-one-out`,
+    )
+    return LeaveOneOutResponseSchema.parse(r.data)
+  },
+  leaveOneOutPngUrl: (projectId: string, metaId: string): string =>
+    `${API_URL}/api/projects/${projectId}/reviews/meta/${metaId}/leave-one-out.png`,
+  subgroupInteraction: async (
+    projectId: string,
+    metaId: string,
+  ): Promise<SubgroupInteractionResponse> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/subgroup-interaction`,
+    )
+    return SubgroupInteractionResponseSchema.parse(r.data)
+  },
+  metaRegression: async (
+    projectId: string,
+    metaId: string,
+    moderator: number[],
+    moderator_label = 'Moderator',
+  ): Promise<MetaRegressionResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/reviews/meta/${metaId}/meta-regression`,
+      { moderator, moderator_label },
+    )
+    return MetaRegressionResponseSchema.parse(r.data)
+  },
+}

@@ -402,7 +402,8 @@ async def test_rob_tools_returns_four(client):
     r = await client.get(f"/api/projects/{pid}/reviews/rob/tools")
     assert r.status_code == 200
     keys = {t["key"] for t in r.json()}
-    assert keys == {"rob2", "robins_i", "nos", "amstar2"}
+    # Phase 19 extended the catalogue with 7 JBI tools.
+    assert {"rob2", "robins_i", "nos", "amstar2"}.issubset(keys)
 
 
 @pytest.mark.asyncio

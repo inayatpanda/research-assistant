@@ -31,8 +31,12 @@ from .routes.projects import router as projects_router
 from .routes.prospero import router as prospero_router
 from .routes.psm import router as psm_router
 from .routes.reviewer_response import router as reviewer_response_router
+from .routes.mesh import router as mesh_router
+from .routes.meta_extensions import router as meta_extensions_router
 from .routes.reviews import router as reviews_router
 from .routes.reviews_meta import router as reviews_meta_router
+from .routes.search_strategies import router as search_strategies_router
+from .routes.sr_depth import router as sr_depth_router
 from .routes.snapshots import router as snapshots_router
 from .routes.transformations import router as transformations_router
 from .routes.cross_dataset import router as cross_dataset_router
@@ -99,3 +103,7 @@ app.include_router(analysis_plans_router, prefix="/api")
 app.include_router(grade_router, prefix="/api")
 app.include_router(prospero_router, prefix="/api")
 app.include_router(living_router, prefix="/api")
+app.include_router(mesh_router, prefix="/api")
+app.include_router(search_strategies_router, prefix="/api")
+app.include_router(sr_depth_router, prefix="/api")
+app.include_router(meta_extensions_router, prefix="/api")

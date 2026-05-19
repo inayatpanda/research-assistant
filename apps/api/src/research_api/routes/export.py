@@ -45,11 +45,15 @@ from ..db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
     ManuscriptSnapshot,
+    MeshTerm,
     MetaAnalysis,
     MetaInput,
+    NarrativeSynthesisEntry,
+    OutcomeInstrument,
     Project,
     ProjectFrontmatter,
     ProsperoDraft,
@@ -58,6 +62,7 @@ from ..db.models import (
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
+    SearchStrategy,
 )
 from ..repositories.articles import SqliteArticleRepository
 from ..repositories.manuscript_sections import SqliteManuscriptSectionRepository
@@ -604,6 +609,46 @@ async def _collect_bundle_inputs(
             )
         )).scalars().all())
 
+    # Phase 15 — Living review job (per-review).
+    living_review_job: LivingReviewJob | None = None
+    if review is not None:
+        living_review_job = (await session.execute(
+            select(LivingReviewJob).where(
+                LivingReviewJob.review_id == review.id,
+                LivingReviewJob.user_id == user_id,
+            )
+        )).scalar_one_or_none()
+
+    # Phase 19 — SR depth tables.
+    mesh_terms = list((await session.execute(
+        select(MeshTerm).where(
+            MeshTerm.project_id == project_id,
+            MeshTerm.user_id == user_id,
+        )
+    )).scalars().all())
+    search_strategies: list[SearchStrategy] = []
+    narrative_entries: list[NarrativeSynthesisEntry] = []
+    outcome_instruments: list[OutcomeInstrument] = []
+    if review is not None:
+        search_strategies = list((await session.execute(
+            select(SearchStrategy).where(
+                SearchStrategy.review_id == review.id,
+                SearchStrategy.user_id == user_id,
+            )
+        )).scalars().all())
+        narrative_entries = list((await session.execute(
+            select(NarrativeSynthesisEntry).where(
+                NarrativeSynthesisEntry.review_id == review.id,
+                NarrativeSynthesisEntry.user_id == user_id,
+            )
+        )).scalars().all())
+        outcome_instruments = list((await session.execute(
+            select(OutcomeInstrument).where(
+                OutcomeInstrument.review_id == review.id,
+                OutcomeInstrument.user_id == user_id,
+            )
+        )).scalars().all())
+
     return BundleInputs(
         project=project,
         articles=articles,
@@ -639,6 +684,11 @@ async def _collect_bundle_inputs(
         analysis_plan_runs=analysis_plan_runs,
         grade_assessments=grade_assessments,
         prospero_draft=prospero_draft,
+        living_review_job=living_review_job,
+        mesh_terms=mesh_terms,
+        search_strategies=search_strategies,
+        narrative_synthesis_entries=narrative_entries,
+        outcome_instruments=outcome_instruments,
     )
 
 

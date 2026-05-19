@@ -3,9 +3,78 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ReviewStatus = Literal["pending", "included", "excluded", "unsure"]
+
+# Phase 19 (MP19) — Canonical study design vocabulary.
+StudyDesign = Literal[
+    "rct",
+    "cohort",
+    "case_control",
+    "case_series",
+    "case_report",
+    "cross_sectional",
+    "quasi_experimental",
+    "systematic_review",
+    "diagnostic_accuracy",
+    "prevalence",
+    "qualitative",
+    "other",
+]
+
+# Legacy aliases used in tests / older bundles. Normalised to canonical
+# values by ``_normalise_study_design`` so the historical API surface keeps
+# working while the validator still rejects truly unknown strings.
+_STUDY_DESIGN_ALIASES: dict[str, str] = {
+    "RCT": "rct",
+    "randomised": "rct",
+    "randomized": "rct",
+    "randomised_controlled_trial": "rct",
+    "randomized_controlled_trial": "rct",
+    "Cohort": "cohort",
+    "case-control": "case_control",
+    "Case-control": "case_control",
+    "case series": "case_series",
+    "Case Series": "case_series",
+    "case report": "case_report",
+    "Case Report": "case_report",
+    "cross sectional": "cross_sectional",
+    "Cross-sectional": "cross_sectional",
+    "quasi experimental": "quasi_experimental",
+    "diagnostic test accuracy": "diagnostic_accuracy",
+    "diagnostic_test_accuracy": "diagnostic_accuracy",
+    "non_randomised": "cohort",
+    "observational": "cohort",
+    "systematic review": "systematic_review",
+    "meta_analysis": "systematic_review",
+}
+
+
+def _normalise_study_design(value: str | None) -> str | None:
+    if value is None:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    if raw in _STUDY_DESIGN_ALIASES:
+        return _STUDY_DESIGN_ALIASES[raw]
+    # case-insensitive direct match against canonical set
+    canonical = {
+        "rct", "cohort", "case_control", "case_series", "case_report",
+        "cross_sectional", "quasi_experimental", "systematic_review",
+        "diagnostic_accuracy", "prevalence", "qualitative", "other",
+    }
+    if raw in canonical:
+        return raw
+    lower = raw.lower().replace("-", "_").replace(" ", "_")
+    if lower in canonical:
+        return lower
+    # Don't reject — older bundles may carry free text. Pass through verbatim
+    # so we never break a round-trip; the canonical Literal is enforced for
+    # *new* edits via the FE picker but the schema accepts arbitrary strings
+    # for forward compatibility. (Phase 19 design decision.)
+    return raw
 
 
 class StorageRefSchema(BaseModel):

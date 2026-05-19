@@ -13,7 +13,8 @@ from research_api.services.review.rob_rules import (
 
 
 def test_catalogue_has_four_tools():
-    assert set(CATALOGUE.keys()) == {"rob2", "robins_i", "nos", "amstar2"}
+    # Phase 19 (MP19) extended the catalogue with 7 JBI tools.
+    assert {"rob2", "robins_i", "nos", "amstar2"}.issubset(set(CATALOGUE.keys()))
     for tool in CATALOGUE.values():
         assert isinstance(tool, Tool)
         assert tool.label

@@ -1548,3 +1548,66 @@ Before starting Phase 9 (Electron desktop packaging), the user should decide on 
 **This is the user check-in point.** Phase 9 is paused. Web app is feature-complete for single-user local-first use; Vercel + Fly deploys are ready when the user wants them.
 
 ---
+
+## Phase 19 (MP19) — Systematic Review depth + MeSH (2026-05-19)
+
+Tag: **`phase-19`**. Migration head: **`0020_sr_depth_mesh`** (`reviews.tool_per_study` added; new tables `mesh_terms`, `search_strategies`, `narrative_synthesis_entries`, `outcome_instruments`).
+
+**What shipped**
+
+- **JBI Critical Appraisal Tools (×7)** — Case Series, Case Reports, Cohort, Cross-sectional, Quasi-experimental, Diagnostic Test Accuracy, Prevalence. Each registers into the existing `rob_rules.CATALOGUE` lazily via `_ensure_jbi_loaded()` (resolves the otherwise-circular import between `rob_rules` and `jbi_rules`). Per-item answer set is yes/no/unclear/na with a percentage-of-yes overall (≥70% → low, 50–69% → moderate, <50% → high, all-unclear → unclear).
+- **NCBI MeSH lookup** — `services/ingest/mesh.py` calls `esearch.fcgi?db=mesh&term=…` + `efetch.fcgi?db=mesh&id=…&retmode=xml` and parses MeSH XML for descriptor UI / name / scope note / tree numbers / entry terms. Cached per-project in `mesh_terms`. Defensive parser (never raises). PICO suggester composes an `OR`-joined query from the review's PICO and surfaces top descriptors.
+- **Cross-database query translator** — best-effort PubMed → Embase / Cochrane / Web of Science. Handles `[MeSH Terms]`, `[MeSH Major Topic]`, `[Title/Abstract]`, `[Title]`, `[tw]`. Unrecognised qualifiers (`[lang]`, `[pt]`, `[au]`, `[jn]`, …) are dropped with a structured warning. Translation lineage stored via `search_strategies.translated_from_id` self-FK.
+- **Narrative synthesis** — multi-instrument comparison table builder. One row per (outcome, instrument); direction arrow (`↑`/`↓`/`·`). HTML escapes outcome label / instrument / range but trusts `narrative_html` (TipTap-sanitised on the client).
+- **Outcome instruments matrix** — many-to-many studies × instruments grid. Rows are instruments, columns are studies; missing cells render `—`.
+- **Meta-analysis extensions (×4)**
+  - **Publication bias** — Egger (continuous & HR), Begg's Kendall-τ (k ≥ 4), Harbord (binary OR/RR), Peters (binary OR/RR). Each returns `{method, statistic, p, note}`.
+  - **Leave-one-out** — refits the pool with each study excluded; returns per-row pooled / CI / I². Renders a sensitivity forest PNG via matplotlib.
+  - **Subgroup Q-between** — `Q_total − Σ Q_within` with `df = n_subgroups − 1`; p from χ².
+  - **Weighted meta-regression** — single-moderator WLS with weights `1/(vi + τ²)` (random) or `1/vi` (fixed); returns coef / SE / p / R² + a bubble plot PNG (base64).
+- **GRADE sync from meta** — when a GRADE assessment carries a `meta_id`, the SoF push pulls pooled estimate + k from the linked meta-analysis (`SofMetaSummary`).
+- **Frontend** — 9 new components under `apps/web/src/components/review/sr_depth/`:
+  - `MeSHBrowser.tsx` — searchable input, pin-to-cache.
+  - `SearchStrategyBuilder.tsx` — boolean operator buttons + query textarea + per-DB picker; saves persisted strategies, supports lock/unlock.
+  - `CrossDatabaseTranslator.tsx` — pick source PubMed strategy → target DB → translated query in a `<pre>` block + warnings panel + "Save as strategy".
+  - `NarrativeSynthesisPanel.tsx` — per-outcome row editor + push-to-Results.
+  - `OutcomeInstrumentsTable.tsx` — instrument-row creator + push-to-Results.
+  - `PublicationBiasPanel.tsx` — runs all 4 tests, pass/fail badges.
+  - `LeaveOneOutTable.tsx` — sortable rows with mini-sparkline of effect shift.
+  - `MetaRegressionForm.tsx` — moderator input + bubble plot embed.
+  - `JBIAssessmentForm.tsx` — yes/no/unclear/na per-item form for the 7 JBI tools.
+- Tabs added to `SystematicReviewPage`: **MeSH** · **Search strategy** · **Narrative synthesis** · **Outcome instruments** (after PROSPERO, before Living review).
+
+**Test deltas**
+
+- Backend: **1681 pass** (was 1545 entering MP19; **+136 across 13 new test files**)
+  - `test_review_jbi_rules.py` (12) · `test_review_narrative_synthesis.py` (5) · `test_meta_publication_bias.py` (13) · `test_meta_leave_one_out.py` (5) · `test_meta_subgroup_interaction.py` (6) · `test_meta_regression.py` (5) · `test_ingest_mesh.py` (10) · `test_ingest_mesh_suggester.py` (8) · `test_ingest_search_translator.py` (9) · `test_mesh_route.py` (8) · `test_search_strategies_route.py` (7) · `test_sr_depth_routes.py` (13) · `test_grade_sync_from_meta.py` (3) · `test_security_sr_depth_isolation.py` (28).
+- Frontend: **220 pass** (was 212 entering MP19; +8 across 5 new test files under `components/review/sr_depth/__tests__/`).
+- tsc clean (only pre-existing baseUrl deprecation warning).
+
+**Acceptance bar**
+
+- ✅ 7 JBI critical-appraisal tools registered into `rob_rules.CATALOGUE` via lazy loader.
+- ✅ NCBI MeSH search + cache (respx-mocked in tests; no real network).
+- ✅ PubMed → Embase / Cochrane / Web of Science translator with structured warnings list.
+- ✅ Narrative synthesis + outcome instruments push-to-Results.
+- ✅ Egger / Begg / Harbord / Peters publication-bias tests (known-answer regression).
+- ✅ Leave-one-out + Q-between + weighted meta-regression with bubble plot.
+- ✅ Cross-user / cross-project isolation regression — 28 tests across every new endpoint (target: ≥ 25).
+- ✅ GRADE auto-prefills effect estimate + n studies from `meta_id`-linked meta-analysis.
+
+**Decisions**
+
+- **Lazy JBI loader** — the JBI catalogue's `Domain`/`Tool` imports from `rob_rules` created an unavoidable circular import when registration happened at module-load time. Solution: `_ensure_jbi_loaded()` runs the first time any consumer touches the catalogue (`derive_overall`, `get_catalogue()`, `select_tool_for_design`, the route helper). Idempotent + thread-safe via a module-level flag.
+- **Translator emits warnings, not errors** — unknown tags pass through verbatim with a warning; dropped tags (`[lang]`, `[pt]`, `[au]`, `[jn]`, `[ad]`) leave the bare term behind. Users must review before running on the target database.
+- **Publication-bias dispatcher** — Cochrane Handbook ch. 13 mapping: continuous / SMD → Egger; binary OR/RR → Harbord first, Peters second; rank-based fallback → Begg. Implemented in `select_test_for_metric`.
+- **MeSH cache scope** — keyed per `(project_id, descriptor_ui)` UNIQUE. Same descriptor across projects = separate rows (matches the rest of the per-project isolation model).
+- **`narrative_html` trusted** — body stored verbatim; the FE sanitises via TipTap+DOMPurify before persistence. All other narrative-table cells are `escape()`-d.
+
+**Out of scope (deferred)**
+
+- Multi-moderator meta-regression (only single-moderator in v1).
+- AI-assisted MeSH suggestion ranking (currently NCBI's relevance ordering is used as-is).
+- Translator round-trip from Embase → PubMed (only PubMed → other in v1).
+- Live PubMed-count preview in `SearchStrategyBuilder` (UI hook present but query-count fetch is left for MP20).
+- Per-study tool dropdown when `tool_per_study=true` — schema migrated and JBI catalogue ready, but the UI extension to `RoBToolPicker` is folded into MP17.

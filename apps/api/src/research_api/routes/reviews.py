@@ -322,7 +322,7 @@ async def ai_suggest_screening(
 @router.get("/projects/{project_id}/reviews/rob/tools")
 async def list_rob_tools(project_id: str) -> list[dict]:
     out: list[dict] = []
-    for key, tool in rob_rules.CATALOGUE.items():
+    for key, tool in rob_rules.get_catalogue().items():
         out.append(
             {
                 "key": key,
@@ -589,6 +589,9 @@ _BLOCK_TAG_BY_CLASS: dict[str, str] = {
     "consort-flow": "figure",
     # Phase 14 (MP14) — Summary-of-Findings (SoF) table for GRADE outcomes.
     "sof-table": "table",
+    # Phase 19 (MP19) — narrative synthesis + outcome instruments push hooks.
+    "narrative-synthesis-table": "table",
+    "outcome-instruments-table": "table",
 }
 
 

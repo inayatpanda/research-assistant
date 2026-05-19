@@ -8,6 +8,11 @@ import { ExtractionTable } from '@/components/review/ExtractionTable'
 import { LivingReviewPanel } from '@/components/review/LivingReviewPanel'
 import { PRISMAFlowChart } from '@/components/review/PRISMAFlowChart'
 import { PROSPEROForm } from '@/components/review/PROSPEROForm'
+import { CrossDatabaseTranslator } from '@/components/review/sr_depth/CrossDatabaseTranslator'
+import { MeSHBrowser } from '@/components/review/sr_depth/MeSHBrowser'
+import { NarrativeSynthesisPanel } from '@/components/review/sr_depth/NarrativeSynthesisPanel'
+import { OutcomeInstrumentsTable } from '@/components/review/sr_depth/OutcomeInstrumentsTable'
+import { SearchStrategyBuilder } from '@/components/review/sr_depth/SearchStrategyBuilder'
 import { ReviewHeader } from '@/components/review/ReviewHeader'
 import { GRADEAssessmentForm } from '@/components/review/grade/GRADEAssessmentForm'
 import { SoFTable } from '@/components/review/grade/SoFTable'
@@ -53,6 +58,10 @@ type ReviewTab =
   | 'prisma'
   | 'grade'
   | 'prospero'
+  | 'mesh'
+  | 'strategy'
+  | 'narrative'
+  | 'instruments'
   | 'living'
 
 const TABS: { id: ReviewTab; label: string }[] = [
@@ -64,6 +73,10 @@ const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'prisma', label: 'PRISMA flow' },
   { id: 'grade', label: 'GRADE' },
   { id: 'prospero', label: 'PROSPERO' },
+  { id: 'mesh', label: 'MeSH' },
+  { id: 'strategy', label: 'Search strategy' },
+  { id: 'narrative', label: 'Narrative synthesis' },
+  { id: 'instruments', label: 'Outcome instruments' },
   { id: 'living', label: 'Living review' },
 ]
 
@@ -147,6 +160,15 @@ function ReviewInner({ projectId }: { projectId: string }) {
         {tab === 'prisma' && <PRISMAFlowChart projectId={projectId} />}
         {tab === 'grade' && <GradeTabContent projectId={projectId} />}
         {tab === 'prospero' && <PROSPEROForm projectId={projectId} />}
+        {tab === 'mesh' && <MeSHBrowser projectId={projectId} />}
+        {tab === 'strategy' && (
+          <div className="space-y-6">
+            <SearchStrategyBuilder projectId={projectId} />
+            <CrossDatabaseTranslator projectId={projectId} />
+          </div>
+        )}
+        {tab === 'narrative' && <NarrativeSynthesisPanel projectId={projectId} />}
+        {tab === 'instruments' && <OutcomeInstrumentsTable projectId={projectId} />}
         {tab === 'living' && <LivingReviewPanel projectId={projectId} />}
       </div>
     </motion.div>

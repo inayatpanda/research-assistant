@@ -182,6 +182,46 @@ CATALOGUE: dict[str, Tool] = {
 }
 
 
+def _register_jbi_tools() -> None:
+    """Phase 19 (MP19) — Extend the catalogue with the 7 JBI tools.
+
+    Done as a deferred call so the JBI module can keep importing
+    ``Tool``/``Domain`` from this module without a circular import. The
+    body is idempotent so repeated test-suite imports are safe.
+
+    Called lazily by :func:`_ensure_jbi_loaded` whenever code first
+    inspects the catalogue or asks to derive a JBI overall rating.
+    """
+    from .jbi_rules import JBI_CATALOGUE  # noqa: WPS433 (deferred import is intentional)
+
+    for k, tool in JBI_CATALOGUE.items():
+        CATALOGUE.setdefault(k, tool)
+
+
+_JBI_REGISTERED = False
+
+
+def _ensure_jbi_loaded() -> None:
+    """Idempotently register JBI tools into :data:`CATALOGUE`.
+
+    Splitting registration from module import avoids the circular
+    import that occurs when ``jbi_rules`` (which depends on this
+    module's :class:`Tool` / :class:`Domain`) is loaded before
+    ``rob_rules`` has finished executing.
+    """
+    global _JBI_REGISTERED
+    if _JBI_REGISTERED:
+        return
+    _register_jbi_tools()
+    _JBI_REGISTERED = True
+
+
+def get_catalogue() -> dict[str, "Tool"]:
+    """Return the catalogue with JBI tools loaded on demand."""
+    _ensure_jbi_loaded()
+    return CATALOGUE
+
+
 AMSTAR2_UNIFIED_MAPPING: dict[str, str] = {
     "high": "low",
     "moderate": "some_concerns",
@@ -283,8 +323,13 @@ def _amstar2_overall(answers: dict[str, str]) -> str:
 
 
 def derive_overall(tool_key: str, domain_answers: dict[str, str]) -> str:
+    _ensure_jbi_loaded()
     if tool_key not in CATALOGUE:
         raise ValueError(f"unknown tool: {tool_key!r}")
+    if tool_key.startswith("jbi_"):
+        from .jbi_rules import derive_overall_jbi  # noqa: WPS433
+
+        return derive_overall_jbi(tool_key, domain_answers)
     tool = CATALOGUE[tool_key]
     _validate_answers(tool, domain_answers)
     if tool_key == "rob2":
@@ -314,5 +359,6 @@ _DESIGN_TOOL_MAP: dict[str, str] = {
 
 
 def select_tool_for_design(study_design: str) -> Tool | None:
+    _ensure_jbi_loaded()
     key = _DESIGN_TOOL_MAP.get(study_design)
     return CATALOGUE[key] if key else None

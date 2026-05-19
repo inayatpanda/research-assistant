@@ -42,8 +42,11 @@ from ...db.models import (
     ManuscriptComment,
     ManuscriptSection,
     ManuscriptSnapshot,
+    MeshTerm,
     MetaAnalysis,
     MetaInput,
+    NarrativeSynthesisEntry,
+    OutcomeInstrument,
     Project,
     ProjectFrontmatter,
     ProsperoDraft,
@@ -52,6 +55,7 @@ from ...db.models import (
     RobAssessment,
     ScreeningRecord,
     SearchRecord,
+    SearchStrategy,
 )
 from .bundle_export import SCHEMA_VERSION
 
@@ -137,6 +141,8 @@ async def _do_import(
         "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
         "grade_assessments": 0, "prospero_draft": 0,
         "living_review_job": 0,
+        "mesh_terms": 0, "search_strategies": 0,
+        "narrative_synthesis_entries": 0, "outcome_instruments": 0,
     }
 
     proj_in = bundle["project"]
@@ -384,6 +390,7 @@ async def _do_import(
             pico_outcome=review_in.get("pico_outcome"),
             eligibility_inclusion=review_in.get("eligibility_inclusion"),
             eligibility_exclusion=review_in.get("eligibility_exclusion"),
+            tool_per_study=bool(review_in.get("tool_per_study", False)),
         ))
         await session.flush()
         counts["reviews"] = 1
@@ -904,6 +911,128 @@ async def _do_import(
         counts["analysis_plan_runs"] += 1
     if counts["analysis_plan_runs"]:
         await session.flush()
+
+    # ── MeSH cache (Phase 19) ──────────────────────────────────────────
+    mesh_map: dict[str, str] = {}
+    seen_mesh_ui: set[str] = set()
+    for mt in bundle.get("mesh_terms") or []:
+        ui = (mt.get("descriptor_ui") or "").strip()
+        if not ui or ui in seen_mesh_ui:
+            continue
+        seen_mesh_ui.add(ui)
+        new_mt_id = _new_id()
+        session.add(MeshTerm(
+            id=new_mt_id,
+            user_id=target_user_id,
+            project_id=new_project_id,
+            descriptor_ui=ui,
+            descriptor_name=(mt.get("descriptor_name") or ui)[:500],
+            scope_note=mt.get("scope_note"),
+            tree_numbers=list(mt.get("tree_numbers") or []),
+            entry_terms=list(mt.get("entry_terms") or []),
+            source=mt.get("source") or "ncbi_lookup",
+        ))
+        if mt.get("id"):
+            mesh_map[mt["id"]] = new_mt_id
+        counts["mesh_terms"] += 1
+    if counts["mesh_terms"]:
+        await session.flush()
+
+    # ── Search strategies (Phase 19) — two-pass to remap translated_from_id
+    if new_review_id is not None:
+        strategy_map: dict[str, str] = {}
+        pending_translated: list[tuple[str, str | None]] = []
+        for ss in bundle.get("search_strategies") or []:
+            new_ss_id = _new_id()
+            # Remap mesh_term_ids through the cache we just imported.
+            mesh_ids = list(ss.get("mesh_term_ids") or [])
+            mesh_ids = [mesh_map.get(m, m) for m in mesh_ids if m]
+            db_name = (ss.get("database") or "PubMed")
+            if db_name not in {"PubMed", "Embase", "Cochrane",
+                               "Web of Science", "Scopus", "Other"}:
+                db_name = "Other"
+            session.add(SearchStrategy(
+                id=new_ss_id,
+                user_id=target_user_id,
+                project_id=new_project_id,
+                review_id=new_review_id,
+                name=(ss.get("name") or "Imported strategy")[:255],
+                database=db_name,
+                query_text=ss.get("query_text") or "",
+                mesh_term_ids=mesh_ids,
+                translated_from_id=None,  # patched below
+                is_locked=bool(ss.get("is_locked", False)),
+                warnings=ss.get("warnings"),
+            ))
+            if ss.get("id"):
+                strategy_map[ss["id"]] = new_ss_id
+            pending_translated.append((new_ss_id, ss.get("translated_from_id")))
+            counts["search_strategies"] += 1
+        if counts["search_strategies"]:
+            await session.flush()
+            for new_ss_id, old_src in pending_translated:
+                if not old_src:
+                    continue
+                mapped = strategy_map.get(old_src)
+                if mapped is None:
+                    continue
+                row = await session.get(SearchStrategy, new_ss_id)
+                if row is not None:
+                    row.translated_from_id = mapped
+            await session.flush()
+
+        # ── Narrative synthesis entries (Phase 19) ─────────────────────
+        for ns in bundle.get("narrative_synthesis_entries") or []:
+            citations = list(ns.get("study_citations") or [])
+            # Remap article_ids through article_map; drop any unknown ones.
+            citations = [article_map.get(a) for a in citations if a]
+            citations = [c for c in citations if c]
+            session.add(NarrativeSynthesisEntry(
+                id=_new_id(),
+                user_id=target_user_id,
+                review_id=new_review_id,
+                outcome_label=(ns.get("outcome_label") or "Outcome")[:255],
+                instrument=(ns.get("instrument") or "Instrument")[:255],
+                range_text=ns.get("range_text"),
+                direction=(ns.get("direction") or "neutral"),
+                narrative_html=ns.get("narrative_html") or "",
+                study_citations=citations,
+            ))
+            counts["narrative_synthesis_entries"] += 1
+        if counts["narrative_synthesis_entries"]:
+            await session.flush()
+
+        # ── Outcome instruments (Phase 19) ─────────────────────────────
+        for oi in bundle.get("outcome_instruments") or []:
+            study_values = []
+            for cell in oi.get("study_values") or []:
+                if not isinstance(cell, dict):
+                    continue
+                old_aid = cell.get("article_id")
+                new_aid = article_map.get(old_aid) if old_aid else None
+                if new_aid is None:
+                    continue
+                study_values.append({
+                    "article_id": new_aid,
+                    "group_label": cell.get("group_label", ""),
+                    "value": cell.get("value"),
+                    "sd_or_ci": cell.get("sd_or_ci"),
+                    "n": cell.get("n"),
+                })
+            session.add(OutcomeInstrument(
+                id=_new_id(),
+                user_id=target_user_id,
+                review_id=new_review_id,
+                outcome_label=(oi.get("outcome_label") or "Outcome")[:255],
+                instrument_name=(oi.get("instrument_name") or "Instrument")[:255],
+                score_range_low=oi.get("score_range_low"),
+                score_range_high=oi.get("score_range_high"),
+                mid=oi.get("mid"),
+                study_values=study_values,
+            ))
+            counts["outcome_instruments"] += 1
+        if counts["outcome_instruments"]:
+            await session.flush()
 
     for cm in bundle.get("manuscript_comments") or []:
         section_name = cm.get("section_name") or "Introduction"
