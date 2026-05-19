@@ -35,7 +35,11 @@ def upgrade() -> None:
         sa.Column(
             "dataset_id",
             sa.String(length=32),
-            sa.ForeignKey("datasets.id", ondelete="CASCADE"),
+            sa.ForeignKey(
+                "datasets.id",
+                name="fk_analysis_populations_dataset_id",
+                ondelete="CASCADE",
+            ),
             nullable=False,
         ),
         sa.Column("name", sa.String(length=255), nullable=False),
@@ -65,7 +69,11 @@ def upgrade() -> None:
         sa.Column(
             "dataset_id",
             sa.String(length=32),
-            sa.ForeignKey("datasets.id", ondelete="CASCADE"),
+            sa.ForeignKey(
+                "datasets.id",
+                name="fk_imputation_runs_dataset_id",
+                ondelete="CASCADE",
+            ),
             nullable=False,
         ),
         sa.Column("method", sa.String(length=32), nullable=False),
@@ -87,13 +95,17 @@ def upgrade() -> None:
     )
 
     # 3. analyses: lock + population FK -------------------------------------
+    # SQLite batch-mode rebuilds the table, which refuses anonymous
+    # constraints — every FK MUST be explicitly named.
     with op.batch_alter_table("analyses") as batch:
         batch.add_column(
             sa.Column(
                 "population_id",
                 sa.String(length=32),
                 sa.ForeignKey(
-                    "analysis_populations.id", ondelete="SET NULL"
+                    "analysis_populations.id",
+                    name="fk_analyses_population_id",
+                    ondelete="SET NULL",
                 ),
                 nullable=True,
             )
