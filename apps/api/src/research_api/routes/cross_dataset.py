@@ -30,7 +30,7 @@ from ..services.stats.cross_dataset import (
     join as op_join,
     merge as op_merge,
 )
-from ..services.stats.ingest import infer_columns, read_table
+from ..services.stats.ingest import infer_columns, read_dataset, read_table  # noqa: F401
 
 router = APIRouter(tags=["cross-dataset"])
 log = logging.getLogger("research_api.cross_dataset")
@@ -52,7 +52,7 @@ async def _load_df(container: Container, dataset: Dataset) -> pd.DataFrame:
 
     ref = StorageRef(backend=dataset.file_ref["backend"], key=dataset.file_ref["key"])
     data = await container.storage.read(ref)
-    return read_table(data, dataset.file_type)
+    return read_dataset(data, dataset)
 
 
 @router.post(

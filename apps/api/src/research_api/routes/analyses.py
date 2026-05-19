@@ -117,10 +117,11 @@ async def _load_dataframe(
     container: Container, dataset: Dataset
 ) -> pd.DataFrame:
     from ..services.storage import StorageRef
+    from ..services.stats.ingest import read_dataset
 
     ref = StorageRef(backend=dataset.file_ref["backend"], key=dataset.file_ref["key"])
     data = await container.storage.read(ref)
-    return read_table(data, dataset.file_type)
+    return read_dataset(data, dataset)
 
 
 async def _load_dataframe_with_transformations(

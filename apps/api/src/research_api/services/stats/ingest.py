@@ -48,6 +48,7 @@ class IngestResult:
     n_rows: int
     n_columns: int
     columns: list[InferredColumn]
+    long_format_hint: dict | None = None
 
 
 def detect_table_mime(data: bytes) -> str:
@@ -64,12 +65,21 @@ def detect_table_mime(data: bytes) -> str:
     raise ValueError("unsupported table mime")
 
 
-def read_table(data: bytes, mime: str) -> pd.DataFrame:
+def read_table(data: bytes, mime: str, sheet_name: str | None = None) -> pd.DataFrame:
+    """Read CSV/XLSX bytes into a DataFrame.
+
+    For XLSX, ``sheet_name`` selects which worksheet to load. When ``None``,
+    the workbook's active (first) sheet is used — preserves pre-multi-sheet
+    behaviour for legacy datasets that don't carry sheet metadata.
+    """
     if mime == CSV_MIME:
         return pd.read_csv(io.BytesIO(data))
     if mime == XLSX_MIME:
         wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-        ws = wb.active
+        if sheet_name is not None and sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+        else:
+            ws = wb.active
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             return pd.DataFrame()
@@ -78,6 +88,102 @@ def read_table(data: bytes, mime: str) -> pd.DataFrame:
         df = pd.DataFrame(body, columns=header)
         return _coerce_obvious_numerics(df)
     raise ValueError(f"unsupported mime {mime}")
+
+
+def read_dataset(data: bytes, dataset) -> pd.DataFrame:
+    """Convenience: read a dataset's bytes honouring its ``sheet_name``
+    metadata (for multi-sheet XLSX). Falls back to the active sheet."""
+    meta = getattr(dataset, "dataset_metadata", None) or {}
+    sheet = None
+    if isinstance(meta, dict):
+        sheet = meta.get("sheet_name")
+        if not isinstance(sheet, str):
+            sheet = None
+    return read_table(data, dataset.file_type, sheet_name=sheet)
+
+
+def list_xlsx_sheets(data: bytes) -> list[str]:
+    """Return the sheet names of an XLSX workbook in workbook order.
+
+    Returns an empty list if the input is not a valid XLSX. Never raises.
+    """
+    try:
+        wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+    except Exception:
+        return []
+    return list(wb.sheetnames)
+
+
+_SUBJECT_NAME_RE = re.compile(r"(patient|subject|id|pid|case)", re.I)
+_TIME_LIKE_NAME_RE = re.compile(
+    r"(time|visit|wave|week|month|year|tp|timepoint|followup|fu)",
+    re.I,
+)
+
+
+def detect_long_format(df: pd.DataFrame) -> dict | None:
+    """Heuristic: does the dataframe look like long-format repeated measures?
+
+    Requires (a) a subject-id-shaped column (name hint OR cardinality at
+    least half the rows but with average 2+ repeats), (b) a time/wave-like
+    column with low cardinality (2-20 levels), and (c) at least one numeric
+    outcome column besides the two. Returns ``None`` for wide-format or
+    cross-sectional data; never raises.
+    """
+    try:
+        if df is None or len(df) < 6 or df.shape[1] < 3:
+            return None
+        n_rows = int(len(df))
+        # Two-pass: prefer name-matched candidates (patient_id, subject_id …).
+        # Only fall back to cardinality-based scan if none found.
+        candidates: list[tuple[str, int, bool]] = []
+        for col in df.columns:
+            try:
+                nunique = int(df[col].nunique(dropna=True))
+            except Exception:
+                continue
+            if nunique < 3 or nunique >= n_rows:
+                continue
+            avg_per_id = n_rows / nunique
+            if avg_per_id < 2 or avg_per_id > 20:
+                continue
+            name_match = bool(_SUBJECT_NAME_RE.search(str(col)))
+            tight = abs(avg_per_id - round(avg_per_id)) < 0.05
+            if name_match or tight:
+                candidates.append((str(col), nunique, name_match))
+        if not candidates:
+            return None
+        # Pick the best: name-matched > more subjects.
+        candidates.sort(key=lambda x: (not x[2], -x[1]))
+        subject_col, best_n_subjects, _ = candidates[0]
+        # Candidate time-like column.
+        time_col: str | None = None
+        for col in df.columns:
+            if col == subject_col:
+                continue
+            try:
+                nunique = int(df[col].nunique(dropna=True))
+            except Exception:
+                continue
+            if 2 <= nunique <= 20 and _TIME_LIKE_NAME_RE.search(str(col)):
+                time_col = str(col)
+                break
+        # Must have a numeric outcome besides the two.
+        has_numeric = any(
+            pd.api.types.is_numeric_dtype(df[c])
+            for c in df.columns
+            if c != subject_col and c != time_col
+        )
+        if not has_numeric:
+            return None
+        return {
+            "subject_col": subject_col,
+            "time_col": time_col,
+            "n_per_subject": round(n_rows / best_n_subjects, 2),
+            "n_subjects": best_n_subjects,
+        }
+    except Exception:
+        return None
 
 
 def _coerce_obvious_numerics(df: pd.DataFrame) -> pd.DataFrame:
@@ -181,11 +287,12 @@ def _parseable_datetime(s: str) -> bool:
         return False
 
 
-def ingest(data: bytes, mime: str) -> IngestResult:
-    df = read_table(data, mime)
+def ingest(data: bytes, mime: str, sheet_name: str | None = None) -> IngestResult:
+    df = read_table(data, mime, sheet_name=sheet_name)
     columns = infer_columns(df)
     return IngestResult(
         n_rows=int(df.shape[0]),
         n_columns=int(df.shape[1]),
         columns=columns,
+        long_format_hint=detect_long_format(df),
     )

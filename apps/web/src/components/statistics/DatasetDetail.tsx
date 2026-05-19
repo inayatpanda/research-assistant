@@ -1,4 +1,12 @@
-import { BarChart3, Code2, Plus, Scale, Table2 } from 'lucide-react'
+import {
+  BarChart3,
+  Code2,
+  Layers,
+  Plus,
+  Repeat,
+  Scale,
+  Table2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -84,6 +92,21 @@ export function DatasetDetail({
     )
   }
 
+  const meta = dataset.dataset_metadata as
+    | {
+        sheet_name?: string
+        long_format_hint?: {
+          subject_col: string
+          time_col?: string | null
+          n_subjects: number
+          n_per_subject: number
+        }
+      }
+    | null
+    | undefined
+  const sheetName = meta?.sheet_name
+  const longHint = meta?.long_format_hint
+
   return (
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-4">
@@ -94,8 +117,19 @@ export function DatasetDetail({
           <h2 className="mt-1 text-lg font-semibold tracking-tight truncate">
             {dataset.filename}
           </h2>
-          <div className="mt-1 text-[12px] text-muted-foreground">
-            {dataset.n_rows} rows × {dataset.n_columns} columns
+          <div className="mt-1 flex items-center gap-2 text-[12px] text-muted-foreground">
+            <span>
+              {dataset.n_rows} rows × {dataset.n_columns} columns
+            </span>
+            {sheetName ? (
+              <span
+                title={`Worksheet: ${sheetName}`}
+                className="inline-flex items-center gap-1 rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent border border-accent/20"
+              >
+                <Layers className="h-3 w-3" />
+                {sheetName}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -117,6 +151,26 @@ export function DatasetDetail({
           </Button>
         </div>
       </header>
+
+      {longHint ? (
+        <div
+          className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] text-amber-900"
+          data-testid="long-format-hint-banner"
+        >
+          <Repeat className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+          <div>
+            <div className="font-medium">
+              This looks like long-format repeated measures.
+            </div>
+            <div className="text-amber-800/90 mt-0.5">
+              {longHint.n_subjects} subjects × {longHint.n_per_subject}{' '}
+              observations each ({longHint.subject_col}
+              {longHint.time_col ? ` × ${longHint.time_col}` : ''}). Consider a
+              mixed-effects model rather than a paired test.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
         <div className="space-y-3">

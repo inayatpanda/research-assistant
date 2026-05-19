@@ -27,7 +27,18 @@ export function DatasetUpload({
       setActiveFile(file)
       try {
         const dataset = await upload.mutateAsync(file)
-        toast.success(`Uploaded ${dataset.filename} · ${dataset.n_rows} rows`)
+        const meta = (dataset.dataset_metadata ?? null) as
+          | { sheet_name?: string; long_format_hint?: unknown }
+          | null
+        if (meta?.sheet_name) {
+          // Multi-sheet XLSX path: filename already includes the sheet
+          // segment, but flag to the user so they understand the split.
+          toast.success(
+            `Imported workbook "${file.name}". Each sheet has been added as its own dataset.`,
+          )
+        } else {
+          toast.success(`Uploaded ${dataset.filename} · ${dataset.n_rows} rows`)
+        }
         onUploaded?.(dataset)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Upload failed'

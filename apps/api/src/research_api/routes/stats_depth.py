@@ -67,7 +67,7 @@ from ..schemas.populations import (
 from ..services.instruments.catalogue import is_known_key, list_instruments
 from ..services.stats.cace import run_cace_2sls
 from ..services.stats.imputation import impute_simple, pool_with_rubin, run_mice
-from ..services.stats.ingest import read_table
+from ..services.stats.ingest import read_dataset, read_table  # noqa: F401
 from ..services.stats.irr import (
     fleiss_kappa,
     krippendorff_alpha,
@@ -125,7 +125,7 @@ async def _load_df(container: Container, session: AsyncSession, dataset: Any, us
         backend=dataset.file_ref["backend"], key=dataset.file_ref["key"]
     )
     raw = await container.storage.read(ref)
-    df = read_table(raw, dataset.file_type)
+    df = read_dataset(raw, dataset)
     trepo = SqliteTransformationRepository(session)
     ops = await trepo.list_for_dataset(dataset.id, user_id)
     if ops:

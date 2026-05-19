@@ -572,6 +572,7 @@ export const DatasetVariableSchema = z.object({
   user_type: VariableTypeSchema.nullable(),
   n_missing: z.number().int(),
   sample_values: z.array(z.string()),
+  instrument_key: z.string().nullable().optional(),
 })
 export type DatasetVariable = z.infer<typeof DatasetVariableSchema>
 
@@ -584,6 +585,12 @@ export const DatasetSchema = z.object({
   n_columns: z.number().int(),
   created_at: z.string(),
   variables: z.array(DatasetVariableSchema),
+  derived_from_dataset_id: z.string().nullable().optional(),
+  derived_from_dataset_ids: z.array(z.string()).nullable().optional(),
+  dataset_metadata: z
+    .record(z.string(), z.unknown())
+    .nullable()
+    .optional(),
 })
 export type Dataset = z.infer<typeof DatasetSchema>
 

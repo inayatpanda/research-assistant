@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { FileSpreadsheet, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Layers, Repeat, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -82,6 +82,20 @@ function DatasetRow({
   onSelect: () => void
   onDelete: () => void
 }) {
+  const meta = dataset.dataset_metadata as
+    | {
+        sheet_name?: string
+        long_format_hint?: {
+          subject_col: string
+          time_col?: string | null
+          n_subjects: number
+          n_per_subject: number
+        }
+      }
+    | null
+    | undefined
+  const sheetName = meta?.sheet_name
+  const longHint = meta?.long_format_hint
   return (
     <motion.li
       initial={{ opacity: 0, y: 4 }}
@@ -102,12 +116,32 @@ function DatasetRow({
         )}
       />
       <div className="flex-1 min-w-0">
-        <div className="truncate text-[13px] font-medium">{dataset.filename}</div>
+        <div className="flex items-center gap-1.5">
+          <div className="truncate text-[13px] font-medium">{dataset.filename}</div>
+          {sheetName ? (
+            <span
+              title={`Sheet: ${sheetName}`}
+              className="inline-flex items-center gap-1 rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent border border-accent/20"
+            >
+              <Layers className="h-3 w-3" />
+              {sheetName}
+            </span>
+          ) : null}
+        </div>
         <div className="text-[11px] text-muted-foreground">
           {dataset.n_rows} rows · {dataset.n_columns} cols ·{' '}
           {dataset.variables.length} variable
           {dataset.variables.length === 1 ? '' : 's'}
         </div>
+        {longHint ? (
+          <div
+            className="mt-1 inline-flex items-center gap-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200"
+            title={`${longHint.n_subjects} subjects × ~${longHint.n_per_subject} timepoints — consider mixed-effects analysis.`}
+          >
+            <Repeat className="h-3 w-3" />
+            Long-format · {longHint.n_subjects} × {longHint.n_per_subject}
+          </div>
+        ) : null}
       </div>
       <Button
         size="icon"

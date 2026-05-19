@@ -21,6 +21,7 @@ class DatasetRepository(Protocol):
         n_columns: int,
         variables: Iterable[InferredColumn],
         user_id: str,
+        dataset_metadata: dict | None = None,
     ) -> Dataset: ...
     async def get(self, dataset_id: str, user_id: str) -> Dataset | None: ...
     async def list_for_project(
@@ -50,6 +51,7 @@ class SqliteDatasetRepository:
         n_columns: int,
         variables: Iterable[InferredColumn],
         user_id: str,
+        dataset_metadata: dict | None = None,
     ) -> Dataset:
         ds = Dataset(
             id=new_id(),
@@ -60,6 +62,7 @@ class SqliteDatasetRepository:
             file_type=file_type,
             n_rows=n_rows,
             n_columns=n_columns,
+            dataset_metadata=dataset_metadata,
         )
         self.session.add(ds)
         await self.session.flush()

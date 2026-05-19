@@ -23,7 +23,12 @@ from ..schemas.dataset import (
     DatasetVariableRead,
     DatasetVariableUpdate,
 )
-from ..services.stats.ingest import detect_table_mime, ingest
+from ..services.stats.ingest import (
+    XLSX_MIME,
+    detect_table_mime,
+    ingest,
+    list_xlsx_sheets,
+)
 
 router = APIRouter(tags=["datasets"])
 log = logging.getLogger("research_api.datasets")
@@ -86,26 +91,83 @@ async def upload_dataset(
             status_code=415, detail="Unsupported MIME; expected CSV or XLSX"
         ) from None
 
+    # Multi-sheet XLSX → one Dataset per sheet (sharing one file_ref via
+    # dataset_metadata.sheet_name). For single-sheet XLSX or CSV, keep the
+    # legacy single-dataset path so existing callers/tests stay green.
+    sheets: list[str] = []
+    if mime == XLSX_MIME:
+        try:
+            sheets = list_xlsx_sheets(data)
+        except Exception:  # noqa: BLE001
+            sheets = []
+
+    ref = await container.storage.save(
+        user_id, "datasets", file.filename or "upload", data
+    )
+    repo = SqliteDatasetRepository(session)
+    base_filename = file.filename or "upload"
+
+    if mime == XLSX_MIME and len(sheets) > 1:
+        # Parse each sheet; skip blanks but keep deterministic order. The
+        # first parseable sheet wins as the "primary" response — the FE
+        # then fetches the list and renders all sheets.
+        primary: object = None
+        for sheet_name in sheets:
+            try:
+                result = ingest(data, mime, sheet_name=sheet_name)
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "Dataset ingest failed for sheet %r: %s", sheet_name, exc
+                )
+                continue
+            if result.n_rows == 0 and result.n_columns == 0:
+                continue
+            sheet_metadata: dict[str, object] = {"sheet_name": sheet_name}
+            if result.long_format_hint:
+                sheet_metadata["long_format_hint"] = result.long_format_hint
+            dataset = await repo.create(
+                project_id=project_id,
+                filename=f"{base_filename} · {sheet_name}",
+                file_ref={"backend": ref.backend, "key": ref.key},
+                file_type=mime,
+                n_rows=result.n_rows,
+                n_columns=result.n_columns,
+                variables=result.columns,
+                user_id=user_id,
+                dataset_metadata=sheet_metadata,
+            )
+            if primary is None:
+                primary = dataset
+        if primary is None:
+            raise HTTPException(
+                status_code=422,
+                detail="No parseable sheets found in workbook.",
+            )
+        return await _hydrate(primary, repo, user_id)
+
+    # Single sheet (or CSV) — legacy path.
     try:
         result = ingest(data, mime)
     except Exception as exc:  # noqa: BLE001
         log.warning("Dataset ingest failed: %s", exc)
         raise HTTPException(status_code=422, detail=f"Could not parse table: {exc}") from None
 
-    ref = await container.storage.save(
-        user_id, "datasets", file.filename or "upload", data
-    )
+    single_metadata: dict[str, object] | None = None
+    if result.long_format_hint:
+        single_metadata = {"long_format_hint": result.long_format_hint}
+    if mime == XLSX_MIME and len(sheets) == 1:
+        single_metadata = {**(single_metadata or {}), "sheet_name": sheets[0]}
 
-    repo = SqliteDatasetRepository(session)
     dataset = await repo.create(
         project_id=project_id,
-        filename=file.filename or "upload",
+        filename=base_filename,
         file_ref={"backend": ref.backend, "key": ref.key},
         file_type=mime,
         n_rows=result.n_rows,
         n_columns=result.n_columns,
         variables=result.columns,
         user_id=user_id,
+        dataset_metadata=single_metadata,
     )
     return await _hydrate(dataset, repo, user_id)
 

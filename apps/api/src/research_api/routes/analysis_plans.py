@@ -36,7 +36,7 @@ from ..schemas.analysis_plan import (
     AnalysisPlanUpdate,
 )
 from ..services.export.sap import build_sap_document, compute_integrity_hash
-from ..services.stats.ingest import read_table
+from ..services.stats.ingest import read_dataset, read_table  # noqa: F401
 from ..services.stats.plan_runner import run_plan
 from ..services.stats.transform import apply_transformations
 from ..services.storage import StorageRef
@@ -208,7 +208,7 @@ async def run_plan_route(
             backend=dataset.file_ref["backend"], key=dataset.file_ref["key"]
         )
         raw = await container.storage.read(ref)
-        df = read_table(raw, dataset.file_type)
+        df = read_dataset(raw, dataset)
         trepo = SqliteTransformationRepository(session)
         ops = await trepo.list_for_dataset(dataset.id, user_id)
         if ops:

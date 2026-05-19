@@ -23,7 +23,7 @@ from ..container import Container, get_container
 from ..repositories.datasets import SqliteDatasetRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.psm import CovariateBalanceRow, PSMRequest, PSMResponse
-from ..services.stats.ingest import infer_columns, read_table
+from ..services.stats.ingest import infer_columns, read_dataset, read_table  # noqa: F401
 from ..services.stats.psm import run_psm
 
 router = APIRouter(tags=["psm"])
@@ -112,7 +112,7 @@ async def run_psm_endpoint(
             backend=source.file_ref["backend"], key=source.file_ref["key"]
         )
         data = await container.storage.read(ref)
-        df = read_table(data, source.file_type)
+        df = read_dataset(data, source)
     except Exception as exc:  # noqa: BLE001
         log.warning("PSM source dataset unreadable: %s", exc)
         raise HTTPException(status_code=422, detail="Could not read source dataset") from None

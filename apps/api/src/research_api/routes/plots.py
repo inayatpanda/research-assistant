@@ -24,7 +24,7 @@ from ..repositories.plots import SqlitePlotRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..repositories.transformations import SqliteTransformationRepository
 from ..schemas.plot import PlotCreate, PlotRead
-from ..services.stats.ingest import read_table
+from ..services.stats.ingest import read_dataset, read_table  # noqa: F401
 from ..services.stats.plot_renderer import PlotRenderError, render_plot
 from ..services.stats.transform import apply_transformations
 from ..services.storage import StorageRef
@@ -63,7 +63,7 @@ async def _load_df(
 ) -> pd.DataFrame:
     ref = StorageRef(backend=dataset.file_ref["backend"], key=dataset.file_ref["key"])
     raw = await container.storage.read(ref)
-    df = read_table(raw, dataset.file_type)
+    df = read_dataset(raw, dataset)
     trepo = SqliteTransformationRepository(session)
     rows = await trepo.list_for_dataset(dataset.id, user_id)
     if not rows:
