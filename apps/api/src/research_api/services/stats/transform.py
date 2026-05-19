@@ -39,6 +39,10 @@ OP_TYPES = (
     "log_transform",
     "z_score",
     "group_summarise",
+    # MP-stats-refine: explicit row drop by original __row_index. Used by
+    # the editable DataView's "Drop selected" action so deletions are
+    # honoured by every downstream analysis.
+    "drop_rows",
 )
 
 
@@ -269,6 +273,43 @@ def _group_summarise(df: pd.DataFrame, args: dict[str, Any]) -> pd.DataFrame:
     return grouped
 
 
+def _drop_rows(df: pd.DataFrame, args: dict[str, Any]) -> pd.DataFrame:
+    """MP-stats-refine — Drop rows by their ORIGINAL positional index.
+
+    The FE editable grid emits row ids of the form ``r-{index}`` where the
+    index is the row's position in the unmutated dataset. We accept either
+    integer indices or the ``r-<int>`` string form.
+    """
+    raw = args.get("indices") or args.get("drop_row_ids") or []
+    if not isinstance(raw, list):
+        raise TransformError("drop_rows requires a list of indices")
+    indices: set[int] = set()
+    for item in raw:
+        if isinstance(item, int):
+            indices.add(item)
+            continue
+        if isinstance(item, str):
+            if item.startswith("r-"):
+                try:
+                    indices.add(int(item[2:]))
+                    continue
+                except ValueError:
+                    pass
+            try:
+                indices.add(int(item))
+                continue
+            except ValueError:
+                pass
+        raise TransformError(f"drop_rows: invalid index {item!r}")
+    if not indices:
+        return df.reset_index(drop=True)
+    # ``df.index`` is the post-prior-ops index. We compare against the
+    # positional index — i.e. row number in the current frame, NOT the
+    # original CSV — because earlier transformations may have reordered.
+    keep_mask = [i for i in range(len(df)) if i not in indices]
+    return df.iloc[keep_mask].reset_index(drop=True)
+
+
 _DISPATCH = {
     "filter": _filter,
     "mutate": _mutate,
@@ -278,6 +319,7 @@ _DISPATCH = {
     "log_transform": _log_transform,
     "z_score": _z_score,
     "group_summarise": _group_summarise,
+    "drop_rows": _drop_rows,
 }
 
 

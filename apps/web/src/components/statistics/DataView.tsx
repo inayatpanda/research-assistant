@@ -176,9 +176,15 @@ export function DataView({
     const rowIds = Array.from(selectedRows)
     addTx.mutate(
       {
-        op_type: 'filter',
+        // MP-stats-refine — backend learnt a dedicated drop_rows op. Pass
+        // both the structured `indices` (row numbers parsed out of the
+        // r-N ids) and the raw ids so the server can validate against
+        // either shape.
+        op_type: 'drop_rows',
         op_args: {
-          expr: `!__row_id %in% c(${rowIds.map((r) => `"${r}"`).join(', ')})`,
+          indices: rowIds
+            .map((r) => Number(r.replace(/^r-/, '')))
+            .filter((n) => Number.isFinite(n)),
           drop_row_ids: rowIds,
         },
         label: `Drop ${rowIds.length} row${rowIds.length === 1 ? '' : 's'}`,

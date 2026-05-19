@@ -258,7 +258,34 @@ def test_op_types_constant_matches_dispatch():
         "log_transform",
         "z_score",
         "group_summarise",
+        "drop_rows",
     }
+
+
+def test_drop_rows_by_integer_indices():
+    df = _df()
+    n = len(df)
+    out = apply_op(df, "drop_rows", {"indices": [0, 2]})
+    assert len(out) == n - 2
+
+
+def test_drop_rows_by_r_prefixed_ids():
+    df = _df()
+    n = len(df)
+    out = apply_op(df, "drop_rows", {"drop_row_ids": ["r-0", "r-1"]})
+    assert len(out) == n - 2
+
+
+def test_drop_rows_empty_list_is_identity():
+    df = _df()
+    out = apply_op(df, "drop_rows", {"indices": []})
+    assert len(out) == len(df)
+
+
+def test_drop_rows_invalid_id_raises():
+    df = _df()
+    with pytest.raises(TransformError):
+        apply_op(df, "drop_rows", {"drop_row_ids": ["nonsense"]})
 
 
 def test_unknown_op_type_raises():

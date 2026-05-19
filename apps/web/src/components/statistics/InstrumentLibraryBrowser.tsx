@@ -66,7 +66,37 @@ export function InstrumentLibraryBrowser({ projectId, datasetId, variables }: Pr
             </option>
           ))}
         </select>
+        {selectedVar
+          && variables.find((v) => v.id === selectedVar)?.instrument_key ? (
+          <button
+            type="button"
+            onClick={() =>
+              bindMutation.mutate({ varId: selectedVar, key: null })
+            }
+            disabled={bindMutation.isPending}
+            data-testid="instrument-unbind"
+            style={{ marginLeft: 8 }}
+          >
+            Clear binding
+          </button>
+        ) : null}
       </label>
+      {bindMutation.error ? (
+        <div
+          role="alert"
+          data-testid="instrument-bind-error"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: '6px 10px',
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          {(bindMutation.error as Error).message}
+        </div>
+      ) : null}
       <ul className="instrument-list">
         {filtered.map((i: InstrumentSpec) => (
           <li key={i.abbreviation}>
@@ -75,6 +105,7 @@ export function InstrumentLibraryBrowser({ projectId, datasetId, variables }: Pr
             {selectedVar ? (
               <button
                 onClick={() => bindMutation.mutate({ varId: selectedVar, key: i.abbreviation })}
+                disabled={bindMutation.isPending}
               >
                 Bind
               </button>
@@ -82,6 +113,11 @@ export function InstrumentLibraryBrowser({ projectId, datasetId, variables }: Pr
           </li>
         ))}
       </ul>
+      {!filtered.length && instruments && query ? (
+        <p style={{ fontSize: 12, color: '#6b7280' }}>
+          No instruments match "{query}".
+        </p>
+      ) : null}
     </div>
   )
 }
