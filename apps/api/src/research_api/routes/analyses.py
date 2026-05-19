@@ -123,6 +123,32 @@ async def _load_dataframe(
     return read_table(data, dataset.file_type)
 
 
+async def _load_dataframe_with_transformations(
+    container: Container,
+    dataset: Dataset,
+    session: AsyncSession,
+    user_id: str,
+) -> pd.DataFrame:
+    """Phase 13 (MP13) — Load the raw CSV, then replay any transformations.
+
+    The runner sees the post-transformation DataFrame. If the dataset has
+    no transformations, behaves identically to ``_load_dataframe``.
+    """
+    from ..repositories.transformations import SqliteTransformationRepository
+    from ..services.stats.transform import apply_transformations
+
+    df = await _load_dataframe(container, dataset)
+    trepo = SqliteTransformationRepository(session)
+    transformations = await trepo.list_for_dataset(dataset.id, user_id)
+    if not transformations:
+        return df
+    ops = [
+        {"op_type": t.op_type, "op_args": t.op_args}
+        for t in transformations  # already sorted by position asc
+    ]
+    return apply_transformations(df, ops)
+
+
 def _maybe_normality_warning(
     df: pd.DataFrame, var_spec: dict[str, Any]
 ) -> list[str]:
@@ -410,7 +436,9 @@ async def run_analysis(
     _validate_columns(variables, analysis.variables)
 
     try:
-        df = await _load_dataframe(container, dataset)
+        df = await _load_dataframe_with_transformations(
+            container, dataset, session, user_id
+        )
     except Exception as exc:  # noqa: BLE001
         log.warning("Failed to load dataset bytes: %s", exc)
         raise HTTPException(status_code=422, detail="Could not load dataset") from None

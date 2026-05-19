@@ -1,4 +1,5 @@
-import { Plus } from 'lucide-react'
+import { Code2, Plus, Scale, Table2 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +18,13 @@ import {
   type VariableType,
 } from '@/lib/api'
 import { useDataset, useUpdateVariableType } from '@/hooks/useDatasets'
+import { useAnalysesForDataset } from '@/hooks/useAnalyses'
+import { useTransformations } from '@/hooks/useTransformations'
+
+import { DataView } from './DataView'
+import { PSMWizard } from './PSMWizard'
+import { SyntaxView } from './SyntaxView'
+import { TransformationStackPanel } from './TransformationStackPanel'
 
 const VARIABLE_TYPES: VariableType[] = [
   'numeric',
@@ -45,6 +53,8 @@ const TYPE_TONE: Record<VariableType, string> = {
   unknown: 'bg-muted text-muted-foreground border-border',
 }
 
+type Tab = 'variables' | 'data'
+
 export function DatasetDetail({
   projectId,
   datasetId,
@@ -55,6 +65,14 @@ export function DatasetDetail({
   onNewAnalysis: (dataset: Dataset) => void
 }) {
   const { data: dataset, isLoading } = useDataset(projectId, datasetId)
+  const { data: transformations = [] } = useTransformations(
+    projectId,
+    datasetId,
+  )
+  const { data: analyses = [] } = useAnalysesForDataset(projectId, datasetId)
+  const [tab, setTab] = useState<Tab>('variables')
+  const [showSyntax, setShowSyntax] = useState(false)
+  const [psmOpen, setPsmOpen] = useState(false)
 
   if (isLoading || !dataset) {
     return (
@@ -79,17 +97,111 @@ export function DatasetDetail({
             {dataset.n_rows} rows × {dataset.n_columns} columns
           </div>
         </div>
-        <Button
-          onClick={() => onNewAnalysis(dataset)}
-          className="bg-accent hover:bg-accent-hover text-white shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          New analysis
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPsmOpen(true)}
+            data-testid="open-psm"
+          >
+            <Scale className="h-4 w-4 mr-1.5" />
+            PSM
+          </Button>
+          <Button
+            onClick={() => onNewAnalysis(dataset)}
+            className="bg-accent hover:bg-accent-hover text-white"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            New analysis
+          </Button>
+        </div>
       </header>
 
-      <VariablesTable projectId={projectId} dataset={dataset} />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+        <div className="space-y-3">
+          <nav className="flex items-center gap-1 border-b border-border" role="tablist">
+            <TabButton
+              active={tab === 'variables'}
+              onClick={() => setTab('variables')}
+              label="Variables"
+            />
+            <TabButton
+              active={tab === 'data'}
+              onClick={() => setTab('data')}
+              label="Data view"
+              icon={<Table2 className="h-3.5 w-3.5 mr-1" />}
+            />
+          </nav>
+          {tab === 'variables' && (
+            <VariablesTable projectId={projectId} dataset={dataset} />
+          )}
+          {tab === 'data' && (
+            <DataView projectId={projectId} dataset={dataset} />
+          )}
+        </div>
+        <aside className="space-y-3">
+          <TransformationStackPanel
+            projectId={projectId}
+            datasetId={datasetId}
+          />
+          <div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-[12px]"
+              onClick={() => setShowSyntax((s) => !s)}
+              data-testid="toggle-syntax"
+            >
+              <Code2 className="h-3.5 w-3.5 mr-1.5" />
+              {showSyntax ? 'Hide syntax' : 'Show syntax'}
+            </Button>
+          </div>
+          {showSyntax && (
+            <SyntaxView
+              dataset={dataset}
+              transformations={transformations}
+              analyses={analyses}
+            />
+          )}
+        </aside>
+      </div>
+
+      <PSMWizard
+        open={psmOpen}
+        onOpenChange={setPsmOpen}
+        projectId={projectId}
+        dataset={dataset}
+      />
     </div>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  icon?: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`inline-flex items-center px-3 py-1.5 text-[12px] font-medium -mb-px border-b-2 transition-colors ${
+        active
+          ? 'border-accent text-accent'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }
 

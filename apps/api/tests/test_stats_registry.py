@@ -9,8 +9,11 @@ from research_api.services.stats.registry import (
 )
 
 
-def test_catalogue_has_all_18_keys():
-    expected = {
+def test_catalogue_has_all_keys():
+    # MP13 expanded the catalogue from 18 to 27 keys. Asserts ⊇ rather than ==
+    # so future additions don't break this; explicit guards on the 9 MP13 keys
+    # below catch any regression.
+    core_18 = {
         "independent_t",
         "paired_t",
         "mann_whitney",
@@ -30,7 +33,20 @@ def test_catalogue_has_all_18_keys():
         "icc",
         "cohen_kappa",
     }
-    assert set(CATALOGUE.keys()) == expected
+    mp13_9 = {
+        "mixed_effects_lm",
+        "glm_poisson",
+        "glm_binomial",
+        "glm_gamma",
+        "gee",
+        "bootstrap_mean_diff",
+        "permutation_test",
+        "tost_equivalence",
+        "tost_noninferiority",
+    }
+    keys = set(CATALOGUE.keys())
+    assert core_18 <= keys
+    assert mp13_9 <= keys
     for spec in CATALOGUE.values():
         assert isinstance(spec, TestSpec)
         assert spec.label

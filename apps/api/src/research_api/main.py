@@ -27,6 +27,8 @@ from .routes.reviewer_response import router as reviewer_response_router
 from .routes.reviews import router as reviews_router
 from .routes.reviews_meta import router as reviews_meta_router
 from .routes.snapshots import router as snapshots_router
+from .routes.transformations import router as transformations_router
+from .routes.cross_dataset import router as cross_dataset_router
 from .routes.writing import router as writing_router
 
 app = FastAPI(title="Research Manuscript Assistant API", version="0.0.1")
@@ -66,3 +68,5 @@ app.include_router(cover_letter_router, prefix="/api")
 app.include_router(reviewer_response_router, prefix="/api")
 app.include_router(power_router, prefix="/api")
 app.include_router(psm_router, prefix="/api")
+app.include_router(transformations_router, prefix="/api")
+app.include_router(cross_dataset_router, prefix="/api")

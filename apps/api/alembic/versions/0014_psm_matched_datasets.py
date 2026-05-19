@@ -26,7 +26,11 @@ def upgrade() -> None:
             sa.Column(
                 "derived_from_dataset_id",
                 sa.String(length=32),
-                sa.ForeignKey("datasets.id", ondelete="SET NULL"),
+                sa.ForeignKey(
+                    "datasets.id",
+                    name="fk_datasets_derived_from_dataset_id",
+                    ondelete="SET NULL",
+                ),
                 nullable=True,
             )
         )

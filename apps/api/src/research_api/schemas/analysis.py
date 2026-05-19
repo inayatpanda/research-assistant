@@ -31,6 +31,16 @@ TestKey = Literal[
     "cox_ph",
     "icc",
     "cohen_kappa",
+    # Phase 13 (MP13) — Extended catalogue.
+    "mixed_effects_lm",
+    "glm_poisson",
+    "glm_binomial",
+    "glm_gamma",
+    "gee",
+    "bootstrap_mean_diff",
+    "permutation_test",
+    "tost_equivalence",
+    "tost_noninferiority",
 ]
 
 AnalysisStatus = Literal["draft", "ready", "running", "completed", "failed"]

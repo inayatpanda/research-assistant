@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, Calculator, Combine } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -9,11 +9,14 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
+import { Button } from '@/components/ui/button'
 import { AnalysisResultCard } from '@/components/statistics/AnalysisResultCard'
+import { CrossDatasetDialog } from '@/components/statistics/CrossDatasetDialog'
 import { DatasetDetail } from '@/components/statistics/DatasetDetail'
 import { DatasetList } from '@/components/statistics/DatasetList'
 import { DatasetUpload } from '@/components/statistics/DatasetUpload'
 import { NewAnalysisWizard } from '@/components/statistics/NewAnalysisWizard'
+import { PowerCalculatorDialog } from '@/components/statistics/PowerCalculator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type Dataset, projectsApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -31,6 +34,8 @@ function StatisticsInner({ projectId }: { projectId: string }) {
   const datasetParam = params.get('dataset')
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardDataset, setWizardDataset] = useState<Dataset | null>(null)
+  const [powerOpen, setPowerOpen] = useState(false)
+  const [crossOpen, setCrossOpen] = useState(false)
 
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
@@ -64,18 +69,41 @@ function StatisticsInner({ projectId }: { projectId: string }) {
       exit="exit"
       className="max-w-7xl mx-auto px-8 py-10 space-y-8"
     >
-      <header>
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-          Statistics · {project?.study_type ?? '—'}
+      <header className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+            Statistics · {project?.study_type ?? '—'}
+          </div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight truncate">
+            {project?.title ?? 'Loading…'}
+          </h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Upload a masterchart, pick a research question, and let the assistant
+            recommend an appropriate test. Push the interpreted result into your
+            Results section.
+          </p>
         </div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight truncate">
-          {project?.title ?? 'Loading…'}
-        </h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Upload a masterchart, pick a research question, and let the assistant
-          recommend an appropriate test. Push the interpreted result into your
-          Results section.
-        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCrossOpen(true)}
+            data-testid="open-cross-dataset"
+            disabled={datasets.length < 2}
+          >
+            <Combine className="h-4 w-4 mr-1.5" />
+            Cross-dataset op
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPowerOpen(true)}
+            data-testid="open-power-calculator"
+          >
+            <Calculator className="h-4 w-4 mr-1.5" />
+            Power calculator
+          </Button>
+        </div>
       </header>
 
       <div className="hidden lg:block min-h-[60vh]">
@@ -160,6 +188,14 @@ function StatisticsInner({ projectId }: { projectId: string }) {
         onOpenChange={setWizardOpen}
         projectId={projectId}
         dataset={wizardDataset}
+      />
+
+      <PowerCalculatorDialog open={powerOpen} onOpenChange={setPowerOpen} />
+      <CrossDatasetDialog
+        open={crossOpen}
+        onOpenChange={setCrossOpen}
+        projectId={projectId}
+        datasets={datasets}
       />
     </motion.div>
   )

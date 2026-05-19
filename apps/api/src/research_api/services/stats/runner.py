@@ -75,9 +75,107 @@ def run(
         if panels is not None:
             chart = chart or {}
             chart = {**chart, "panels": panels}
+    # Phase 13 (MP13) — Charts that need the result's extras dict.
+    if chart is None:
+        chart = _post_result_chart(test_key, df, variables, result)
     if chart is not None:
         result = replace(result, chart=chart)
     return result
+
+
+def _post_result_chart(
+    test_key: str,
+    df: pd.DataFrame,
+    variables: dict[str, Any],
+    result: "TestResult",
+) -> dict[str, Any] | None:
+    """Build a chart that depends on `result.extras` (bootstrap, permutation,
+    TOST, mixed-effects, GLM, GEE). Returns None on any failure."""
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        if test_key == "bootstrap_mean_diff":
+            from research_api.services.stats.charts.bootstrap_dist import (
+                render_bootstrap_distribution,
+            )
+
+            dist = result.extras.get("bootstrap_distribution") or []
+            if not dist:
+                return None
+            return render_bootstrap_distribution(
+                distribution=dist,
+                observed=float(result.statistic),
+                ci_low=float(result.ci_low) if result.ci_low is not None else float("nan"),
+                ci_high=float(result.ci_high) if result.ci_high is not None else float("nan"),
+                title="Bootstrap mean difference",
+            )
+        if test_key == "permutation_test":
+            from research_api.services.stats.charts.permutation_dist import (
+                render_permutation_distribution,
+            )
+
+            dist = result.extras.get("null_distribution") or []
+            if not dist:
+                return None
+            return render_permutation_distribution(
+                null_distribution=dist,
+                observed=float(result.statistic),
+            )
+        if test_key in {"tost_equivalence", "tost_noninferiority"}:
+            from research_api.services.stats.charts.tost_plot import (
+                render_tost_bounds,
+            )
+
+            return render_tost_bounds(
+                observed_diff=float(result.extras.get("mean_diff", 0.0)),
+                low_eq=float(result.extras.get("low_eq", -1.0)),
+                upp_eq=float(result.extras.get("upp_eq", 1.0)),
+                n_a=int(result.n // 2),
+                n_b=int(result.n - result.n // 2),
+                title=test_key.replace("_", " ").title(),
+            )
+        if test_key == "mixed_effects_lm":
+            from research_api.services.stats.charts.mixed_effects import (
+                render_mixed_effects_caterpillar,
+            )
+
+            outcome = variables["outcome"]
+            cluster = variables["cluster"]
+            predictors = variables["predictors"]
+            if isinstance(predictors, str):
+                predictors = [predictors]
+            return render_mixed_effects_caterpillar(
+                df=df,
+                outcome=outcome,
+                predictors=list(predictors),
+                cluster=cluster,
+            )
+        if test_key in {"glm_poisson", "glm_binomial", "glm_gamma", "gee"}:
+            from research_api.services.stats.charts.glm_diagnostics import (
+                render_glm_deviance_residuals,
+            )
+
+            outcome = variables["outcome"]
+            predictors = variables["predictors"]
+            if isinstance(predictors, str):
+                predictors = [predictors]
+            family_map = {
+                "glm_poisson": "Poisson",
+                "glm_binomial": "Binomial",
+                "glm_gamma": "Gamma",
+                "gee": "Poisson",  # GEE diagnostic uses a Poisson-shaped chart by convention
+            }
+            return render_glm_deviance_residuals(
+                df=df,
+                outcome=outcome,
+                predictors=list(predictors),
+                family=family_map[test_key],
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("post-result chart failed for %s: %s", test_key, exc)
+        return None
+    return None
 
 
 def _ols_diagnostic_panels(
@@ -680,6 +778,307 @@ def _cohen_kappa(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
     )
 
 
+def _mixed_effects_lm(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    """Phase 13 (MP13) — Linear mixed-effects model with a random intercept.
+
+    Requires ``outcome``, ``predictors`` (list or single str), and ``cluster``
+    (grouping variable, e.g. patient_id). The random-effects structure is a
+    random intercept per cluster.
+    """
+    import statsmodels.formula.api as smf
+
+    outcome = var.get("outcome")
+    predictors = var.get("predictors")
+    cluster = var.get("cluster")
+    if not outcome or not predictors or not cluster:
+        raise ValueError(
+            "mixed_effects_lm requires 'outcome', 'predictors', and 'cluster'"
+        )
+    if isinstance(predictors, str):
+        predictors = [predictors]
+    _check_column_name(outcome)
+    _check_column_name(cluster)
+    for p in predictors:
+        _check_column_name(p)
+    _require_columns(df, [outcome, cluster, *predictors])
+    df = _drop_nan(df, [outcome, cluster, *predictors])
+    formula = f"{outcome} ~ " + " + ".join(predictors)
+    model = smf.mixedlm(formula, data=df, groups=df[cluster])
+    fit = model.fit(method="lbfgs")
+    fe_coefs = {f"coef_{name}": float(fit.fe_params.get(name, float("nan"))) for name in predictors}
+    fe_pvals = {f"p_{name}": float(fit.pvalues.get(name, float("nan"))) for name in predictors}
+    re_var = float(fit.cov_re.iloc[0, 0]) if hasattr(fit.cov_re, "iloc") else float("nan")
+    return TestResult(
+        test_key="mixed_effects_lm",
+        statistic=float(fe_coefs.get(f"coef_{predictors[0]}", float("nan"))),
+        p_value=float(fe_pvals.get(f"p_{predictors[0]}", float("nan"))),
+        effect_size=None,
+        ci_low=None,
+        ci_high=None,
+        n=int(fit.nobs),
+        df=float(len(predictors)),
+        extras={
+            "intercept": float(fit.fe_params.get("Intercept", float("nan"))),
+            "n_clusters": int(df[cluster].nunique()),
+            "random_intercept_var": re_var,
+            **fe_coefs,
+            **fe_pvals,
+        },
+    )
+
+
+def _glm(
+    df: pd.DataFrame,
+    var: dict[str, Any],
+    family_name: str,
+    test_key: str,
+) -> TestResult:
+    """Generic statsmodels GLM dispatch — Poisson / Binomial / Gamma."""
+    import statsmodels.api as sm
+    import statsmodels.formula.api as smf
+
+    outcome = var.get("outcome")
+    predictors = var.get("predictors")
+    if not outcome or not predictors:
+        raise ValueError(f"{test_key} requires 'outcome' and 'predictors'")
+    if isinstance(predictors, str):
+        predictors = [predictors]
+    _check_column_name(outcome)
+    for p in predictors:
+        _check_column_name(p)
+    _require_columns(df, [outcome, *predictors])
+    df = _drop_nan(df, [outcome, *predictors])
+
+    family_map = {
+        "Poisson": sm.families.Poisson(),
+        "Binomial": sm.families.Binomial(),
+        "Gamma": sm.families.Gamma(link=sm.families.links.Log()),
+    }
+    family = family_map[family_name]
+
+    formula = f"{outcome} ~ " + " + ".join(predictors)
+    model = smf.glm(formula, data=df, family=family).fit()
+    coefs = {f"coef_{name}": float(model.params[name]) for name in predictors}
+    pvals = {f"p_{name}": float(model.pvalues[name]) for name in predictors}
+    deviance = float(model.deviance)
+    return TestResult(
+        test_key=test_key,
+        statistic=float(model.params.get(predictors[0], float("nan"))),
+        p_value=float(model.pvalues.get(predictors[0], float("nan"))),
+        effect_size=None,
+        ci_low=None,
+        ci_high=None,
+        n=int(model.nobs),
+        df=float(model.df_model),
+        extras={
+            "family": family_name,
+            "intercept": float(model.params.get("Intercept", float("nan"))),
+            "deviance": deviance,
+            "df_resid": float(model.df_resid),
+            **coefs,
+            **pvals,
+        },
+    )
+
+
+def _glm_poisson(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _glm(df, var, "Poisson", "glm_poisson")
+
+
+def _glm_binomial(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _glm(df, var, "Binomial", "glm_binomial")
+
+
+def _glm_gamma(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _glm(df, var, "Gamma", "glm_gamma")
+
+
+def _gee(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    """GEE with an exchangeable working correlation."""
+    import statsmodels.api as sm
+    import statsmodels.formula.api as smf
+
+    outcome = var.get("outcome")
+    predictors = var.get("predictors")
+    cluster = var.get("cluster")
+    if not outcome or not predictors or not cluster:
+        raise ValueError("gee requires 'outcome', 'predictors', 'cluster'")
+    if isinstance(predictors, str):
+        predictors = [predictors]
+    _check_column_name(outcome)
+    _check_column_name(cluster)
+    for p in predictors:
+        _check_column_name(p)
+    _require_columns(df, [outcome, cluster, *predictors])
+    df = _drop_nan(df, [outcome, cluster, *predictors])
+    formula = f"{outcome} ~ " + " + ".join(predictors)
+    model = smf.gee(
+        formula, groups=cluster, data=df, cov_struct=sm.cov_struct.Exchangeable()
+    ).fit()
+    coefs = {f"coef_{name}": float(model.params[name]) for name in predictors}
+    pvals = {f"p_{name}": float(model.pvalues[name]) for name in predictors}
+    return TestResult(
+        test_key="gee",
+        statistic=float(model.params.get(predictors[0], float("nan"))),
+        p_value=float(model.pvalues.get(predictors[0], float("nan"))),
+        effect_size=None,
+        ci_low=None,
+        ci_high=None,
+        n=int(model.nobs),
+        df=float(len(predictors)),
+        extras={
+            "cov_struct": "exchangeable",
+            "n_clusters": int(df[cluster].nunique()),
+            "intercept": float(model.params.get("Intercept", float("nan"))),
+            **coefs,
+            **pvals,
+        },
+    )
+
+
+def _bootstrap_mean_diff(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    """Distribution-free 95% CI on (mean_b - mean_a) via 9,999 bootstrap resamples."""
+    outcome = var.get("outcome")
+    groups = var.get("groups")
+    if not outcome or not groups:
+        raise ValueError("bootstrap_mean_diff requires 'outcome' and 'groups'")
+    _require_columns(df, [outcome, groups])
+    df = _drop_nan(df, [outcome, groups])
+    a, b, labels = _two_groups(df, outcome, groups)
+    diff_obs = float(b.mean() - a.mean())
+
+    def _stat(x: np.ndarray, y: np.ndarray, axis: int = -1) -> np.ndarray:
+        return np.mean(y, axis=axis) - np.mean(x, axis=axis)
+
+    rng = np.random.default_rng(0xBEEF)
+    res = stats.bootstrap(
+        (a, b),
+        statistic=_stat,
+        vectorized=True,
+        paired=False,
+        n_resamples=9999,
+        method="basic",
+        confidence_level=0.95,
+        random_state=rng,
+    )
+    ci_low = float(res.confidence_interval.low)
+    ci_high = float(res.confidence_interval.high)
+    return TestResult(
+        test_key="bootstrap_mean_diff",
+        statistic=diff_obs,
+        p_value=float("nan"),
+        effect_size=diff_obs,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        n=int(len(a) + len(b)),
+        df=None,
+        extras={
+            "labels": labels,
+            "n_resamples": 9999,
+            "mean_a": float(a.mean()),
+            "mean_b": float(b.mean()),
+            "bootstrap_distribution": res.bootstrap_distribution.tolist(),
+        },
+    )
+
+
+def _permutation_test(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    """Permutation test for difference in means."""
+    outcome = var.get("outcome")
+    groups = var.get("groups")
+    if not outcome or not groups:
+        raise ValueError("permutation_test requires 'outcome' and 'groups'")
+    _require_columns(df, [outcome, groups])
+    df = _drop_nan(df, [outcome, groups])
+    a, b, labels = _two_groups(df, outcome, groups)
+
+    def _stat(x: np.ndarray, y: np.ndarray, axis: int = -1) -> np.ndarray:
+        return np.mean(x, axis=axis) - np.mean(y, axis=axis)
+
+    rng = np.random.default_rng(0xCAFE)
+    res = stats.permutation_test(
+        (a, b),
+        statistic=_stat,
+        permutation_type="independent",
+        n_resamples=9999,
+        alternative="two-sided",
+        random_state=rng,
+        vectorized=True,
+    )
+    return TestResult(
+        test_key="permutation_test",
+        statistic=float(res.statistic),
+        p_value=float(res.pvalue),
+        effect_size=float(res.statistic),
+        ci_low=None,
+        ci_high=None,
+        n=int(len(a) + len(b)),
+        df=None,
+        extras={
+            "labels": labels,
+            "n_resamples": 9999,
+            "null_distribution": res.null_distribution.tolist(),
+        },
+    )
+
+
+def _tost(
+    df: pd.DataFrame,
+    var: dict[str, Any],
+    test_key: str,
+) -> TestResult:
+    """Two One-Sided Tests for equivalence (or non-inferiority).
+
+    Requires ``low_eq`` and ``upp_eq`` margins. For non-inferiority the
+    caller passes ``low_eq = -margin`` and ``upp_eq = +inf`` (or a very
+    large number), but we accept whatever margins the form supplied.
+    """
+    from statsmodels.stats.weightstats import ttost_ind
+
+    outcome = var.get("outcome")
+    groups = var.get("groups")
+    low_eq = var.get("low_eq")
+    upp_eq = var.get("upp_eq")
+    if not outcome or not groups:
+        raise ValueError(f"{test_key} requires 'outcome' and 'groups'")
+    if low_eq is None or upp_eq is None:
+        raise ValueError(f"{test_key} requires 'low_eq' and 'upp_eq' margins")
+    _require_columns(df, [outcome, groups])
+    df = _drop_nan(df, [outcome, groups])
+    a, b, labels = _two_groups(df, outcome, groups)
+    p_value, t_lower, t_upper = ttost_ind(
+        a, b, low=float(low_eq), upp=float(upp_eq), usevar="unequal"
+    )
+    return TestResult(
+        test_key=test_key,
+        statistic=float(max(t_lower[0], t_upper[0])),
+        p_value=float(p_value),
+        effect_size=float(a.mean() - b.mean()),
+        ci_low=None,
+        ci_high=None,
+        n=int(len(a) + len(b)),
+        df=None,
+        extras={
+            "labels": labels,
+            "low_eq": float(low_eq),
+            "upp_eq": float(upp_eq),
+            "mean_diff": float(a.mean() - b.mean()),
+            "t_lower": float(t_lower[0]),
+            "p_lower": float(t_lower[1]),
+            "t_upper": float(t_upper[0]),
+            "p_upper": float(t_upper[1]),
+        },
+    )
+
+
+def _tost_equivalence(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _tost(df, var, "tost_equivalence")
+
+
+def _tost_noninferiority(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _tost(df, var, "tost_noninferiority")
+
+
 _DISPATCH = {
     "independent_t": _independent_t,
     "paired_t": _paired_t,
@@ -699,6 +1098,16 @@ _DISPATCH = {
     "cox_ph": _cox_ph,
     "icc": _icc,
     "cohen_kappa": _cohen_kappa,
+    # Phase 13 (MP13)
+    "mixed_effects_lm": _mixed_effects_lm,
+    "glm_poisson": _glm_poisson,
+    "glm_binomial": _glm_binomial,
+    "glm_gamma": _glm_gamma,
+    "gee": _gee,
+    "bootstrap_mean_diff": _bootstrap_mean_diff,
+    "permutation_test": _permutation_test,
+    "tost_equivalence": _tost_equivalence,
+    "tost_noninferiority": _tost_noninferiority,
 }
 
 

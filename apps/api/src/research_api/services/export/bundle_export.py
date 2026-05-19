@@ -30,6 +30,7 @@ from ...db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
     Figure,
@@ -62,6 +63,8 @@ class BundleInputs:
     abbreviations: list[Abbreviation] = field(default_factory=list)
     datasets: list[Dataset] = field(default_factory=list)
     dataset_variables: list[DatasetVariable] = field(default_factory=list)
+    # Phase 13 (MP13) — Pure-function transformation stacks per dataset.
+    dataset_transformations: list[DatasetTransformation] = field(default_factory=list)
     analyses: list[Analysis] = field(default_factory=list)
     analysis_results: list[AnalysisResult] = field(default_factory=list)
     review: Review | None = None
@@ -135,6 +138,9 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "abbreviations": [_row_to_dict(a) for a in inputs.abbreviations],
         "datasets": [_row_to_dict(d) for d in inputs.datasets],
         "dataset_variables": [_row_to_dict(v) for v in inputs.dataset_variables],
+        "dataset_transformations": [
+            _row_to_dict(t) for t in inputs.dataset_transformations
+        ],
         "analyses": [_row_to_dict(a) for a in inputs.analyses],
         "analysis_results": [_row_to_dict(r) for r in inputs.analysis_results],
         "review": _row_to_dict(inputs.review) if inputs.review is not None else None,

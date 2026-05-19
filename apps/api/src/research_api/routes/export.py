@@ -36,6 +36,7 @@ from ..db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
     Figure,
@@ -390,12 +391,19 @@ async def _collect_bundle_inputs(
     dataset_ids = [d.id for d in datasets]
 
     dataset_variables: list[DatasetVariable] = []
+    dataset_transformations: list[DatasetTransformation] = []
     if dataset_ids:
         dataset_variables = list((await session.execute(
             select(DatasetVariable).where(
                 DatasetVariable.user_id == user_id,
                 DatasetVariable.dataset_id.in_(dataset_ids),
             )
+        )).scalars().all())
+        dataset_transformations = list((await session.execute(
+            select(DatasetTransformation).where(
+                DatasetTransformation.user_id == user_id,
+                DatasetTransformation.dataset_id.in_(dataset_ids),
+            ).order_by(DatasetTransformation.position.asc())
         )).scalars().all())
 
     analyses = list((await session.execute(
@@ -553,6 +561,7 @@ async def _collect_bundle_inputs(
         abbreviations=abbreviations,
         datasets=datasets,
         dataset_variables=dataset_variables,
+        dataset_transformations=dataset_transformations,
         analyses=analyses,
         analysis_results=analysis_results,
         review=review,

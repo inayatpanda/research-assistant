@@ -25,6 +25,7 @@ import {
 
 import { AssumptionPills } from './AssumptionPills'
 import { ChartImage } from './ChartImage'
+import { OLSDiagnosticsPanel } from './OLSDiagnosticsPanel'
 
 export function AnalysisResultCard({
   projectId,
@@ -99,6 +100,11 @@ export function AnalysisResultCard({
               alt={`${TEST_LABELS[analysis.chosen_test]} chart`}
               downloadName={`analysis-${analysis.id}-chart`}
             />
+          )}
+
+          {(analysis.chosen_test === 'linear_regression' ||
+            analysis.chosen_test === 'multiple_linear') && (
+            <OLSDiagnosticsPanel chart={result?.chart} />
           )}
 
           {result?.assumptions && (

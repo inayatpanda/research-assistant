@@ -29,6 +29,7 @@ from ...db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
     Figure,
@@ -117,7 +118,7 @@ async def _do_import(
     counts: dict[str, int] = {
         "projects": 0, "articles": 0, "highlights": 0, "article_notes": 0,
         "manuscript_sections": 0, "abbreviations": 0,
-        "datasets": 0, "dataset_variables": 0,
+        "datasets": 0, "dataset_variables": 0, "dataset_transformations": 0,
         "analyses": 0, "analysis_results": 0,
         "reviews": 0, "search_records": 0, "screening_records": 0,
         "rob_assessments": 0, "extraction_records": 0,
@@ -259,6 +260,7 @@ async def _do_import(
             n_rows=ds.get("n_rows") or 0,
             n_columns=ds.get("n_columns") or 0,
             dataset_metadata=ds.get("dataset_metadata"),
+            derived_from_dataset_ids=ds.get("derived_from_dataset_ids"),
         ))
         if ds.get("id"):
             dataset_map[ds["id"]] = new_ds_id
@@ -296,6 +298,27 @@ async def _do_import(
         ))
         counts["dataset_variables"] += 1
     if counts["dataset_variables"]:
+        await session.flush()
+
+    # ── Phase 13 (MP13) — Dataset transformation stacks ───────────────
+    for t in bundle.get("dataset_transformations") or []:
+        new_ds = dataset_map.get(t.get("dataset_id"))
+        if new_ds is None:
+            continue
+        op_type = t.get("op_type")
+        if not op_type:
+            continue
+        session.add(DatasetTransformation(
+            id=_new_id(),
+            user_id=target_user_id,
+            dataset_id=new_ds,
+            position=int(t.get("position") or 0),
+            op_type=op_type,
+            op_args=t.get("op_args") or {},
+            label=t.get("label") or "",
+        ))
+        counts["dataset_transformations"] += 1
+    if counts["dataset_transformations"]:
         await session.flush()
 
     analysis_map: dict[str, str] = {}

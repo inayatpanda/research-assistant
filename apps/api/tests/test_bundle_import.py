@@ -258,6 +258,8 @@ async def test_import_full_round_trip_lossless(session):
         "projects": 1, "articles": 1, "highlights": 1, "article_notes": 1,
         "manuscript_sections": 1, "abbreviations": 1,
         "datasets": 1, "dataset_variables": 1,
+        # Phase 13 (MP13) — bundle source didn't include any transformations.
+        "dataset_transformations": 0,
         "analyses": 1, "analysis_results": 1,
         "reviews": 1, "search_records": 1, "screening_records": 1,
         "rob_assessments": 1, "extraction_records": 1,

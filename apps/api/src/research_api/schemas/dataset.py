@@ -47,3 +47,5 @@ class DatasetRead(BaseModel):
     # the covariate-balance JSON.
     derived_from_dataset_id: str | None = None
     dataset_metadata: dict[str, Any] | None = None
+    # Phase 13 (MP13) — Cross-dataset ops can derive from 2+ sources.
+    derived_from_dataset_ids: list[str] | None = None

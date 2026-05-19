@@ -205,6 +205,38 @@ class Dataset(Base):
     )
     # Phase 13 — PSM: covariate-balance JSON (smd_before / smd_after / params).
     dataset_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Phase 13 (MP13) — Cross-dataset ops: list of source dataset ids.
+    derived_from_dataset_ids: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DatasetTransformation(Base):
+    """Phase 13 (MP13) — Ordered stack of pure-function ops applied to a
+    dataset before any analysis runs. The original CSV is untouched.
+    """
+
+    __tablename__ = "dataset_transformations"
+    __table_args__ = (
+        Index(
+            "ix_dataset_transformations_dataset_position",
+            "dataset_id",
+            "position",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    op_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    op_args: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

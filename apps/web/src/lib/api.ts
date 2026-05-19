@@ -605,6 +605,16 @@ export const TestKeySchema = z.enum([
   'cox_ph',
   'icc',
   'cohen_kappa',
+  // Phase 13 (MP13) — extended catalogue.
+  'mixed_effects_lm',
+  'glm_poisson',
+  'glm_binomial',
+  'glm_gamma',
+  'gee',
+  'bootstrap_mean_diff',
+  'permutation_test',
+  'tost_equivalence',
+  'tost_noninferiority',
 ])
 export type TestKey = z.infer<typeof TestKeySchema>
 
@@ -676,6 +686,15 @@ export const TEST_LABELS: Record<TestKey, string> = {
   cox_ph: 'Cox proportional hazards',
   icc: 'Intraclass correlation',
   cohen_kappa: "Cohen's kappa",
+  mixed_effects_lm: 'Mixed-effects linear model',
+  glm_poisson: 'GLM (Poisson)',
+  glm_binomial: 'GLM (Binomial)',
+  glm_gamma: 'GLM (Gamma)',
+  gee: 'Generalized estimating equations',
+  bootstrap_mean_diff: 'Bootstrap (mean difference)',
+  permutation_test: 'Permutation test',
+  tost_equivalence: 'TOST equivalence',
+  tost_noninferiority: 'TOST non-inferiority',
 }
 
 export const analysesApi = {
@@ -2298,5 +2317,223 @@ export const reviewerResponseApi = {
     await api.delete(
       `/api/projects/${projectId}/reviewer-responses/${responseId}`,
     )
+  },
+}
+
+// ── Phase 13 (MP13): Dataset transformations ───────────────────────────
+
+export const TransformationOpTypeSchema = z.enum([
+  'filter',
+  'mutate',
+  'select',
+  'recode',
+  'drop_na',
+  'log_transform',
+  'z_score',
+  'group_summarise',
+])
+export type TransformationOpType = z.infer<typeof TransformationOpTypeSchema>
+
+export const TransformationReadSchema = z.object({
+  id: z.string(),
+  dataset_id: z.string(),
+  position: z.number().int(),
+  op_type: TransformationOpTypeSchema,
+  op_args: z.record(z.string(), z.any()),
+  label: z.string(),
+  created_at: z.string(),
+})
+export type TransformationRead = z.infer<typeof TransformationReadSchema>
+
+export type TransformationCreate = {
+  op_type: TransformationOpType
+  op_args?: Record<string, unknown>
+  label?: string
+  position?: number | null
+}
+
+export type TransformationUpdate = {
+  op_args?: Record<string, unknown>
+  label?: string
+  position?: number
+}
+
+export const transformationsApi = {
+  list: async (
+    projectId: string,
+    datasetId: string,
+  ): Promise<TransformationRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/datasets/${datasetId}/transformations`,
+    )
+    return z.array(TransformationReadSchema).parse(r.data)
+  },
+  add: async (
+    projectId: string,
+    datasetId: string,
+    body: TransformationCreate,
+  ): Promise<TransformationRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/transformations`,
+      body,
+    )
+    return TransformationReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    datasetId: string,
+    transformationId: string,
+    body: TransformationUpdate,
+  ): Promise<TransformationRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/datasets/${datasetId}/transformations/${transformationId}`,
+      body,
+    )
+    return TransformationReadSchema.parse(r.data)
+  },
+  delete: async (
+    projectId: string,
+    datasetId: string,
+    transformationId: string,
+  ): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/datasets/${datasetId}/transformations/${transformationId}`,
+    )
+  },
+  reorder: async (
+    projectId: string,
+    datasetId: string,
+    ids: string[],
+  ): Promise<TransformationRead[]> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/transformations/reorder`,
+      { ids },
+    )
+    return z.array(TransformationReadSchema).parse(r.data)
+  },
+}
+
+// ── Phase 13 (MP13): Cross-dataset op ──────────────────────────────────
+
+export const CrossOpNameSchema = z.enum(['merge', 'append', 'join'])
+export type CrossOpName = z.infer<typeof CrossOpNameSchema>
+
+export const CrossOpResponseSchema = z.object({
+  dataset_id: z.string(),
+  filename: z.string(),
+  n_rows: z.number().int(),
+  n_columns: z.number().int(),
+  source_dataset_ids: z.array(z.string()),
+})
+export type CrossOpResponse = z.infer<typeof CrossOpResponseSchema>
+
+export type CrossOpRequest = {
+  op: CrossOpName
+  source_dataset_ids: string[]
+  args?: Record<string, unknown>
+  filename?: string
+}
+
+export const crossDatasetApi = {
+  crossOp: async (
+    projectId: string,
+    body: CrossOpRequest,
+  ): Promise<CrossOpResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/cross-op`,
+      body,
+    )
+    return CrossOpResponseSchema.parse(r.data)
+  },
+}
+
+// ── Phase 13 (MP13): Power calculator ──────────────────────────────────
+
+export const PowerTestFamilySchema = z.enum([
+  'ttest_ind',
+  'ttest_paired',
+  'anova',
+  'chi_square',
+  'correlation',
+])
+export type PowerTestFamily = z.infer<typeof PowerTestFamilySchema>
+
+export const POWER_FAMILY_LABELS: Record<PowerTestFamily, string> = {
+  ttest_ind: 'Independent t-test',
+  ttest_paired: 'Paired t-test',
+  anova: 'One-way ANOVA',
+  chi_square: 'Chi-square',
+  correlation: 'Correlation',
+}
+
+export const PowerResponseSchema = z.object({
+  required_n: z.number().int(),
+  required_n_per_group: z.number().int().nullable(),
+  alpha: z.number(),
+  power: z.number(),
+  effect_size: z.number(),
+  sensitivity_curve_png: z.string(),
+  notes: z.string(),
+})
+export type PowerResponse = z.infer<typeof PowerResponseSchema>
+
+export type PowerRequest = {
+  test_family: PowerTestFamily
+  effect_size: number
+  alpha?: number
+  power?: number
+  k_groups?: number | null
+  df?: number | null
+}
+
+export const powerApi = {
+  calculate: async (body: PowerRequest): Promise<PowerResponse> => {
+    const r = await api.post('/api/power', body)
+    return PowerResponseSchema.parse(r.data)
+  },
+}
+
+// ── Phase 13 (MP13): Propensity Score Matching ─────────────────────────
+
+export const CovariateBalanceRowSchema = z.object({
+  covariate: z.string(),
+  smd: z.number(),
+  mean_treated: z.number(),
+  mean_control: z.number(),
+})
+export type CovariateBalanceRow = z.infer<typeof CovariateBalanceRowSchema>
+
+export const PSMResponseSchema = z.object({
+  matched_dataset_id: z.string(),
+  n_treated_total: z.number().int(),
+  n_control_total: z.number().int(),
+  n_treated_matched: z.number().int(),
+  n_control_matched: z.number().int(),
+  caliper_sd: z.number(),
+  balance_before: z.array(CovariateBalanceRowSchema),
+  balance_after: z.array(CovariateBalanceRowSchema),
+  max_smd_before: z.number(),
+  max_smd_after: z.number(),
+})
+export type PSMResponse = z.infer<typeof PSMResponseSchema>
+
+export type PSMRequest = {
+  treatment_col: string
+  covariate_cols: string[]
+  caliper_sd?: number
+}
+
+export const psmApi = {
+  run: async (
+    projectId: string,
+    datasetId: string,
+    body: PSMRequest,
+  ): Promise<PSMResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/psm`,
+      body,
+      { timeout: 60_000 },
+    )
+    return PSMResponseSchema.parse(r.data)
   },
 }
