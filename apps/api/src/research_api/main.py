@@ -15,6 +15,7 @@ from .routes.export import router as export_router
 from .routes.figures import router as figures_router
 from .routes.files import router as files_router
 from .routes.frontmatter import router as frontmatter_router
+from .routes.grade import router as grade_router
 from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
 from .routes.ingest import router as ingest_router
@@ -24,6 +25,7 @@ from .routes.notes import router as notes_router
 from .routes.plots import router as plots_router
 from .routes.power import router as power_router
 from .routes.projects import router as projects_router
+from .routes.prospero import router as prospero_router
 from .routes.psm import router as psm_router
 from .routes.reviewer_response import router as reviewer_response_router
 from .routes.reviews import router as reviews_router
@@ -74,3 +76,5 @@ app.include_router(transformations_router, prefix="/api")
 app.include_router(cross_dataset_router, prefix="/api")
 app.include_router(plots_router, prefix="/api")
 app.include_router(analysis_plans_router, prefix="/api")
+app.include_router(grade_router, prefix="/api")
+app.include_router(prospero_router, prefix="/api")

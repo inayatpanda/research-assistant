@@ -2742,3 +2742,165 @@ export const statsReportApi = {
     return r.data as Blob
   },
 }
+
+// ── Phase 14 (MP14): GRADE certainty + Summary-of-Findings ────────────
+
+export const GradeStartingCertaintySchema = z.enum(['high', 'low'])
+export type GradeStartingCertainty = z.infer<
+  typeof GradeStartingCertaintySchema
+>
+
+export const GradeDowngradeLevelSchema = z.enum([
+  'not_serious',
+  'serious',
+  'very_serious',
+])
+export type GradeDowngradeLevel = z.infer<typeof GradeDowngradeLevelSchema>
+
+export const GradeUpgradeLevelSchema = z.enum(['none', 'present', 'large'])
+export type GradeUpgradeLevel = z.infer<typeof GradeUpgradeLevelSchema>
+
+export const GradeSmallUpgradeSchema = z.enum(['none', 'present'])
+export type GradeSmallUpgrade = z.infer<typeof GradeSmallUpgradeSchema>
+
+export const GradeCertaintySchema = z.enum([
+  'high',
+  'moderate',
+  'low',
+  'very_low',
+])
+export type GradeCertainty = z.infer<typeof GradeCertaintySchema>
+
+export const GradeAssessmentReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  review_id: z.string(),
+  meta_id: z.string().nullable(),
+  outcome_label: z.string(),
+  starting_certainty: GradeStartingCertaintySchema,
+  domain_risk_of_bias: GradeDowngradeLevelSchema,
+  domain_inconsistency: GradeDowngradeLevelSchema,
+  domain_indirectness: GradeDowngradeLevelSchema,
+  domain_imprecision: GradeDowngradeLevelSchema,
+  domain_publication_bias: GradeDowngradeLevelSchema,
+  upgrade_large_effect: GradeUpgradeLevelSchema,
+  upgrade_dose_response: GradeSmallUpgradeSchema,
+  upgrade_confounders_against: GradeSmallUpgradeSchema,
+  certainty: GradeCertaintySchema,
+  notes: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type GradeAssessmentRead = z.infer<typeof GradeAssessmentReadSchema>
+
+export type GradeAssessmentCreate = {
+  outcome_label: string
+  starting_certainty: GradeStartingCertainty
+  domain_risk_of_bias: GradeDowngradeLevel
+  domain_inconsistency: GradeDowngradeLevel
+  domain_indirectness: GradeDowngradeLevel
+  domain_imprecision: GradeDowngradeLevel
+  domain_publication_bias: GradeDowngradeLevel
+  upgrade_large_effect: GradeUpgradeLevel
+  upgrade_dose_response: GradeSmallUpgrade
+  upgrade_confounders_against: GradeSmallUpgrade
+  notes?: string | null
+  meta_id?: string | null
+}
+
+export const gradeApi = {
+  list: async (projectId: string): Promise<GradeAssessmentRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/review/grade`)
+    return z.array(GradeAssessmentReadSchema).parse(r.data)
+  },
+  upsert: async (
+    projectId: string,
+    body: GradeAssessmentCreate,
+  ): Promise<GradeAssessmentRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/grade`,
+      body,
+    )
+    return GradeAssessmentReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string, gradeId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/review/grade/${gradeId}`)
+  },
+  push: async (projectId: string): Promise<ManuscriptSection> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/grade/push`,
+      {},
+    )
+    return ManuscriptSectionSchema.parse(r.data)
+  },
+}
+
+// ── Phase 14 (MP14): PROSPERO registration draft ──────────────────────
+
+export const ProsperoDraftReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  review_id: z.string(),
+  fields: z.record(z.string(), z.string()),
+  updated_at: z.string(),
+})
+export type ProsperoDraftRead = z.infer<typeof ProsperoDraftReadSchema>
+
+export const PROSPERO_FIELDS: readonly { key: string; label: string }[] = [
+  { key: 'title', label: 'Review title' },
+  { key: 'anticipated_start_date', label: 'Anticipated or actual start date' },
+  { key: 'anticipated_completion_date', label: 'Anticipated completion date' },
+  { key: 'stage', label: 'Stage of review at time of this submission' },
+  { key: 'named_contact', label: 'Named contact' },
+  { key: 'named_contact_email', label: 'Named contact email' },
+  { key: 'named_contact_address', label: 'Named contact address' },
+  {
+    key: 'organisational_affiliation',
+    label: 'Organisational affiliation of the review',
+  },
+  {
+    key: 'review_team_members',
+    label: 'Review team members and their organisational affiliations',
+  },
+  { key: 'funding_sources', label: 'Funding sources/sponsors' },
+  { key: 'conflicts_of_interest', label: 'Conflicts of interest' },
+  { key: 'collaborators', label: 'Collaborators' },
+  { key: 'review_question', label: 'Review question' },
+  { key: 'searches', label: 'Searches' },
+  {
+    key: 'url_to_protocol',
+    label: 'URL to search strategy / additional protocol',
+  },
+  { key: 'condition_or_domain', label: 'Condition or domain being studied' },
+  { key: 'participants', label: 'Participants/population' },
+  { key: 'intervention_exposure', label: 'Intervention(s), exposure(s)' },
+  { key: 'comparators_control', label: 'Comparator(s)/control' },
+  { key: 'types_of_study', label: 'Types of study to be included' },
+  { key: 'context', label: 'Context' },
+  { key: 'primary_outcomes', label: 'Main outcome(s)' },
+]
+
+export const prosperoApi = {
+  get: async (projectId: string): Promise<ProsperoDraftRead> => {
+    const r = await api.get(`/api/projects/${projectId}/review/prospero`)
+    return ProsperoDraftReadSchema.parse(r.data)
+  },
+  patch: async (
+    projectId: string,
+    fields: Record<string, string>,
+  ): Promise<ProsperoDraftRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/review/prospero`,
+      { fields },
+    )
+    return ProsperoDraftReadSchema.parse(r.data)
+  },
+  export: async (projectId: string): Promise<string> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/prospero/export`,
+      undefined,
+      { responseType: 'text' },
+    )
+    return typeof r.data === 'string' ? r.data : String(r.data)
+  },
+}

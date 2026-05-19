@@ -37,6 +37,7 @@ from ...db.models import (
     DatasetVariable,
     ExtractionRecord,
     Figure,
+    GradeAssessment,
     Highlight,
     ManuscriptComment,
     ManuscriptSection,
@@ -45,6 +46,7 @@ from ...db.models import (
     MetaInput,
     Project,
     ProjectFrontmatter,
+    ProsperoDraft,
     Review,
     ReviewerResponse,
     RobAssessment,
@@ -97,6 +99,9 @@ class BundleInputs:
     dataset_plots: list[DatasetPlot] = field(default_factory=list)
     analysis_plans: list[AnalysisPlan] = field(default_factory=list)
     analysis_plan_runs: list[AnalysisPlanRun] = field(default_factory=list)
+    # Phase 14 (MP14) — GRADE assessments + PROSPERO drafts
+    grade_assessments: list[GradeAssessment] = field(default_factory=list)
+    prospero_draft: ProsperoDraft | None = None
 
 
 def _serialise(value: Any) -> Any:
@@ -191,4 +196,12 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "analysis_plan_runs": [
             _row_to_dict(r) for r in inputs.analysis_plan_runs
         ],
+        "grade_assessments": [
+            _row_to_dict(g) for g in inputs.grade_assessments
+        ],
+        "prospero_draft": (
+            _row_to_dict(inputs.prospero_draft)
+            if inputs.prospero_draft is not None
+            else None
+        ),
     }

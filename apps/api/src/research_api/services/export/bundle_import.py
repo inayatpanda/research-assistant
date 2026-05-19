@@ -36,6 +36,7 @@ from ...db.models import (
     DatasetVariable,
     ExtractionRecord,
     Figure,
+    GradeAssessment,
     Highlight,
     ManuscriptComment,
     ManuscriptSection,
@@ -44,6 +45,7 @@ from ...db.models import (
     MetaInput,
     Project,
     ProjectFrontmatter,
+    ProsperoDraft,
     Review,
     ReviewerResponse,
     RobAssessment,
@@ -132,6 +134,7 @@ async def _do_import(
         "manuscript_snapshots": 0, "manuscript_comments": 0,
         "cover_letter": 0, "reviewer_responses": 0,
         "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
+        "grade_assessments": 0, "prospero_draft": 0,
     }
 
     proj_in = bundle["project"]
@@ -567,6 +570,59 @@ async def _do_import(
             counts["meta_inputs"] += 1
         if counts["meta_inputs"]:
             await session.flush()
+
+        # ── GRADE assessments (Phase 14) ───────────────────────────────
+        # Drop the meta_id link if the source meta wasn't carried in this
+        # bundle — otherwise we'd point at a meta from a different project.
+        seen_outcomes: set[str] = set()
+        for g in bundle.get("grade_assessments") or []:
+            outcome = (g.get("outcome_label") or "").strip()
+            if not outcome:
+                continue
+            if outcome in seen_outcomes:
+                # UNIQUE(review_id, outcome_label) — drop duplicates instead
+                # of failing the whole import.
+                continue
+            seen_outcomes.add(outcome)
+            new_meta = meta_map.get(g.get("meta_id")) if g.get("meta_id") else None
+            session.add(GradeAssessment(
+                id=_new_id(),
+                user_id=target_user_id,
+                project_id=new_project_id,
+                review_id=new_review_id,
+                meta_id=new_meta,
+                outcome_label=outcome,
+                starting_certainty=g.get("starting_certainty") or "high",
+                domain_risk_of_bias=g.get("domain_risk_of_bias") or "not_serious",
+                domain_inconsistency=g.get("domain_inconsistency") or "not_serious",
+                domain_indirectness=g.get("domain_indirectness") or "not_serious",
+                domain_imprecision=g.get("domain_imprecision") or "not_serious",
+                domain_publication_bias=g.get("domain_publication_bias") or "not_serious",
+                upgrade_large_effect=g.get("upgrade_large_effect") or "none",
+                upgrade_dose_response=g.get("upgrade_dose_response") or "none",
+                upgrade_confounders_against=g.get("upgrade_confounders_against") or "none",
+                certainty=g.get("certainty") or "low",
+                notes=g.get("notes"),
+            ))
+            counts["grade_assessments"] += 1
+        if counts["grade_assessments"]:
+            await session.flush()
+
+        # ── PROSPERO draft (Phase 14) ──────────────────────────────────
+        pros_in = bundle.get("prospero_draft")
+        if isinstance(pros_in, dict):
+            fields_in = pros_in.get("fields")
+            if not isinstance(fields_in, dict):
+                fields_in = {}
+            session.add(ProsperoDraft(
+                id=_new_id(),
+                user_id=target_user_id,
+                project_id=new_project_id,
+                review_id=new_review_id,
+                fields=fields_in,
+            ))
+            await session.flush()
+            counts["prospero_draft"] = 1
 
     # ── ICMJE front-matter (Phase 10) ──────────────────────────────────
     author_map: dict[str, str] = {}

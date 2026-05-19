@@ -999,6 +999,120 @@ class AnalysisPlanRun(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class GradeAssessment(Base):
+    """Phase 14 (MP14) — GRADE certainty-of-evidence assessment per outcome.
+
+    One row per (review, outcome_label). The five downgrade domains and three
+    upgrade domains are persisted as plain strings (validated at the Pydantic
+    boundary). ``certainty`` is derived by ``services.review.grade`` on every
+    write, but persisted so the SoF builder can sort/filter without re-running
+    the algorithm. ``meta_id`` is optional — narrative-synthesis outcomes
+    don't have a pooled estimate.
+    """
+
+    __tablename__ = "grade_assessments"
+    __table_args__ = (
+        Index(
+            "uq_grade_assessments_review_outcome",
+            "review_id", "outcome_label",
+            unique=True,
+        ),
+        Index(
+            "ix_grade_assessments_review_user",
+            "review_id", "user_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    meta_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("meta_analyses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    outcome_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    starting_certainty: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="high"
+    )
+    domain_risk_of_bias: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_serious"
+    )
+    domain_inconsistency: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_serious"
+    )
+    domain_indirectness: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_serious"
+    )
+    domain_imprecision: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_serious"
+    )
+    domain_publication_bias: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="not_serious"
+    )
+    upgrade_large_effect: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="none"
+    )
+    upgrade_dose_response: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="none"
+    )
+    upgrade_confounders_against: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="none"
+    )
+    certainty: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="high"
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ProsperoDraft(Base):
+    """Phase 14 (MP14) — PROSPERO registration draft.
+
+    The 22 PROSPERO fields are kept as a flat JSON dict so we can add/remove
+    fields without a migration. The service layer (``services.review.prospero``)
+    owns the field catalogue + default pre-fill logic.
+    """
+
+    __tablename__ = "prospero_drafts"
+    __table_args__ = (
+        Index(
+            "uq_prospero_drafts_review_user",
+            "review_id", "user_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    fields: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class ManuscriptComment(Base):
     """Phase 11 — margin comment anchored to a manuscript section.
 

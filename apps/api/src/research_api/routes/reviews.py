@@ -587,6 +587,8 @@ _BLOCK_TAG_BY_CLASS: dict[str, str] = {
     "meta-analysis-forest": "figure",
     # Phase 8.7 — CONSORT 2010 flow diagram (pushed by routes/consort.py).
     "consort-flow": "figure",
+    # Phase 14 (MP14) — Summary-of-Findings (SoF) table for GRADE outcomes.
+    "sof-table": "table",
 }
 
 

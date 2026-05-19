@@ -6,7 +6,10 @@ import { useSearchParams } from 'react-router-dom'
 import { EmptyReviewState } from '@/components/review/EmptyReviewState'
 import { ExtractionTable } from '@/components/review/ExtractionTable'
 import { PRISMAFlowChart } from '@/components/review/PRISMAFlowChart'
+import { PROSPEROForm } from '@/components/review/PROSPEROForm'
 import { ReviewHeader } from '@/components/review/ReviewHeader'
+import { GRADEAssessmentForm } from '@/components/review/grade/GRADEAssessmentForm'
+import { SoFTable } from '@/components/review/grade/SoFTable'
 import { ForestPlotView } from '@/components/review/meta/ForestPlotView'
 import { FunnelPlotView } from '@/components/review/meta/FunnelPlotView'
 import { MetaListPanel } from '@/components/review/meta/MetaListPanel'
@@ -37,9 +40,18 @@ import {
   useRoBTools,
   useScreening,
 } from '@/hooks/useReviews'
+import { useGradeList, usePushGrade } from '@/hooks/useGrade'
 import { useMetaDetail } from '@/hooks/useMeta'
 
-type ReviewTab = 'search' | 'screening' | 'rob' | 'extraction' | 'meta' | 'prisma'
+type ReviewTab =
+  | 'search'
+  | 'screening'
+  | 'rob'
+  | 'extraction'
+  | 'meta'
+  | 'prisma'
+  | 'grade'
+  | 'prospero'
 
 const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'search', label: 'Search log' },
@@ -48,6 +60,8 @@ const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'extraction', label: 'Data extraction' },
   { id: 'meta', label: 'Meta-analysis' },
   { id: 'prisma', label: 'PRISMA flow' },
+  { id: 'grade', label: 'GRADE' },
+  { id: 'prospero', label: 'PROSPERO' },
 ]
 
 export default function SystematicReviewPage() {
@@ -128,6 +142,8 @@ function ReviewInner({ projectId }: { projectId: string }) {
         {tab === 'extraction' && <ExtractionTable projectId={projectId} />}
         {tab === 'meta' && <MetaTabContent projectId={projectId} />}
         {tab === 'prisma' && <PRISMAFlowChart projectId={projectId} />}
+        {tab === 'grade' && <GradeTabContent projectId={projectId} />}
+        {tab === 'prospero' && <PROSPEROForm projectId={projectId} />}
       </div>
     </motion.div>
   )
@@ -351,5 +367,43 @@ function RoBStudyRow({
         </SheetContent>
       </Sheet>
     </li>
+  )
+}
+
+function GradeTabContent({ projectId }: { projectId: string }) {
+  const { data: rows = [] } = useGradeList(projectId)
+  const push = usePushGrade(projectId)
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-[15px] font-semibold tracking-tight">
+            GRADE certainty of evidence
+          </h3>
+          <div className="text-[12px] text-muted-foreground">
+            One row per outcome. Add a new outcome below; the Summary of
+            Findings table updates live.
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => push.mutate()}
+          disabled={rows.length === 0 || push.isPending}
+        >
+          {push.isPending ? 'Pushing…' : 'Push SoF to Results'}
+        </Button>
+      </div>
+
+      <GRADEAssessmentForm projectId={projectId} />
+
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+          Summary of Findings
+        </div>
+        <SoFTable projectId={projectId} rows={rows} />
+      </div>
+    </div>
   )
 }

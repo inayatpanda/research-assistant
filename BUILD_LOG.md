@@ -5,6 +5,76 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-19 · Mini-phase 14 — GRADE certainty + PROSPERO helper ✅ COMPLETE
+
+**Scope**
+
+Two streams landed under one mini-phase tag (`phase-14`):
+
+1. **GRADE certainty of evidence per outcome.** New `grade_assessments`
+   table (migration `0018_grade_prospero`). One row per (review,
+   outcome_label) with five downgrade domains, three upgrade domains,
+   starting certainty (`high` for RCTs / `low` for observational), and
+   the derived certainty band (`high` / `moderate` / `low` / `very_low`).
+   The derivation lives in `services/review/grade.py::compute_certainty`
+   — pure function, mirrored on the frontend in `lib/grade.ts` for
+   live UI feedback. Algorithm: start band 4 (high) or 2 (low); sum the
+   five downgrade deltas (0 / -1 / -2 per `not_serious` / `serious` /
+   `very_serious`); when no downgrade fires, add upgrades (large effect
+   caps at +2; the other two upgrades cap at +1). Clamp to [1..4] →
+   map to certainty. `services/review/sof_table.py::build_sof_html`
+   renders a Summary-of-Findings table with coloured `cert-*` badges
+   and `[CITE_<aid>]` tokens for pooled studies. Routes:
+   GET/POST/DELETE `/api/projects/{pid}/review/grade` plus
+   POST `…/grade/push` (registered as the `sof-table` class hook in the
+   `_BLOCK_TAG_BY_CLASS` registry so re-pushes overwrite cleanly).
+2. **PROSPERO registration helper.** New `prospero_drafts` table (one
+   per review). `services/review/prospero.py` owns a 22-field catalogue
+   plus `default_draft()` which pre-fills title from the project,
+   anticipated start/finish from `review.created_at + 6 months`, PICO
+   fields from the review row, and `searches` from the project's
+   search records. `format_for_export()` produces a labelled
+   copy-paste block (`text/plain`). Routes: GET (auto-creates),
+   PATCH (partial-merge into the JSON `fields` dict), and POST `…/export`.
+
+**Bundle round-trip** — `bundle_export` / `bundle_import` extended for
+`grade_assessments` + `prospero_draft`. Orphan handling: when the
+source meta-analysis isn't carried in the bundle, the `meta_id` link is
+nulled (the row still lands as a narrative-synthesis outcome).
+
+**Frontend** — `lib/api.ts` gains `gradeApi` + `prosperoApi`. Two new
+tabs ("GRADE" and "PROSPERO") on `SystematicReviewPage.tsx` —
+appended after the existing six tabs (Search log, Screening, RoB,
+Data extraction, Meta-analysis, PRISMA flow). The GRADE tab combines a
+single `GRADEAssessmentForm` (5 downgrade selects + 3 upgrade selects
++ live certainty badge) above the `SoFTable` listing every saved
+outcome with a "Push SoF to Results" button. The PROSPERO tab renders
+the 22 fields grouped into Administrative / Methods / Outcomes /
+Funding sections, with "Re-load auto-fill from review" and "Copy
+formatted text" buttons.
+
+**Bug found + fixed** — initial `test_bundle_import_full_round_trip`
+fail: the import counter dict didn't list the two new keys
+(`grade_assessments`, `prospero_draft`), so the existing equality
+assertion broke. Fix: registered the keys in
+`bundle_import.py::_do_import`'s counter initialiser and updated the
+single legacy test to include them.
+
+**Tests**
+
+- Backend +52 across 7 new files
+  (`test_grade_service.py` ×14, `test_grade_route.py` ×9,
+  `test_grade_push.py` ×4, `test_security_grade_isolation.py` ×7,
+  `test_prospero_service.py` ×8, `test_prospero_route.py` ×7,
+  `test_bundle_grade_prospero_round_trip.py` ×3).
+- Frontend +10 vitest (7 in `lib/__tests__/grade.test.ts` + 3 in
+  `components/review/grade/__tests__/GRADEAssessmentForm.test.tsx`).
+- Final: backend **1518** all green, vitest **207** all green.
+
+**Tag**: `phase-14`.
+
+---
+
 ## 2026-05-19 · Mini-phase 13.5 — Plots + plans + reports + output viewer ✅ COMPLETE
 
 **Scope**

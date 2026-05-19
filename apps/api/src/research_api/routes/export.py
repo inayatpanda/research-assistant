@@ -43,6 +43,7 @@ from ..db.models import (
     DatasetVariable,
     ExtractionRecord,
     Figure,
+    GradeAssessment,
     Highlight,
     ManuscriptComment,
     ManuscriptSection,
@@ -51,6 +52,7 @@ from ..db.models import (
     MetaInput,
     Project,
     ProjectFrontmatter,
+    ProsperoDraft,
     Review,
     ReviewerResponse,
     RobAssessment,
@@ -447,6 +449,8 @@ async def _collect_bundle_inputs(
     extraction_records: list[ExtractionRecord] = []
     meta_analyses: list[MetaAnalysis] = []
     meta_inputs: list[MetaInput] = []
+    grade_assessments: list[GradeAssessment] = []
+    prospero_draft: ProsperoDraft | None = None
     if review is not None:
         search_records = list((await session.execute(
             select(SearchRecord).where(
@@ -486,6 +490,18 @@ async def _collect_bundle_inputs(
                     MetaInput.meta_id.in_(meta_ids),
                 )
             )).scalars().all())
+        grade_assessments = list((await session.execute(
+            select(GradeAssessment).where(
+                GradeAssessment.review_id == review.id,
+                GradeAssessment.user_id == user_id,
+            )
+        )).scalars().all())
+        prospero_draft = (await session.execute(
+            select(ProsperoDraft).where(
+                ProsperoDraft.review_id == review.id,
+                ProsperoDraft.user_id == user_id,
+            )
+        )).scalar_one_or_none()
 
     figures = list((await session.execute(
         select(Figure).where(
@@ -621,6 +637,8 @@ async def _collect_bundle_inputs(
         dataset_plots=dataset_plots,
         analysis_plans=analysis_plans,
         analysis_plan_runs=analysis_plan_runs,
+        grade_assessments=grade_assessments,
+        prospero_draft=prospero_draft,
     )
 
 
