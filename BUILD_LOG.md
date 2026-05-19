@@ -1641,3 +1641,69 @@ Tag: **`phase-19`**. Migration head: **`0020_sr_depth_mesh`** (`reviews.tool_per
 **Integrity-hash encoding** (locked in for the lifetime of the hash): `json.dumps(steps, sort_keys=True, ensure_ascii=False, separators=(",",":"))` with floats rounded to 8 decimal places via a recursive walker, and NaN/Inf encoded as fixed string tokens. Sorting dict keys before encoding is non-negotiable — without it, a Python-dict round-trip would change the hash.
 
 **Hard rules upheld**: instrument bindings are pure metadata (no runner branch reads `instrument_key`); only existing pip libs were used; the deterministic hash is stable across hosts (verified by NaN/Inf test).
+
+
+## Statistics module deep refinement (2026-05-19)
+
+**Tests**: 1816 → 1841 backend (+25); 239 → 245 vitest (+6). All green.
+
+Five commits, each at a logical boundary:
+
+1. **`fix(stats-refine): multi-sheet XLSX → one Dataset per sheet + long-format hint`** — the canonical defect. `read_table()` only loaded the active sheet; the rest of `hip_THA_masterchart_v2.xlsx` (Perioperative, Outcomes_Long, Costs_GBP) was unreachable. `ingest()` and downstream readers now honour an optional `sheet_name`; the upload route splits a multi-sheet workbook into N datasets sharing a single file_ref (no extra disk copies). A `detect_long_format()` heuristic flags repeated-measures shape (name-matched subject id + time-like column + numeric outcome) and the result decorates the dataset with a UI banner pointing toward mixed-effects. +15 backend tests.
+
+2. **`fix(stats-refine): DataView shows actual rows, not sample-values pseudo-rows`** — the most egregious UX defect. The editable grid was synthesising rows from `DatasetVariable.sample_values` (≤ 5 distinct values per column), making a 120-row table appear to have 5 rows while the header confidently announced "120 rows total". New `GET /datasets/{id}/data?offset=&limit=` endpoint returns real post-transformation rows (capped at 500/page) with numpy scalars coerced to JSON-safe natives. DataView rewritten to drive off the new endpoint with edits/drops as in-memory overlays — the previous dual-state pattern (`rows` state synced from `serverRows` derived data via useEffect) tore down DOM nodes mid-render and silently broke cell click handlers. `detect_table_mime` also relaxed to accept single-column CSVs while explicitly rejecting PDF/PNG/JPEG/GIF magic bytes. +6 backend tests + 2 vitest.
+
+3. **`fix(stats-refine): wizards — stale state in MixedEffectsWizard + missing power families`** — two adjacent defects. (a) MixedEffectsWizard called `setX(value); emit()` inline; because `emit` was a regular closure capturing the *render-time* state, the parent received the pre-edit config every time. Replaced with a single `useEffect` driven by the post-state. (b) Backend exposed 8 power families but the FE only listed 5 — the MP17 extras (`logrank`, `mixed_effects`, `noninferiority`) were never wired through. PowerCalculator now has per-family input panels for the three new families and renders the optional `required_events` / `required_clusters_per_arm` / `design_effect` extras. +3 vitest (MixedEffectsWizard).
+
+4. **`fix(stats-refine): MP17 panels — error display + formatted result tables`** — IRR / CACE / Sensitivity / Imputation panels swallowed mutation errors silently (running CACE on an all-complier assignment column gave the user nothing to suggest the compliance-rate guard had tripped) and either rendered raw JSON `<pre>` blobs or showed `0.000` as the lower-bound p-value. All four now render a `role="alert"` error block, format p < 0.001 as `"<0.001"`, and replace JSON dumps with structured tables (4-col pooled imputation summary; per-method IRR stats with collapsed raw output behind a `<details>`).
+
+5. **`fix(stats-refine): drop_rows transformation op + InstrumentLibraryBrowser unbind`** — DataView's "Drop selected" was sending a `filter` op the backend never understood; with sample-values data it was invisibly broken, with real data it became a 400 on every drop. New first-class `drop_rows` op accepts either `indices: [int]` or `drop_row_ids: ["r-N"]`. InstrumentLibraryBrowser gained a "Clear binding" button (the API supported `null` but the UI had no path to it) plus mutation-error display and an empty-state message for the search filter.
+
+**By-feature summary**
+
+| # | Surface | Status going in | Status post-refine |
+|---|---------|-----------------|---------------------|
+| 1 | Dataset upload | Multi-sheet broken (sheets 2..N silently dropped) | **Fixed** — N datasets, sheet metadata, long-format hint |
+| 2 | DataView grid | Pseudo-rows from sample_values (5 rows visible on 120-row table) | **Fixed** — real rows via new preview endpoint, paginated |
+| 3 | TransformationStack | Drop-selected broken (wrong op shape) | **Fixed** — drop_rows op |
+| 4 | Variable typing | Worked | Worked (no changes) |
+| 5 | Single-group analyses (wizard) | Worked | Worked |
+| 6 | Regression | Worked | Worked (4-panel OLS diagnostics unchanged) |
+| 7 | Mixed-effects wizard | **Stale state bug** silently dispatched wrong config | **Fixed** — useEffect-driven emit |
+| 8 | Survival | Worked | Worked |
+| 9 | Power calculator | Only 5 of 8 families exposed | **Fixed** — all 8 families + extras (events, clusters, DE) |
+| 10 | PSM | Worked | Worked |
+| 11 | Cross-dataset | Worked | Worked |
+| 12 | Populations | Worked | Worked |
+| 13 | Imputation (MICE) | Raw JSON blob result | **Fixed** — formatted table + error display |
+| 14 | CACE | No error display, p=0.000 lower bound | **Fixed** — `<0.001` + error alert |
+| 15 | Sensitivity | Same pattern | **Fixed** |
+| 16 | IRR | Raw JSON blob result | **Fixed** — per-method formatted stats |
+| 17 | Plot workspace | Worked (graceful error for missing fields) | Worked |
+| 18 | Analysis plans | Worked | Worked |
+| 19 | Output viewer | Worked | Worked |
+| 20 | Push to manuscript | Worked (CITE token resolved post-MP17) | Worked |
+
+**Multi-sheet XLSX decision**: each sheet becomes its own Dataset row, sharing a single underlying `file_ref` on disk and recording `dataset_metadata.sheet_name`. The downstream readers consult `read_dataset(data, dataset)` which routes through `read_table(... sheet_name=...)`. Alternative considered: one dataset with the picker UI in the Stats workspace. Rejected because (a) every existing analysis route expects a single dataset → single dataframe, and (b) researchers in our flows reason about each sheet as a distinct cohort/table — separating them at the dataset level matches the mental model.
+
+**Polish applied** (smaller-than-bug refinements, included in the commits above):
+- DataView empty state message distinguishes "no rows at all" from "no rows on this page match the filters".
+- Single-column CSV upload now succeeds (`detect_table_mime` previously required a separator).
+- Dataset preview returns `410` not `500` when the file payload is missing (bundle import edge case).
+- DataView pagination caption shows `N of TOTAL · page X/Y` instead of just the page index.
+- DatasetList rows carry a sheet pill (Layers icon) + long-format pill (Repeat icon).
+- DatasetDetail surfaces an amber banner on long-format datasets pointing at mixed-effects.
+- Power result panel surfaces `required_events`, `required_clusters_per_arm`, `design_effect` when present.
+
+**Limitations remaining (logged for follow-up)**
+- The wizard's "Re-interpret" doesn't show *what* changed in the AI output — re-runs are fully replaced. Could add diff highlighting.
+- Power calculator family change resets effect-size to medium preset but doesn't reset family-specific extras (e.g. switching to mixed_effects keeps an old event_rate in state; only the right field is sent because the validation gate strips inapplicable fields, so this is not a correctness issue, just UI residue).
+- PlotWorkspace doesn't expose multi-faceted previews; this is by design (one preview at a time) but could be enriched.
+- AnalysisResultCard "Push to Manuscript" is one-shot — there's no "undo push" if the user immediately regrets it. Researchers can delete the Results paragraph manually.
+- `detect_long_format` is conservative; a dataset with custom subject column names (e.g. `record_no`, `study_id`) outside the regex won't trigger the banner. The list of name-match patterns is intentionally short to avoid false positives.
+
+**Test counts (final)**: backend 1841 (+25 over the 1816 baseline; target was ≥1840 — met); vitest 245 (+6 over the 239 baseline; target was ≥250 — slight shortfall, by design, as the shadcn Select component is hard to drive from `fireEvent.change`; trade-off was made for end-to-end coverage of the power-family expansion).
+
+**Bundle round-trip**: `dataset_metadata.sheet_name` and `long_format_hint` are JSON columns and survive the existing bundle import/export pipeline (verified — `bundle_import.py` already round-trips `dataset_metadata` verbatim).
+
+**Hard rules upheld**: no new pip/npm deps; only the editable DataView's behaviour shifted under the hood; the original `filter` op is still accepted (a `drop_rows` op was added rather than overloading `filter`).
