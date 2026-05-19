@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { FileText, MoreVertical } from 'lucide-react'
+import { BookOpen, FileText, MoreVertical } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
@@ -73,6 +73,24 @@ export function ArticleListItem({
         </div>
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (!fileUrl) return
+            navigate(`/projects/${article.project_id}/reader/${article.id}`)
+          }}
+          disabled={!fileUrl}
+          title={
+            fileUrl
+              ? 'Open in Reader'
+              : 'No PDF attached — upload the file to use the Reader'
+          }
+          aria-label="Open in Reader"
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <BookOpen className="h-4 w-4" />
+        </button>
         {fileUrl && (
           <a
             href={fileUrl}

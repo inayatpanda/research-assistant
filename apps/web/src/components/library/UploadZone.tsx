@@ -47,6 +47,12 @@ export function UploadZone({
           )
           qc.invalidateQueries({ queryKey: ['articles', projectId] })
           onUploaded?.(resp)
+          // Auto-clear succeeded rows after 5s so the dropzone display doesn't
+          // pile up when the user uploads many files in a row (#L1/#L3). Errors
+          // remain so the user can act on them.
+          setTimeout(() => {
+            setRows((r) => r.filter((row) => row.id !== rowId))
+          }, 5000)
         } catch (e) {
           const msg = e instanceof Error ? e.message : 'Upload failed'
           setRows((r) =>

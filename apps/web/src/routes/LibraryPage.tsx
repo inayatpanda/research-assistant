@@ -28,7 +28,12 @@ import { useProjectId } from '@/lib/projectContext'
 export default function LibraryPage() {
   const projectId = useProjectId()
   const [filters, setFilters] = useState<Filters>({ sort: 'created_desc' })
-  const [editing, setEditing] = useState<Article | null>(null)
+  // Articles waiting to be confirmed sit in a FIFO queue. We only show the
+  // dialog for the head of the queue so multi-file uploads can't stack
+  // dialogs invisibly on top of each other (#L2). Manual edits (from the
+  // "Edit" row button) jump to the head so users see their click react.
+  const [confirmQueue, setConfirmQueue] = useState<Article[]>([])
+  const editing = confirmQueue[0] ?? null
   const [doiPreview, setDoiPreview] = useState<ArticleMetadata | null>(null)
   const qc = useQueryClient()
 
@@ -52,8 +57,20 @@ export default function LibraryPage() {
   })
 
   function onUploaded(response: UploadResponse) {
-    // Open metadata confirm for the newly created article so user can review extraction
-    setEditing(response.article)
+    // Open metadata confirm for the newly created article so user can review
+    // extraction. Append to the queue rather than replacing — when several
+    // PDFs are uploaded back-to-back each one gets its own dialog turn (#L2).
+    setConfirmQueue((q) => [...q, response.article])
+  }
+
+  function openEditDialog(article: Article) {
+    // Jump manual edits to the front of the queue so the user immediately
+    // sees the dialog for the row they just clicked.
+    setConfirmQueue((q) => [article, ...q.filter((a) => a.id !== article.id)])
+  }
+
+  function advanceQueue() {
+    setConfirmQueue((q) => q.slice(1))
   }
 
   return (
@@ -127,7 +144,7 @@ export default function LibraryPage() {
                 key={a.id}
                 article={a}
                 index={i}
-                onEdit={(art) => setEditing(art)}
+                onEdit={openEditDialog}
                 onDelete={(art) => {
                   if (confirm(`Delete "${art.title}"? The file will also be removed.`)) {
                     del.mutate(art.id)
@@ -142,7 +159,9 @@ export default function LibraryPage() {
       <MetadataConfirmDialog
         article={editing}
         open={!!editing}
-        onOpenChange={(o) => !o && setEditing(null)}
+        onOpenChange={(o) => {
+          if (!o) advanceQueue()
+        }}
       />
 
       {doiPreview && (

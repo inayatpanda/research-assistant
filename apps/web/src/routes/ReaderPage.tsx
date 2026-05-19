@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, FileText } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { ReaderShell } from '@/components/reader/ReaderShell'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -9,7 +9,11 @@ import { useProjectId } from '@/lib/projectContext'
 
 export default function ReaderPage() {
   const projectId = useProjectId()
-  const { articleId } = useParams<{ articleId: string }>()
+  const { articleId: paramArticleId } = useParams<{ articleId: string }>()
+  const [searchParams] = useSearchParams()
+  // Accept `?article=<id>` as a fallback alongside the path-param route so
+  // external links / share URLs don't have to know about the segment layout.
+  const articleId = paramArticleId ?? searchParams.get('article') ?? undefined
   const libraryHref = `/projects/${projectId}/library`
 
   const { data: article, isLoading, isError } = useQuery({
