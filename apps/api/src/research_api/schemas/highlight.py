@@ -40,6 +40,10 @@ class HighlightCreate(BaseModel):
 
 
 class HighlightUpdate(BaseModel):
+    # Reject unknown keys so a stale frontend / typo never silently no-ops.
+    # FastAPI maps Pydantic ValidationError → HTTP 422.
+    model_config = ConfigDict(extra="forbid")
+
     user_note: str | None = Field(default=None, max_length=4_000)
     ai_summary: str | None = Field(default=None, max_length=2_000)
     sort_order: int | None = None

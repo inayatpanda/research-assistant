@@ -99,6 +99,23 @@ async def test_update_user_note(client):
 
 
 @pytest.mark.asyncio
+async def test_update_rejects_unknown_fields(client):
+    """#API1 — PATCH /highlights/{id} must 422 on unknown keys so stale
+    frontends or typos don't silently no-op."""
+    aid = await _make_article(client)
+    created = (await client.post(f"/api/articles/{aid}/highlights", json=_payload())).json()
+    r = await client.patch(
+        f"/api/highlights/{created['id']}",
+        json={"user_note": "ok", "paraphrase": "typo for user_note"},
+    )
+    assert r.status_code == 422, r.text
+    body = r.json()
+    # FastAPI's error body has detail=[{loc, msg, ...}]
+    msgs = " ".join(d.get("msg", "") for d in body.get("detail", []) if isinstance(d, dict))
+    assert "paraphrase" in r.text or "extra" in msgs.lower()
+
+
+@pytest.mark.asyncio
 async def test_delete(client):
     aid = await _make_article(client)
     created = (await client.post(f"/api/articles/{aid}/highlights", json=_payload())).json()
