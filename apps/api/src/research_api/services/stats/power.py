@@ -319,12 +319,225 @@ def power_correlation(
     }
 
 
+# ─── Phase 17 (MP17) — Extended power families ─────────────────────────────
+
+
+def power_logrank(
+    hazard_ratio: float,
+    *,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    allocation_ratio: float = 1.0,
+    event_rate: float = 0.5,
+) -> dict[str, Any]:
+    """Log-rank required total N for a two-arm survival comparison.
+
+    Uses Schoenfeld's formula:
+
+        d = (z_{1-α/2} + z_{1-β})² · (1 + k)² / (k · ln(HR)²)
+
+    where ``k = allocation_ratio = n_treatment / n_control`` and ``d`` is the
+    required total number of EVENTS. Total ``N`` is then ``d / event_rate``.
+
+    ``hazard_ratio`` must be != 1 (it would imply no effect to detect).
+    """
+    if not math.isfinite(hazard_ratio) or hazard_ratio <= 0 or hazard_ratio == 1.0:
+        raise ValueError("hazard_ratio must be > 0 and != 1")
+    _validate_alpha_power(alpha, power)
+    if not (0 < event_rate <= 1):
+        raise ValueError("event_rate must be in (0, 1]")
+    if allocation_ratio <= 0:
+        raise ValueError("allocation_ratio must be > 0")
+    z_a = float(sp_stats.norm.ppf(1 - alpha / 2))
+    z_b = float(sp_stats.norm.ppf(power))
+    log_hr = math.log(hazard_ratio)
+    k = float(allocation_ratio)
+    required_events = ((z_a + z_b) ** 2) * ((1 + k) ** 2) / (k * (log_hr**2))
+    required_events_int = _ceil_pos(required_events, minimum=4)
+    n_total = required_events_int / event_rate
+    n_total_int = _ceil_pos(n_total, minimum=4)
+    # Sensitivity curve over total sample size at fixed HR.
+    xs = list(range(max(8, n_total_int // 4), n_total_int * 2 + 1))
+    powers: list[float] = []
+    for n in xs:
+        d = n * event_rate
+        if d <= 0:
+            powers.append(0.0)
+            continue
+        # invert Schoenfeld at this d to get achieved power
+        rhs = math.sqrt(d * k / ((1 + k) ** 2)) * abs(log_hr) - z_a
+        powers.append(float(sp_stats.norm.cdf(rhs)))
+    png = _sensitivity_curve_png(
+        xs=xs,
+        powers=powers,
+        required_n=n_total_int,
+        target_power=power,
+        title=f"Log-rank power (HR={hazard_ratio}, event_rate={event_rate})",
+        x_label="total n",
+    )
+    return {
+        "required_n": n_total_int,
+        "required_n_per_group": int(math.ceil(n_total_int / (1 + k))),
+        "required_events": required_events_int,
+        "alpha": alpha,
+        "power": power,
+        "effect_size": float(hazard_ratio),
+        "sensitivity_curve_png": png,
+        "notes": (
+            f"Schoenfeld log-rank: HR={hazard_ratio}, event_rate={event_rate}. "
+            f"Required {required_events_int} events and ~{n_total_int} total "
+            f"participants for power={power:.2f} at alpha={alpha:.3f}."
+        ),
+    }
+
+
+def power_mixed_effects(
+    effect_size: float,
+    *,
+    n_per_cluster: int,
+    n_clusters: int,
+    icc: float,
+    alpha: float = 0.05,
+    power: float = 0.80,
+) -> dict[str, Any]:
+    """Cluster-RCT design-effect correction for a continuous outcome.
+
+    Given a planned ``n_clusters`` × ``n_per_cluster`` design and intra-class
+    correlation ``icc``, the effective sample size is
+
+        n_eff = N / DE        with DE = 1 + (n_per_cluster - 1) · ICC.
+
+    We solve the two-sample ``t``-test required n_per_group from Cohen's d,
+    multiply by DE, then return the required *total* sample size to achieve
+    the planned cluster size.
+    """
+    _validate_effect_size(effect_size)
+    _validate_alpha_power(alpha, power)
+    if not (0 <= icc <= 1):
+        raise ValueError("icc must be in [0, 1]")
+    if n_per_cluster < 1:
+        raise ValueError("n_per_cluster must be >= 1")
+    if n_clusters < 2:
+        raise ValueError("n_clusters must be >= 2")
+    de = 1.0 + (n_per_cluster - 1) * icc
+    # Required n per group ignoring clustering.
+    solver = TTestIndPower()
+    n_per_group_indep = solver.solve_power(
+        effect_size=effect_size, alpha=alpha, power=power, ratio=1.0, alternative="two-sided"
+    )
+    n_per_group_clustered = n_per_group_indep * de
+    n_per_group_int = _ceil_pos(n_per_group_clustered)
+    n_total = n_per_group_int * 2
+    # Required clusters per arm.
+    required_clusters_per_arm = math.ceil(n_per_group_int / n_per_cluster)
+    xs = list(range(max(5, n_per_group_int // 4), n_per_group_int * 2 + 1))
+    powers = [
+        float(
+            solver.power(
+                effect_size=effect_size,
+                nobs1=n / de,
+                alpha=alpha,
+                ratio=1.0,
+                alternative="two-sided",
+            )
+        )
+        for n in xs
+    ]
+    png = _sensitivity_curve_png(
+        xs=xs,
+        powers=powers,
+        required_n=n_per_group_int,
+        target_power=power,
+        title=f"Cluster RCT power (d={effect_size}, ICC={icc}, m={n_per_cluster})",
+        x_label="n per arm (clustered)",
+    )
+    return {
+        "required_n": n_total,
+        "required_n_per_group": n_per_group_int,
+        "required_clusters_per_arm": int(required_clusters_per_arm),
+        "design_effect": float(de),
+        "alpha": alpha,
+        "power": power,
+        "effect_size": effect_size,
+        "sensitivity_curve_png": png,
+        "notes": (
+            f"Cluster RCT: d={effect_size}, ICC={icc}, cluster size={n_per_cluster}, "
+            f"design effect={de:.3f}. Required {n_per_group_int} per arm "
+            f"(~{required_clusters_per_arm} clusters per arm) for power={power:.2f}."
+        ),
+    }
+
+
+def power_noninferiority(
+    margin: float,
+    *,
+    sigma: float,
+    alpha: float = 0.025,
+    power: float = 0.80,
+    allocation_ratio: float = 1.0,
+) -> dict[str, Any]:
+    """Non-inferiority sample size (one-sided test of mean diff vs margin).
+
+    Required N per arm = (z_{1-α} + z_{1-β})² · σ² · (1 + 1/k) / margin²
+
+    where ``margin`` is positive and on the same scale as ``sigma``.
+    The default ``alpha=0.025`` mirrors the FDA convention of a one-sided
+    2.5% level (equivalent to two-sided 5%).
+    """
+    if margin <= 0 or not math.isfinite(margin):
+        raise ValueError("margin must be > 0")
+    if sigma <= 0 or not math.isfinite(sigma):
+        raise ValueError("sigma must be > 0")
+    if not (0 < alpha < 1):
+        raise ValueError("alpha must be in (0, 1)")
+    if not (0 < power < 1):
+        raise ValueError("power must be in (0, 1)")
+    if allocation_ratio <= 0:
+        raise ValueError("allocation_ratio must be > 0")
+    z_a = float(sp_stats.norm.ppf(1 - alpha))
+    z_b = float(sp_stats.norm.ppf(power))
+    k = float(allocation_ratio)
+    n_per_arm = ((z_a + z_b) ** 2) * (sigma**2) * (1.0 + 1.0 / k) / (margin**2)
+    n_per_arm_int = _ceil_pos(n_per_arm)
+    n_total = n_per_arm_int + math.ceil(n_per_arm_int * k)
+    xs = list(range(max(5, n_per_arm_int // 4), n_per_arm_int * 2 + 1))
+    powers: list[float] = []
+    for n in xs:
+        # invert: with n per arm, achieved power for the same margin/sigma
+        se = sigma * math.sqrt((1.0 + 1.0 / k) / n)
+        rhs = (margin / se) - z_a
+        powers.append(float(sp_stats.norm.cdf(rhs)))
+    png = _sensitivity_curve_png(
+        xs=xs,
+        powers=powers,
+        required_n=n_per_arm_int,
+        target_power=power,
+        title=f"Non-inferiority power (margin={margin}, σ={sigma})",
+        x_label="n per arm",
+    )
+    return {
+        "required_n": n_total,
+        "required_n_per_group": n_per_arm_int,
+        "alpha": alpha,
+        "power": power,
+        "effect_size": float(margin),
+        "sensitivity_curve_png": png,
+        "notes": (
+            f"Non-inferiority (one-sided alpha={alpha}). Required {n_per_arm_int} "
+            f"per arm (total {n_total}) for power={power:.2f}."
+        ),
+    }
+
+
 __all__ = [
     "power_ttest_ind",
     "power_ttest_paired",
     "power_anova",
     "power_chi_square",
     "power_correlation",
+    "power_logrank",
+    "power_mixed_effects",
+    "power_noninferiority",
 ]
 
 

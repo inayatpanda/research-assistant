@@ -293,6 +293,49 @@ CATALOGUE: dict[str, TestSpec] = {
         nonparametric=False,
         rationale="One-sided non-inferiority test: rejects when the new treatment is not worse than the comparator by more than the margin.",
     ),
+    # Phase 17 (MP17) — Post-hoc pairwise comparisons. These are NEVER auto-
+    # recommended by ``recommend()``; the registry's ``post_hoc_follow_up``
+    # helper emits them as suggestions after a significant omnibus.
+    "post_hoc_tukey": TestSpec(
+        key="post_hoc_tukey",
+        label="Tukey HSD pairwise comparisons",
+        question_type="group_comparison",
+        requires={"outcome": "numeric", "groups": "nominal"},
+        n_groups=None,
+        paired=False,
+        nonparametric=False,
+        rationale="Family-wise corrected pairwise comparisons assuming homoscedasticity. Use after a significant one-way ANOVA.",
+    ),
+    "post_hoc_bonferroni": TestSpec(
+        key="post_hoc_bonferroni",
+        label="Bonferroni-corrected pairwise t-tests",
+        question_type="group_comparison",
+        requires={"outcome": "numeric", "groups": "nominal"},
+        n_groups=None,
+        paired=False,
+        nonparametric=False,
+        rationale="Conservative pairwise comparisons after a significant omnibus. Multiplies the raw p by the number of pairs.",
+    ),
+    "post_hoc_dunns": TestSpec(
+        key="post_hoc_dunns",
+        label="Dunn's pairwise rank-based test",
+        question_type="group_comparison",
+        requires={"outcome": "numeric", "groups": "nominal"},
+        n_groups=None,
+        paired=False,
+        nonparametric=True,
+        rationale="Rank-based pairwise comparisons after a significant Kruskal-Wallis test.",
+    ),
+    "post_hoc_games_howell": TestSpec(
+        key="post_hoc_games_howell",
+        label="Games-Howell pairwise comparisons",
+        question_type="group_comparison",
+        requires={"outcome": "numeric", "groups": "nominal"},
+        n_groups=None,
+        paired=False,
+        nonparametric=False,
+        rationale="Pairwise comparisons without the equal-variance assumption. Use when Levene's test rejects.",
+    ),
 }
 
 
@@ -433,6 +476,73 @@ def _recommend_time_to_event(
     if has_covariates:
         return "cox_ph", _spec("cox_ph").rationale
     return "kaplan_meier", _spec("kaplan_meier").rationale
+
+
+def post_hoc_follow_up(
+    *,
+    omnibus_test_key: str,
+    p_value: float,
+    alpha: float = 0.05,
+    equal_var_ok: bool | None = None,
+) -> dict[str, Any]:
+    """Phase 17 (MP17) — Suggest follow-up post-hoc tests after a significant
+    omnibus comparison. Pure function: never runs anything itself.
+
+    The suggestion list is ordered by preference for the specific omnibus
+    family. The flag ``post_hoc_recommended`` is True when ``p_value < alpha``
+    AND the omnibus is a multi-group comparison (ANOVA / KW). Callers MUST
+    still gate on the user confirming they want to run a post-hoc.
+    """
+    if omnibus_test_key not in {"one_way_anova", "kruskal_wallis"}:
+        return {
+            "post_hoc_recommended": False,
+            "suggested_tests": [],
+            "reason": (
+                f"{omnibus_test_key} is not a multi-group omnibus — no post-hoc."
+            ),
+        }
+    if not (p_value < alpha):
+        return {
+            "post_hoc_recommended": False,
+            "suggested_tests": [],
+            "reason": (
+                f"omnibus p={p_value:.4g} >= alpha={alpha:.3f} — no follow-up needed."
+            ),
+        }
+
+    if omnibus_test_key == "kruskal_wallis":
+        suggested = ["post_hoc_dunns", "post_hoc_bonferroni"]
+        reason = (
+            "Kruskal-Wallis omnibus significant. Dunn's preserves the rank-based "
+            "assumption; Bonferroni offers a conservative alternative."
+        )
+    else:
+        # one_way_anova
+        if equal_var_ok is False:
+            suggested = ["post_hoc_games_howell", "post_hoc_bonferroni"]
+            reason = (
+                "ANOVA omnibus significant but unequal variances suspected — "
+                "Games-Howell does not assume homoscedasticity."
+            )
+        else:
+            suggested = [
+                "post_hoc_tukey",
+                "post_hoc_bonferroni",
+                "post_hoc_games_howell",
+            ]
+            reason = (
+                "ANOVA omnibus significant. Tukey HSD is the conventional choice; "
+                "Bonferroni is more conservative; Games-Howell when equal-variance "
+                "is in doubt."
+            )
+    return {
+        "post_hoc_recommended": True,
+        "suggested_tests": suggested,
+        "reason": reason,
+        "omnibus_test_key": omnibus_test_key,
+        "omnibus_p_value": float(p_value),
+        "alpha": float(alpha),
+    }
 
 
 def _recommend_agreement(*, var_types: dict[str, Any]) -> tuple[str, str]:

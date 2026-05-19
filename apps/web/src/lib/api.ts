@@ -3447,3 +3447,311 @@ export const metaExtensionsApi = {
     return MetaRegressionResponseSchema.parse(r.data)
   },
 }
+
+// ─── Phase 17 (MP17) — Stats depth ─────────────────────────────────────────
+
+export interface PopulationDefinition {
+  filter: string
+  label: string
+}
+
+export interface AnalysisPopulation {
+  id: string
+  dataset_id: string
+  name: string
+  definition: PopulationDefinition
+  study_assignment_field: string
+  treatment_received_field: string | null
+  created_at: string
+}
+
+export interface PopulationCreateBody {
+  name: string
+  definition: PopulationDefinition
+  study_assignment_field: string
+  treatment_received_field?: string | null
+}
+
+export const populationsApi = {
+  list: async (projectId: string, datasetId: string): Promise<AnalysisPopulation[]> => {
+    const r = await api.get(`/api/projects/${projectId}/datasets/${datasetId}/populations`)
+    return r.data as AnalysisPopulation[]
+  },
+  create: async (
+    projectId: string,
+    datasetId: string,
+    body: PopulationCreateBody,
+  ): Promise<AnalysisPopulation> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/populations`,
+      body,
+    )
+    return r.data as AnalysisPopulation
+  },
+  update: async (
+    projectId: string,
+    datasetId: string,
+    populationId: string,
+    body: Partial<PopulationCreateBody>,
+  ): Promise<AnalysisPopulation> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/datasets/${datasetId}/populations/${populationId}`,
+      body,
+    )
+    return r.data as AnalysisPopulation
+  },
+  delete: async (
+    projectId: string,
+    datasetId: string,
+    populationId: string,
+  ): Promise<void> => {
+    await api.delete(
+      `/api/projects/${projectId}/datasets/${datasetId}/populations/${populationId}`,
+    )
+  },
+  preview: async (
+    projectId: string,
+    datasetId: string,
+    populationId: string,
+  ): Promise<{ n_before: number; n_after: number; head_rows: unknown[] }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/populations/${populationId}/preview`,
+    )
+    return r.data
+  },
+}
+
+export interface PostHocPair {
+  pair: [string, string]
+  mean_diff: number
+  ci_low: number | null
+  ci_high: number | null
+  p_adj: number
+  method: string
+  n_a: number
+  n_b: number
+}
+
+export const postHocApi = {
+  run: async (
+    projectId: string,
+    analysisId: string,
+    body: { method: 'tukey' | 'bonferroni' | 'dunns' | 'games_howell'; outcome: string; groups: string },
+  ): Promise<{ method: string; n_groups: number; pairs: PostHocPair[] }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/post-hoc`,
+      body,
+    )
+    return r.data
+  },
+}
+
+export interface MixedEffectsParams {
+  outcome: string
+  predictors: string[]
+  cluster: string
+  inner_cluster?: string | null
+  reml?: boolean
+  interaction_pair?: [string, string] | null
+}
+
+export const mixedEffectsApi = {
+  // Reuses the standard analyses POST/createAndRun path with chosen_test = 'mixed_effects_lm'.
+  buildVariables: (params: MixedEffectsParams) => ({ ...params }),
+}
+
+export interface ImputationRunRecord {
+  id: string
+  dataset_id: string
+  method: string
+  n_imputations: number
+  seed: number
+  target_cols: string[]
+  pooled_summary: { method: string; per_column: Array<Record<string, number>>; n_imputations: number }
+  created_at: string
+}
+
+export const imputationApi = {
+  list: async (
+    projectId: string,
+    datasetId: string,
+  ): Promise<ImputationRunRecord[]> => {
+    const r = await api.get(`/api/projects/${projectId}/datasets/${datasetId}/imputation-runs`)
+    return r.data as ImputationRunRecord[]
+  },
+  run: async (
+    projectId: string,
+    datasetId: string,
+    body: {
+      method: 'mice' | 'knn' | 'mean' | 'median' | 'last_observation'
+      target_cols: string[]
+      n_imputations?: number
+      seed?: number
+    },
+  ): Promise<ImputationRunRecord> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/impute`,
+      { n_imputations: 5, seed: 42, ...body },
+    )
+    return r.data as ImputationRunRecord
+  },
+}
+
+export interface CACEResponse {
+  cace_estimate: number
+  se: number
+  p: number
+  compliance_rate: number
+  n: number
+}
+
+export const caceApi = {
+  run: async (
+    projectId: string,
+    analysisId: string,
+    body: { outcome: string; assigned: string; received: string },
+  ): Promise<CACEResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/cace`,
+      body,
+    )
+    return r.data as CACEResponse
+  },
+}
+
+export interface SensitivityResponse {
+  type: string
+  effect_estimate: number | null
+  p_value: number | null
+  threshold: number | null
+  n_imputed: number
+  note: string
+}
+
+export const sensitivityApi = {
+  run: async (
+    projectId: string,
+    analysisId: string,
+    body: {
+      type: 'worst_case' | 'best_case' | 'tipping_point'
+      outcome: string
+      group: string
+      candidate_low?: number | null
+      candidate_high?: number | null
+      alpha?: number
+    },
+  ): Promise<SensitivityResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analyses/${analysisId}/sensitivity`,
+      body,
+    )
+    return r.data as SensitivityResponse
+  },
+}
+
+export const irrApi = {
+  fleiss: async (
+    projectId: string,
+    datasetId: string,
+    matrix: number[][],
+  ): Promise<{ kappa: number; z: number; p: number; n_subjects: number; n_raters: number; n_categories: number }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/irr`,
+      { method: 'fleiss', matrix },
+    )
+    return r.data
+  },
+  krippendorff: async (
+    projectId: string,
+    datasetId: string,
+    ratings: (number | null)[][],
+    level: 'nominal' | 'ordinal' | 'interval' = 'nominal',
+  ): Promise<{ alpha: number; level: string; n_raters: number; n_items: number; n_pairable: number }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/irr`,
+      { method: 'krippendorff', ratings, level },
+    )
+    return r.data
+  },
+  weightedKappa: async (
+    projectId: string,
+    datasetId: string,
+    rater1: number[],
+    rater2: number[],
+    weights: 'linear' | 'quadratic' = 'linear',
+    n_bootstrap = 0,
+  ): Promise<{ kappa: number; weights: string; n: number; ci_low: number | null; ci_high: number | null; se: number | null }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/irr`,
+      { method: 'weighted_kappa', rater1, rater2, weights, n_bootstrap, seed: 0 },
+    )
+    return r.data
+  },
+}
+
+export interface InstrumentSpec {
+  name: string
+  abbreviation: string
+  scale_low: number
+  scale_high: number
+  mid: number | null
+  direction: 'higher_better' | 'lower_better' | 'neutral'
+  category: string
+  default_citation: string
+}
+
+export const instrumentsApi = {
+  catalogue: async (): Promise<InstrumentSpec[]> => {
+    const r = await api.get(`/api/instruments/catalogue`)
+    return r.data.instruments as InstrumentSpec[]
+  },
+  bind: async (
+    projectId: string,
+    datasetId: string,
+    variableId: string,
+    instrumentKey: string | null,
+  ): Promise<{ variable_id: string; instrument_key: string | null }> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/datasets/${datasetId}/variables/${variableId}/instrument-binding`,
+      { instrument_key: instrumentKey },
+    )
+    return r.data
+  },
+}
+
+export const analysisPlanLockApi = {
+  lock: async (
+    projectId: string,
+    planId: string,
+  ): Promise<{ plan_id: string; integrity_hash: string; locked_at: string }> => {
+    const r = await api.post(`/api/projects/${projectId}/analysis-plans/${planId}/lock`)
+    return r.data
+  },
+  forceUnlockPatch: async (
+    projectId: string,
+    planId: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> => {
+    const r = await api.patch(`/api/projects/${projectId}/analysis-plans/${planId}`, {
+      ...body,
+      force_unlock: true,
+    })
+    return r.data
+  },
+}
+
+export const sapApi = {
+  exportUrl: (projectId: string, planId: string, format: 'docx' | 'pdf'): string =>
+    `/api/projects/${projectId}/analysis-plans/${planId}/sap?format=${format}`,
+  download: async (
+    projectId: string,
+    planId: string,
+    format: 'docx' | 'pdf' = 'docx',
+  ): Promise<Blob> => {
+    const r = await api.get(`/api/projects/${projectId}/analysis-plans/${planId}/sap`, {
+      params: { format },
+      responseType: 'blob',
+    })
+    return r.data as Blob
+  },
+}

@@ -29,6 +29,7 @@ from ..db.models import (
     Analysis,
     AnalysisPlan,
     AnalysisPlanRun,
+    AnalysisPopulation,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -45,6 +46,7 @@ from ..db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    ImputationRun,
     LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
@@ -619,6 +621,23 @@ async def _collect_bundle_inputs(
             )
         )).scalar_one_or_none()
 
+    # Phase 17 (MP17) — Stats depth tables.
+    analysis_populations: list[AnalysisPopulation] = []
+    imputation_runs: list[ImputationRun] = []
+    if dataset_ids:
+        analysis_populations = list((await session.execute(
+            select(AnalysisPopulation).where(
+                AnalysisPopulation.user_id == user_id,
+                AnalysisPopulation.dataset_id.in_(dataset_ids),
+            )
+        )).scalars().all())
+        imputation_runs = list((await session.execute(
+            select(ImputationRun).where(
+                ImputationRun.user_id == user_id,
+                ImputationRun.dataset_id.in_(dataset_ids),
+            )
+        )).scalars().all())
+
     # Phase 19 — SR depth tables.
     mesh_terms = list((await session.execute(
         select(MeshTerm).where(
@@ -689,6 +708,8 @@ async def _collect_bundle_inputs(
         search_strategies=search_strategies,
         narrative_synthesis_entries=narrative_entries,
         outcome_instruments=outcome_instruments,
+        analysis_populations=analysis_populations,
+        imputation_runs=imputation_runs,
     )
 
 

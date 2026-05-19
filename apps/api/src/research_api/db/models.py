@@ -259,6 +259,9 @@ class DatasetVariable(Base):
     user_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     n_missing: Mapped[int] = mapped_column(Integer, nullable=False)
     sample_values: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
+    # Phase 17 (MP17) — Optional binding to the curated instrument catalogue.
+    # Pure metadata — never affects how analyses run; used only by reports + UI.
+    instrument_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Analysis(Base):
@@ -280,6 +283,19 @@ class Analysis(Base):
     recommendation_rationale: Mapped[str] = mapped_column(Text, nullable=False)
     variables: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
+    # Phase 17 (MP17) — Optional FK to an analysis-population for sub-cohort
+    # restriction (ITT/PP/safety/etc). NULL = whole dataset.
+    population_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("analysis_populations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Phase 17 (MP17) — Pre-registration lock fields.
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    integrity_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -963,6 +979,12 @@ class AnalysisPlan(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    # Phase 17 (MP17) — Pre-registration lock fields.
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    integrity_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1396,6 +1418,67 @@ class OutcomeInstrument(Base):
     study_values: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, default=list, nullable=False
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AnalysisPopulation(Base):
+    """Phase 17 (MP17) — A named sub-population definition for a dataset.
+
+    ``definition`` is a JSON dict carrying:
+      - ``filter``: an optional pandas ``query()``-style expression (e.g.
+        ``"approach == 'anterior'"``); empty / missing means "all rows".
+      - ``label``: a free-text label like ``"ITT"`` / ``"PP"`` / ``"safety"``.
+
+    ``study_assignment_field`` names the column that holds the randomised
+    allocation; ``treatment_received_field`` names the column that holds the
+    actual treatment received (NULL when not relevant — eg single-arm).
+    """
+
+    __tablename__ = "analysis_populations"
+    __table_args__ = (
+        Index("ix_analysis_populations_dataset", "dataset_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    study_assignment_field: Mapped[str] = mapped_column(String(255), nullable=False)
+    treatment_received_field: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ImputationRun(Base):
+    """Phase 17 (MP17) — One MICE / KNN / mean / median / LOCF run record.
+
+    ``pooled_summary`` carries the Rubin-pooled per-column summary produced
+    by ``services.stats.imputation.summarise_pooled``.
+    """
+
+    __tablename__ = "imputation_runs"
+    __table_args__ = (
+        Index("ix_imputation_runs_dataset", "dataset_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False)
+    n_imputations: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    target_cols: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    pooled_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

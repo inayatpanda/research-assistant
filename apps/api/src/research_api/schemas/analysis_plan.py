@@ -35,6 +35,8 @@ class AnalysisPlanUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     steps: list[PlanStep] | None = None
+    # Phase 17 (MP17) — Allow override of pre-registration lock.
+    force_unlock: bool = False
 
 
 class AnalysisPlanRead(BaseModel):
@@ -45,8 +47,26 @@ class AnalysisPlanRead(BaseModel):
     name: str
     description: str | None
     steps: list[dict[str, Any]]
+    # Phase 17 (MP17) — Pre-registration lock fields.
+    is_locked: bool = False
+    locked_at: datetime | None = None
+    integrity_hash: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AnalysisPlanLockRequest(BaseModel):
+    """Phase 17 (MP17) — body for ``POST /analysis-plans/{id}/lock``.
+
+    Lock is irreversible by default; pass ``force_unlock=true`` to a
+    subsequent PATCH to override.
+    """
+
+
+class AnalysisPlanLockResponse(BaseModel):
+    plan_id: str
+    integrity_hash: str
+    locked_at: datetime
 
 
 class AnalysisPlanRunRequest(BaseModel):

@@ -22,6 +22,7 @@ from ...db.models import (
     Analysis,
     AnalysisPlan,
     AnalysisPlanRun,
+    AnalysisPopulation,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -38,6 +39,7 @@ from ...db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    ImputationRun,
     LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
@@ -143,6 +145,8 @@ async def _do_import(
         "living_review_job": 0,
         "mesh_terms": 0, "search_strategies": 0,
         "narrative_synthesis_entries": 0, "outcome_instruments": 0,
+        # Phase 17 (MP17) — Stats depth.
+        "analysis_populations": 0, "imputation_runs": 0,
     }
 
     proj_in = bundle["project"]
@@ -374,6 +378,42 @@ async def _do_import(
         ))
         counts["analysis_results"] += 1
     if counts["analysis_results"]:
+        await session.flush()
+
+    # Phase 17 (MP17) — Analysis populations + imputation runs.
+    for pop in bundle.get("analysis_populations") or []:
+        new_ds = dataset_map.get(pop.get("dataset_id"))
+        if new_ds is None:
+            continue
+        session.add(AnalysisPopulation(
+            id=_new_id(),
+            user_id=target_user_id,
+            dataset_id=new_ds,
+            name=(pop.get("name") or "Population")[:255],
+            definition=pop.get("definition") or {},
+            study_assignment_field=(pop.get("study_assignment_field") or "")[:255],
+            treatment_received_field=pop.get("treatment_received_field"),
+        ))
+        counts["analysis_populations"] += 1
+    if counts["analysis_populations"]:
+        await session.flush()
+
+    for run in bundle.get("imputation_runs") or []:
+        new_ds = dataset_map.get(run.get("dataset_id"))
+        if new_ds is None:
+            continue
+        session.add(ImputationRun(
+            id=_new_id(),
+            user_id=target_user_id,
+            dataset_id=new_ds,
+            method=run.get("method") or "mice",
+            n_imputations=int(run.get("n_imputations") or 5),
+            seed=int(run.get("seed") or 42),
+            target_cols=run.get("target_cols") or [],
+            pooled_summary=run.get("pooled_summary") or {},
+        ))
+        counts["imputation_runs"] += 1
+    if counts["imputation_runs"]:
         await session.flush()
 
     review_in = bundle.get("review")

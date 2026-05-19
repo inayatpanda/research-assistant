@@ -41,6 +41,11 @@ TestKey = Literal[
     "permutation_test",
     "tost_equivalence",
     "tost_noninferiority",
+    # Phase 17 (MP17) — Post-hoc pairwise comparisons.
+    "post_hoc_tukey",
+    "post_hoc_bonferroni",
+    "post_hoc_dunns",
+    "post_hoc_games_howell",
 ]
 
 AnalysisStatus = Literal["draft", "ready", "running", "completed", "failed"]
@@ -84,6 +89,11 @@ class AnalysisRead(BaseModel):
     variables: dict[str, Any]
     status: AnalysisStatus
     created_at: datetime
+    # Phase 17 (MP17) — Population + lock.
+    population_id: str | None = None
+    is_locked: bool = False
+    locked_at: datetime | None = None
+    integrity_hash: str | None = None
     result: AnalysisResultRead | None = None
 
 

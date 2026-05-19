@@ -15,6 +15,9 @@ from ..services.stats.power import (
     power_anova,
     power_chi_square,
     power_correlation,
+    power_logrank,
+    power_mixed_effects,
+    power_noninferiority,
     power_ttest_ind,
     power_ttest_paired,
 )
@@ -55,6 +58,40 @@ async def compute_power(body: PowerRequest) -> PowerResponse:
             result = power_correlation(
                 body.effect_size, alpha=body.alpha, power=body.power
             )
+        elif body.test_family == "logrank":
+            if body.event_rate is None:
+                raise HTTPException(status_code=400, detail="logrank requires event_rate")
+            result = power_logrank(
+                body.effect_size,
+                alpha=body.alpha,
+                power=body.power,
+                allocation_ratio=body.allocation_ratio or 1.0,
+                event_rate=body.event_rate,
+            )
+        elif body.test_family == "mixed_effects":
+            if body.n_per_cluster is None or body.n_clusters is None or body.icc is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="mixed_effects requires n_per_cluster, n_clusters, and icc",
+                )
+            result = power_mixed_effects(
+                body.effect_size,
+                n_per_cluster=body.n_per_cluster,
+                n_clusters=body.n_clusters,
+                icc=body.icc,
+                alpha=body.alpha,
+                power=body.power,
+            )
+        elif body.test_family == "noninferiority":
+            if body.sigma is None:
+                raise HTTPException(status_code=400, detail="noninferiority requires sigma")
+            result = power_noninferiority(
+                body.effect_size,
+                sigma=body.sigma,
+                alpha=body.alpha,
+                power=body.power,
+                allocation_ratio=body.allocation_ratio or 1.0,
+            )
         else:  # pragma: no cover - Literal exhaustiveness
             raise HTTPException(status_code=400, detail=f"unknown test_family {body.test_family}")
     except ValueError as exc:
@@ -68,4 +105,7 @@ async def compute_power(body: PowerRequest) -> PowerResponse:
         effect_size=result["effect_size"],
         sensitivity_curve_png=_to_data_uri(result["sensitivity_curve_png"]),
         notes=result["notes"],
+        required_events=result.get("required_events"),
+        required_clusters_per_arm=result.get("required_clusters_per_arm"),
+        design_effect=result.get("design_effect"),
     )

@@ -779,13 +779,14 @@ def _cohen_kappa(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
 
 
 def _mixed_effects_lm(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
-    """Phase 13 (MP13) — Linear mixed-effects model with a random intercept.
+    """Phase 13/17 (MP13/MP17) — Linear mixed-effects model.
 
-    Requires ``outcome``, ``predictors`` (list or single str), and ``cluster``
-    (grouping variable, e.g. patient_id). The random-effects structure is a
-    random intercept per cluster.
+    Single random intercept by default; nested random effects when
+    ``inner_cluster`` is provided; optional treatment × time interaction via
+    ``interaction_pair=("treatment_col","time_col")``. ``reml`` switches
+    between REML (default) and ML.
     """
-    import statsmodels.formula.api as smf
+    from research_api.services.stats.mixed_effects import fit_mixedlm
 
     outcome = var.get("outcome")
     predictors = var.get("predictors")
@@ -796,33 +797,68 @@ def _mixed_effects_lm(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
         )
     if isinstance(predictors, str):
         predictors = [predictors]
+    inner_cluster = var.get("inner_cluster")
+    reml = bool(var.get("reml", True))
+    interaction_pair = var.get("interaction_pair")
+    if interaction_pair is not None:
+        if (
+            not isinstance(interaction_pair, (list, tuple))
+            or len(interaction_pair) != 2
+        ):
+            raise ValueError("interaction_pair must be a [a, b] pair")
+        a_col, b_col = interaction_pair
+        _check_column_name(str(a_col))
+        _check_column_name(str(b_col))
+        interaction_pair = (str(a_col), str(b_col))
+
     _check_column_name(outcome)
     _check_column_name(cluster)
     for p in predictors:
         _check_column_name(p)
-    _require_columns(df, [outcome, cluster, *predictors])
-    df = _drop_nan(df, [outcome, cluster, *predictors])
-    formula = f"{outcome} ~ " + " + ".join(predictors)
-    model = smf.mixedlm(formula, data=df, groups=df[cluster])
-    fit = model.fit(method="lbfgs")
-    fe_coefs = {f"coef_{name}": float(fit.fe_params.get(name, float("nan"))) for name in predictors}
-    fe_pvals = {f"p_{name}": float(fit.pvalues.get(name, float("nan"))) for name in predictors}
-    re_var = float(fit.cov_re.iloc[0, 0]) if hasattr(fit.cov_re, "iloc") else float("nan")
+    needed = [outcome, cluster, *predictors]
+    if inner_cluster is not None:
+        _check_column_name(inner_cluster)
+        needed.append(inner_cluster)
+    if interaction_pair is not None:
+        needed.extend(list(interaction_pair))
+    _require_columns(df, needed)
+    df = _drop_nan(df, needed)
+
+    summary = fit_mixedlm(
+        df,
+        outcome=outcome,
+        predictors=list(predictors),
+        cluster=cluster,
+        inner_cluster=inner_cluster,
+        reml=reml,
+        interaction_pair=interaction_pair,
+    )
+    rhs_names = summary["predictor_names"]
+    first_name = rhs_names[0]
     return TestResult(
         test_key="mixed_effects_lm",
-        statistic=float(fe_coefs.get(f"coef_{predictors[0]}", float("nan"))),
-        p_value=float(fe_pvals.get(f"p_{predictors[0]}", float("nan"))),
+        statistic=float(summary["fe_coefs"].get(f"coef_{first_name}", float("nan"))),
+        p_value=float(summary["fe_pvals"].get(f"p_{first_name}", float("nan"))),
         effect_size=None,
         ci_low=None,
         ci_high=None,
-        n=int(fit.nobs),
-        df=float(len(predictors)),
+        n=int(summary["n_obs"]),
+        df=float(len(rhs_names)),
         extras={
-            "intercept": float(fit.fe_params.get("Intercept", float("nan"))),
-            "n_clusters": int(df[cluster].nunique()),
-            "random_intercept_var": re_var,
-            **fe_coefs,
-            **fe_pvals,
+            "intercept": summary["intercept"],
+            "n_clusters": summary["n_clusters"],
+            "n_inner_clusters": summary["n_inner_clusters"],
+            "random_intercept_var": summary["random_intercept_var"],
+            "reml": summary["reml"],
+            "cov_structure": summary["cov_structure"],
+            "formula": summary["formula"],
+            "interaction_term": summary["interaction_term"],
+            "log_likelihood": summary["log_likelihood"],
+            "aic": summary["aic"],
+            "bic": summary["bic"],
+            **summary["fe_coefs"],
+            **summary["fe_pvals"],
+            **summary["fe_se"],
         },
     )
 
@@ -1079,6 +1115,95 @@ def _tost_noninferiority(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
     return _tost(df, var, "tost_noninferiority")
 
 
+def _post_hoc(
+    df: pd.DataFrame, var: dict[str, Any], *, kind: str
+) -> TestResult:
+    """Phase 17 (MP17) — Post-hoc pairwise comparisons.
+
+    Requires ``outcome`` and ``groups``. The omnibus test must be run
+    separately; this only computes pairwise comparisons.
+    """
+    from research_api.services.stats import post_hoc as ph
+
+    outcome = var.get("outcome")
+    groups_col = var.get("groups")
+    if not outcome or not groups_col:
+        raise ValueError(f"{kind} requires 'outcome' and 'groups'")
+    _check_column_name(outcome)
+    _check_column_name(groups_col)
+    _require_columns(df, [outcome, groups_col])
+    df = _drop_nan(df, [outcome, groups_col])
+    levels = sorted(df[groups_col].dropna().unique().tolist(), key=str)
+    if len(levels) < 2:
+        raise ValueError(
+            f"{kind} requires >= 2 groups in {groups_col!r}; found {len(levels)}"
+        )
+    group_data = {
+        str(lv): df.loc[df[groups_col] == lv, outcome].to_numpy(dtype=float).tolist()
+        for lv in levels
+    }
+    if kind == "post_hoc_tukey":
+        rows = ph.tukey_hsd(group_data)
+    elif kind == "post_hoc_bonferroni":
+        rows = ph.bonferroni_pairwise(group_data)
+    elif kind == "post_hoc_dunns":
+        rows = ph.dunns_test(group_data)
+    elif kind == "post_hoc_games_howell":
+        rows = ph.games_howell(group_data)
+    else:  # pragma: no cover — dispatch wall
+        raise ValueError(f"unknown post-hoc kind {kind!r}")
+
+    # Roll-up statistic = smallest pairwise p-adj for at-a-glance reporting.
+    p_min = float("nan")
+    for r in rows:
+        p = r.get("p_adj")
+        if p is None:
+            continue
+        try:
+            pf = float(p)
+        except (TypeError, ValueError):
+            continue
+        if p_min != p_min or pf < p_min:  # NaN-aware min
+            p_min = pf
+    return TestResult(
+        test_key=kind,
+        statistic=float(len(rows)),
+        p_value=p_min,
+        effect_size=None,
+        ci_low=None,
+        ci_high=None,
+        n=int(df.shape[0]),
+        df=float(len(levels) - 1),
+        extras={
+            "pairs": [
+                {
+                    **{k: v for k, v in r.items() if k != "pair"},
+                    "pair": list(r["pair"]),
+                }
+                for r in rows
+            ],
+            "n_groups": len(levels),
+            "method": kind.removeprefix("post_hoc_"),
+        },
+    )
+
+
+def _post_hoc_tukey(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _post_hoc(df, var, kind="post_hoc_tukey")
+
+
+def _post_hoc_bonferroni(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _post_hoc(df, var, kind="post_hoc_bonferroni")
+
+
+def _post_hoc_dunns(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _post_hoc(df, var, kind="post_hoc_dunns")
+
+
+def _post_hoc_games_howell(df: pd.DataFrame, var: dict[str, Any]) -> TestResult:
+    return _post_hoc(df, var, kind="post_hoc_games_howell")
+
+
 _DISPATCH = {
     "independent_t": _independent_t,
     "paired_t": _paired_t,
@@ -1108,6 +1233,11 @@ _DISPATCH = {
     "permutation_test": _permutation_test,
     "tost_equivalence": _tost_equivalence,
     "tost_noninferiority": _tost_noninferiority,
+    # Phase 17 (MP17) — Post-hoc pairwise comparison tests.
+    "post_hoc_tukey": _post_hoc_tukey,
+    "post_hoc_bonferroni": _post_hoc_bonferroni,
+    "post_hoc_dunns": _post_hoc_dunns,
+    "post_hoc_games_howell": _post_hoc_games_howell,
 }
 
 

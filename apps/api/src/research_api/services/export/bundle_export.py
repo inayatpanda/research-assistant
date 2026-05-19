@@ -23,6 +23,7 @@ from ...db.models import (
     Analysis,
     AnalysisPlan,
     AnalysisPlanRun,
+    AnalysisPopulation,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -39,6 +40,7 @@ from ...db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    ImputationRun,
     LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
@@ -118,6 +120,9 @@ class BundleInputs:
         default_factory=list
     )
     outcome_instruments: list[OutcomeInstrument] = field(default_factory=list)
+    # Phase 17 (MP17) — Stats depth: populations + imputation runs.
+    analysis_populations: list[AnalysisPopulation] = field(default_factory=list)
+    imputation_runs: list[ImputationRun] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -235,4 +240,9 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "outcome_instruments": [
             _row_to_dict(o) for o in inputs.outcome_instruments
         ],
+        # Phase 17 (MP17) — Stats depth additions.
+        "analysis_populations": [
+            _row_to_dict(p) for p in inputs.analysis_populations
+        ],
+        "imputation_runs": [_row_to_dict(r) for r in inputs.imputation_runs],
     }

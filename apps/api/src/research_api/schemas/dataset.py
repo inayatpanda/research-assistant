@@ -26,6 +26,8 @@ class DatasetVariableRead(BaseModel):
     user_type: VariableType | None
     n_missing: int
     sample_values: list[str]
+    # Phase 17 (MP17) — Optional binding to the instrument catalogue.
+    instrument_key: str | None = None
 
 
 class DatasetVariableUpdate(BaseModel):

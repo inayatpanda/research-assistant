@@ -38,6 +38,7 @@ from .routes.reviews_meta import router as reviews_meta_router
 from .routes.search_strategies import router as search_strategies_router
 from .routes.sr_depth import router as sr_depth_router
 from .routes.snapshots import router as snapshots_router
+from .routes.stats_depth import router as stats_depth_router
 from .routes.transformations import router as transformations_router
 from .routes.cross_dataset import router as cross_dataset_router
 from .routes.writing import router as writing_router
@@ -107,3 +108,6 @@ app.include_router(mesh_router, prefix="/api")
 app.include_router(search_strategies_router, prefix="/api")
 app.include_router(sr_depth_router, prefix="/api")
 app.include_router(meta_extensions_router, prefix="/api")
+# Phase 17 (MP17) — Stats depth: populations / imputation / CACE / sensitivity
+# / IRR / instruments / post-hoc / instrument-binding.
+app.include_router(stats_depth_router, prefix="/api")

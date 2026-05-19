@@ -281,6 +281,8 @@ async def test_import_full_round_trip_lossless(session):
         # Phase 19 (MP19) additions — bundle source didn't include any rows.
         "mesh_terms": 0, "search_strategies": 0,
         "narrative_synthesis_entries": 0, "outcome_instruments": 0,
+        # Phase 17 (MP17) additions — bundle source didn't include any rows.
+        "analysis_populations": 0, "imputation_runs": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

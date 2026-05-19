@@ -1611,3 +1611,33 @@ Tag: **`phase-19`**. Migration head: **`0020_sr_depth_mesh`** (`reviews.tool_per
 - Translator round-trip from Embase → PubMed (only PubMed → other in v1).
 - Live PubMed-count preview in `SearchStrategyBuilder` (UI hook present but query-count fetch is left for MP20).
 - Per-study tool dropdown when `tool_per_study=true` — schema migrated and JBI catalogue ready, but the UI extension to `RoBToolPicker` is folded into MP17.
+
+
+## MP17 — Statistics depth (`phase-17`)
+
+**Date**: 2026-05-19. **Tests**: 1681 → 1812 backend (+131); 220 → 232 vitest (+12). All green.
+
+**Migration**: `0021_stats_depth.py` (down_revision `0020`). New tables: `analysis_populations`, `imputation_runs`. New columns on `analyses` (`population_id`, `is_locked`, `locked_at`, `integrity_hash`), `analysis_plans` (`is_locked`, `locked_at`, `integrity_hash`), `dataset_variables` (`instrument_key`).
+
+**Services**
+- `services/stats/post_hoc.py`: Tukey HSD, Bonferroni pairwise, Dunn's, Games-Howell (pure functions).
+- `services/stats/mixed_effects.py`: split MixedLM from `runner.py`. Adds nested random effects via `vc_formula`, REML/ML toggle, interaction expansion. Catches `LinAlgError` and falls back to `method=["lbfgs","bfgs","powell"]`.
+- `services/stats/imputation.py`: MICE wrapper + Rubin's-rule pooling (`T = U + (1+1/m)·B`, Barnard-Rubin df). Simple fallbacks: mean / median / LOCF / KNN.
+- `services/stats/cace.py`: 2SLS via `statsmodels.sandbox.regression.gmm.IV2SLS` with compliance-rate guard.
+- `services/stats/sensitivity_missing.py`: worst-case / best-case / tipping-point (bisection over the favoured arm's missing-row imputation value).
+- `services/stats/irr.py`: Fleiss κ (statsmodels) + Krippendorff α (manual coincidence-matrix formula) + weighted κ (sklearn, optional bootstrap CI).
+- `services/stats/power.py`: extended with `power_logrank` (Schoenfeld), `power_mixed_effects` (Donner-Klar design-effect correction), `power_noninferiority` (one-sided TOST framework).
+- `services/instruments/catalogue.py`: 32-row curated outcome-instrument list (HHS, OHS, OKS, KSS, KOOS, WOMAC, FJS-12, UCLA, ODI, NDI, RMDQ, JOA-back, Constant-Murley, DASH, Quick-DASH, OSS, ASES, PROMIS UE, AOFAS, FAOS, MOXFQ, VAS Pain, NRS, SF-36, SF-12, EQ-5D-3L/5L/Y, PROMIS Global Health, PROMIS PF CAT, PSFS, NYHA).
+- `services/export/sap.py`: deterministic integrity hash (`sort_keys=True`, `ensure_ascii=False`, floats rounded to 8 dp, NaN/Inf as fixed string tokens) + DOCX/PDF SAP document builder.
+
+**Routes**: New router `routes/stats_depth.py` with populations CRUD + preview, MICE imputation, CACE, sensitivity, IRR, post-hoc, instrument catalogue, instrument-binding PATCH. Extended `analysis_plans.py` with `/lock` and `/sap?format=docx|pdf`. Locked plans refuse mutations unless PATCH carries `force_unlock=true` (which clears the hash).
+
+**Bundle**: `analysis_populations` + `imputation_runs` round-trip through `BundleInputs` and the import pipeline; plan lock fields (`is_locked`, `locked_at`, `integrity_hash`) survive via column-mirror in `_row_to_dict`.
+
+**Frontend**: 10 new components in `components/statistics/` — `PopulationManager`, `PostHocComparisonsCard`, `MixedEffectsWizard`, `ImputationCard`, `CACEPanel`, `SensitivityAnalysisPanel`, `IRRPanel`, `InstrumentLibraryBrowser`, `AnalysisPlanLockButton`, `SAPExportButton`. `lib/api.ts` extended with 10 new API client wrappers (populations / postHoc / mixedEffects / imputation / cace / sensitivity / irr / instruments / analysisPlanLock / sap).
+
+**Bug discovered**: `statsmodels.MixedLM.fit(method="lbfgs")` raises `numpy.linalg.LinAlgError: Singular matrix` inside `score_full → np.linalg.inv(xtvix)` when the random-effects covariance is near-singular (small per-cluster variance + few clusters). Fix: pass a list of methods so statsmodels falls back to BFGS / Powell when L-BFGS's gradient computation blows up; wrap in an outer `except LinAlgError` for the residual case.
+
+**Integrity-hash encoding** (locked in for the lifetime of the hash): `json.dumps(steps, sort_keys=True, ensure_ascii=False, separators=(",",":"))` with floats rounded to 8 decimal places via a recursive walker, and NaN/Inf encoded as fixed string tokens. Sorting dict keys before encoding is non-negotiable — without it, a Python-dict round-trip would change the hash.
+
+**Hard rules upheld**: instrument bindings are pure metadata (no runner branch reads `instrument_key`); only existing pip libs were used; the deterministic hash is stable across hosts (verified by NaN/Inf test).
