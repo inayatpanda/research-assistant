@@ -25,8 +25,11 @@ export function useManuscript(
       qc.setQueryData(['manuscript-section', projectId, section], saved)
       // Citations live inside section content; the bibliography is derived
       // from every section's HTML, so any successful save must re-fetch it.
-      // Same for the reference-integrity panel (keyed on section data).
+      // Same for the reference-integrity panel (its useMemo recomputes
+      // when section data changes, and the "never cited" list needs to
+      // shrink immediately after a new citation is inserted — #A4).
       qc.invalidateQueries({ queryKey: ['bibliography', projectId] })
+      qc.invalidateQueries({ queryKey: ['manuscript-section', projectId] })
     },
   })
 

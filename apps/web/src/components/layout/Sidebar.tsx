@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
+import { useEffect } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
+import { projectsApi } from '@/lib/api'
 import { sidebarSlide } from '@/lib/motion'
 import { useLastViewedProject } from '@/lib/projectContext'
 import { cn } from '@/lib/utils'
@@ -9,8 +12,39 @@ import { isNavItemActive, navItems, resolveNavHref } from './nav-items'
 
 export function Sidebar() {
   const { projectId: routeProjectId } = useParams<{ projectId: string }>()
-  const lastViewedProjectId = useLastViewedProject((s) => s.projectId)
+  const storedLastViewedProjectId = useLastViewedProject((s) => s.projectId)
+  const clearLastViewed = useLastViewedProject((s) => s.clear)
   const { pathname } = useLocation()
+
+  // #N1 — validate the persisted lastViewedProjectId before letting the
+  // sidebar route project-scoped nav items to it. If the project has been
+  // deleted (or was never created), the stored id leaks "phantom" links
+  // that 404 when clicked. We refresh once per session.
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+    staleTime: 1000 * 60 * 5,
+    // Don't block sidebar render on the network.
+    placeholderData: [],
+  })
+  const knownProjectIds = (projects ?? []).map((p) => p.id)
+  const lastViewedProjectId =
+    storedLastViewedProjectId && knownProjectIds.includes(storedLastViewedProjectId)
+      ? storedLastViewedProjectId
+      : null
+
+  // If the stored id is stale (project deleted), clear it so other surfaces
+  // stop linking to it. Only clear once we have a resolved list.
+  useEffect(() => {
+    if (
+      projects &&
+      projects.length > 0 &&
+      storedLastViewedProjectId &&
+      !projects.some((p) => p.id === storedLastViewedProjectId)
+    ) {
+      clearLastViewed()
+    }
+  }, [projects, storedLastViewedProjectId, clearLastViewed])
 
   return (
     <motion.aside

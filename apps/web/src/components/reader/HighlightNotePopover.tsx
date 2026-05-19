@@ -34,9 +34,15 @@ export function HighlightNotePopover({
   const del = useDeleteHighlight(articleId)
   const summarise = useSummariseHighlight(articleId)
 
-  const [note, setNote] = useState('')
-  const [aiSummary, setAiSummary] = useState<string | null>(null)
-  const [aiState, setAiState] = useState<'idle' | 'pending' | 'review' | 'accepted'>('idle')
+  // Pre-populate from existing user_note on mount so the textbox shows the
+  // saved value the moment the popover opens (#H1: previously the field
+  // stayed empty until a second render cycle, leading users to assume their
+  // note was lost when they reopened a highlight).
+  const [note, setNote] = useState(highlight?.user_note ?? '')
+  const [aiSummary, setAiSummary] = useState<string | null>(highlight?.ai_summary ?? null)
+  const [aiState, setAiState] = useState<'idle' | 'pending' | 'review' | 'accepted'>(
+    highlight?.ai_summary ? 'accepted' : 'idle',
+  )
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
   // Hooks must run on every render — keep the anchor ref above any early return.
