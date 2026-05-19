@@ -2529,6 +2529,10 @@ export const PowerTestFamilySchema = z.enum([
   'anova',
   'chi_square',
   'correlation',
+  // Phase 17 (MP17) extras — also exposed by the FE Power calculator.
+  'logrank',
+  'mixed_effects',
+  'noninferiority',
 ])
 export type PowerTestFamily = z.infer<typeof PowerTestFamilySchema>
 
@@ -2538,6 +2542,9 @@ export const POWER_FAMILY_LABELS: Record<PowerTestFamily, string> = {
   anova: 'One-way ANOVA',
   chi_square: 'Chi-square',
   correlation: 'Correlation',
+  logrank: 'Survival (log-rank)',
+  mixed_effects: 'Cluster RCT (mixed-effects)',
+  noninferiority: 'Non-inferiority',
 }
 
 export const PowerResponseSchema = z.object({
@@ -2548,6 +2555,9 @@ export const PowerResponseSchema = z.object({
   effect_size: z.number(),
   sensitivity_curve_png: z.string(),
   notes: z.string(),
+  required_events: z.number().int().nullable().optional(),
+  required_clusters_per_arm: z.number().int().nullable().optional(),
+  design_effect: z.number().nullable().optional(),
 })
 export type PowerResponse = z.infer<typeof PowerResponseSchema>
 
@@ -2558,6 +2568,12 @@ export type PowerRequest = {
   power?: number
   k_groups?: number | null
   df?: number | null
+  event_rate?: number | null
+  allocation_ratio?: number | null
+  n_per_cluster?: number | null
+  n_clusters?: number | null
+  icc?: number | null
+  sigma?: number | null
 }
 
 export const powerApi = {

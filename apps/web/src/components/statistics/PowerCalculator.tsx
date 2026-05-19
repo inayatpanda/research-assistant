@@ -36,6 +36,19 @@ const EFFECT_PRESETS: Record<
   anova: { small: 0.1, medium: 0.25, large: 0.4, label: "Cohen's f" },
   chi_square: { small: 0.1, medium: 0.3, large: 0.5, label: "Cohen's w" },
   correlation: { small: 0.1, medium: 0.3, large: 0.5, label: '|r|' },
+  logrank: { small: 1.5, medium: 1.75, large: 2.0, label: 'Hazard ratio' },
+  mixed_effects: {
+    small: 0.2,
+    medium: 0.5,
+    large: 0.8,
+    label: "Cohen's d (cluster)",
+  },
+  noninferiority: {
+    small: 0.1,
+    medium: 0.25,
+    large: 0.4,
+    label: 'Margin (same scale as σ)',
+  },
 }
 
 export function PowerCalculatorDialog({
@@ -68,6 +81,13 @@ export function PowerCalculator() {
   const [power, setPower] = useState<string>('0.80')
   const [kGroups, setKGroups] = useState<string>('3')
   const [df, setDf] = useState<string>('1')
+  // Phase 17 (MP17) extras.
+  const [eventRate, setEventRate] = useState<string>('0.5')
+  const [allocationRatio, setAllocationRatio] = useState<string>('1.0')
+  const [nPerCluster, setNPerCluster] = useState<string>('20')
+  const [nClusters, setNClusters] = useState<string>('10')
+  const [icc, setIcc] = useState<string>('0.05')
+  const [sigma, setSigma] = useState<string>('1.0')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PowerResponse | null>(null)
   const mutation = usePower()
@@ -115,6 +135,54 @@ export function PowerCalculator() {
         return
       }
       body.df = d
+    }
+    if (family === 'logrank') {
+      const er = Number(eventRate)
+      const ar = Number(allocationRatio)
+      if (!(er > 0 && er <= 1)) {
+        setError('Event rate must be in (0, 1]')
+        return
+      }
+      if (!(ar > 0)) {
+        setError('Allocation ratio must be > 0')
+        return
+      }
+      body.event_rate = er
+      body.allocation_ratio = ar
+    }
+    if (family === 'mixed_effects') {
+      const npc = Number(nPerCluster)
+      const nc = Number(nClusters)
+      const i = Number(icc)
+      if (!Number.isFinite(npc) || npc < 1) {
+        setError('n per cluster must be ≥ 1')
+        return
+      }
+      if (!Number.isFinite(nc) || nc < 2) {
+        setError('n clusters must be ≥ 2')
+        return
+      }
+      if (!(i >= 0 && i <= 1)) {
+        setError('ICC must be in [0, 1]')
+        return
+      }
+      body.n_per_cluster = npc
+      body.n_clusters = nc
+      body.icc = i
+    }
+    if (family === 'noninferiority') {
+      const s = Number(sigma)
+      const ar = Number(allocationRatio)
+      if (!(s > 0)) {
+        setError('σ must be > 0')
+        return
+      }
+      if (!(ar > 0)) {
+        setError('Allocation ratio must be > 0')
+        return
+      }
+      body.sigma = s
+      body.allocation_ratio = ar
     }
     mutation.mutate(body, {
       onSuccess: (r) => setResult(r),
@@ -249,6 +317,103 @@ export function PowerCalculator() {
           </div>
         )}
 
+        {family === 'logrank' && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="power-event-rate">Event rate</Label>
+              <Input
+                id="power-event-rate"
+                type="number"
+                min="0.01"
+                max="1"
+                step="0.05"
+                value={eventRate}
+                onChange={(e) => setEventRate(e.target.value)}
+                data-testid="power-event-rate"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="power-alloc">Allocation ratio</Label>
+              <Input
+                id="power-alloc"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={allocationRatio}
+                onChange={(e) => setAllocationRatio(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {family === 'mixed_effects' && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="power-npc">n per cluster</Label>
+              <Input
+                id="power-npc"
+                type="number"
+                min="1"
+                step="1"
+                value={nPerCluster}
+                onChange={(e) => setNPerCluster(e.target.value)}
+                data-testid="power-n-per-cluster"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="power-nc">n clusters</Label>
+              <Input
+                id="power-nc"
+                type="number"
+                min="2"
+                step="1"
+                value={nClusters}
+                onChange={(e) => setNClusters(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="power-icc">ICC</Label>
+              <Input
+                id="power-icc"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={icc}
+                onChange={(e) => setIcc(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {family === 'noninferiority' && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="power-sigma">σ (std deviation)</Label>
+              <Input
+                id="power-sigma"
+                type="number"
+                min="0.01"
+                step="0.1"
+                value={sigma}
+                onChange={(e) => setSigma(e.target.value)}
+                data-testid="power-sigma"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="power-alloc-ni">Allocation ratio</Label>
+              <Input
+                id="power-alloc-ni"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={allocationRatio}
+                onChange={(e) => setAllocationRatio(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
         {error && (
           <div
             className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800"
@@ -288,6 +453,21 @@ export function PowerCalculator() {
               {result.required_n_per_group !== null && (
                 <div className="text-[12px] text-muted-foreground">
                   {result.required_n_per_group} per group
+                </div>
+              )}
+              {result.required_events != null && (
+                <div className="text-[12px] text-muted-foreground">
+                  Required events: {result.required_events}
+                </div>
+              )}
+              {result.required_clusters_per_arm != null && (
+                <div className="text-[12px] text-muted-foreground">
+                  Required clusters per arm: {result.required_clusters_per_arm}
+                </div>
+              )}
+              {result.design_effect != null && (
+                <div className="text-[12px] text-muted-foreground">
+                  Design effect: {result.design_effect.toFixed(3)}
                 </div>
               )}
               <div className="text-[12px] text-muted-foreground">

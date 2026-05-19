@@ -87,3 +87,27 @@ describe('PowerCalculator — form validation', () => {
     expect(calculateMock).not.toHaveBeenCalled()
   })
 })
+
+describe('PowerCalculator — MP17 extra families', () => {
+  it('lists all 8 power families', async () => {
+    // The shadcn Select doesn't change via fireEvent.change(trigger), so we
+    // verify exposure indirectly: the labels map and the family enum both
+    // include the MP17 extras. The renderer creates a <SelectItem> for each.
+    wrap(<PowerCalculator />)
+    // Opening the dropdown is a pointer interaction; we just confirm the
+    // hidden options exist in the DOM via the API of POWER_FAMILY_LABELS.
+    const { POWER_FAMILY_LABELS } = await import('@/lib/api')
+    expect(Object.keys(POWER_FAMILY_LABELS)).toEqual(
+      expect.arrayContaining([
+        'ttest_ind',
+        'ttest_paired',
+        'anova',
+        'chi_square',
+        'correlation',
+        'logrank',
+        'mixed_effects',
+        'noninferiority',
+      ]),
+    )
+  })
+})
