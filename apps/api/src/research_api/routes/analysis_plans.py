@@ -1,0 +1,255 @@
+"""Phase 13.5 (MP13.5) — Analysis plan + plan run routes.
+
+Endpoints:
+
+  POST   /projects/{pid}/analysis-plans
+  GET    /projects/{pid}/analysis-plans
+  GET    /projects/{pid}/analysis-plans/{plan_id}
+  PATCH  /projects/{pid}/analysis-plans/{plan_id}
+  DELETE /projects/{pid}/analysis-plans/{plan_id}
+  POST   /projects/{pid}/analysis-plans/{plan_id}/run    body: {dataset_id}
+  GET    /projects/{pid}/analysis-plans/{plan_id}/runs
+  GET    /projects/{pid}/analysis-plan-runs/{run_id}
+"""
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..container import Container, get_container
+from ..repositories.analysis_plans import SqliteAnalysisPlanRepository
+from ..repositories.datasets import SqliteDatasetRepository
+from ..repositories.projects import SqliteProjectRepository
+from ..repositories.transformations import SqliteTransformationRepository
+from ..schemas.analysis_plan import (
+    AnalysisPlanCreate,
+    AnalysisPlanRead,
+    AnalysisPlanRunRead,
+    AnalysisPlanRunRequest,
+    AnalysisPlanUpdate,
+)
+from ..services.stats.ingest import read_table
+from ..services.stats.plan_runner import run_plan
+from ..services.stats.transform import apply_transformations
+from ..services.storage import StorageRef
+
+router = APIRouter(tags=["analysis-plans"])
+
+
+async def _session(
+    container: Container = Depends(get_container),
+) -> AsyncIterator[AsyncSession]:
+    async with container.session_factory() as s:
+        yield s
+
+
+def _user_id(container: Container = Depends(get_container)) -> str:
+    return container.settings.local_user_id
+
+
+async def _require_project(session: AsyncSession, project_id: str, user_id: str) -> None:
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+@router.post(
+    "/projects/{project_id}/analysis-plans",
+    response_model=AnalysisPlanRead,
+    status_code=201,
+)
+async def create_plan(
+    project_id: str,
+    body: AnalysisPlanCreate,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisPlanRead:
+    await _require_project(session, project_id, user_id)
+    repo = SqliteAnalysisPlanRepository(session)
+    steps_jsonable = [s.model_dump() for s in body.steps]
+    row = await repo.create(
+        project_id=project_id,
+        name=body.name,
+        description=body.description,
+        steps=steps_jsonable,
+        user_id=user_id,
+    )
+    return AnalysisPlanRead.model_validate(row)
+
+
+@router.get(
+    "/projects/{project_id}/analysis-plans",
+    response_model=list[AnalysisPlanRead],
+)
+async def list_plans(
+    project_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> list[AnalysisPlanRead]:
+    await _require_project(session, project_id, user_id)
+    rows = await SqliteAnalysisPlanRepository(session).list_for_project(
+        project_id, user_id
+    )
+    return [AnalysisPlanRead.model_validate(r) for r in rows]
+
+
+@router.get(
+    "/projects/{project_id}/analysis-plans/{plan_id}",
+    response_model=AnalysisPlanRead,
+)
+async def get_plan(
+    project_id: str,
+    plan_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisPlanRead:
+    row = await SqliteAnalysisPlanRepository(session).get(plan_id, user_id)
+    if row is None or row.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return AnalysisPlanRead.model_validate(row)
+
+
+@router.patch(
+    "/projects/{project_id}/analysis-plans/{plan_id}",
+    response_model=AnalysisPlanRead,
+)
+async def update_plan(
+    project_id: str,
+    plan_id: str,
+    body: AnalysisPlanUpdate,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisPlanRead:
+    repo = SqliteAnalysisPlanRepository(session)
+    row = await repo.get(plan_id, user_id)
+    if row is None or row.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    steps_jsonable = (
+        [s.model_dump() for s in body.steps] if body.steps is not None else None
+    )
+    updated = await repo.update(
+        plan_id=plan_id,
+        user_id=user_id,
+        name=body.name,
+        description=body.description,
+        steps=steps_jsonable,
+    )
+    assert updated is not None
+    return AnalysisPlanRead.model_validate(updated)
+
+
+@router.delete(
+    "/projects/{project_id}/analysis-plans/{plan_id}",
+    status_code=204,
+)
+async def delete_plan(
+    project_id: str,
+    plan_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> None:
+    repo = SqliteAnalysisPlanRepository(session)
+    row = await repo.get(plan_id, user_id)
+    if row is None or row.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    await repo.delete(plan_id, user_id)
+    return None
+
+
+@router.post(
+    "/projects/{project_id}/analysis-plans/{plan_id}/run",
+    response_model=AnalysisPlanRunRead,
+)
+async def run_plan_route(
+    project_id: str,
+    plan_id: str,
+    body: AnalysisPlanRunRequest,
+    container: Container = Depends(get_container),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisPlanRunRead:
+    repo = SqliteAnalysisPlanRepository(session)
+    plan = await repo.get(plan_id, user_id)
+    if plan is None or plan.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    ds_repo = SqliteDatasetRepository(session)
+    dataset = await ds_repo.get(body.dataset_id, user_id)
+    if dataset is None or dataset.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Load df + apply transformations baseline (the plan can further transform)
+    try:
+        ref = StorageRef(
+            backend=dataset.file_ref["backend"], key=dataset.file_ref["key"]
+        )
+        raw = await container.storage.read(ref)
+        df = read_table(raw, dataset.file_type)
+        trepo = SqliteTransformationRepository(session)
+        ops = await trepo.list_for_dataset(dataset.id, user_id)
+        if ops:
+            df = apply_transformations(
+                df, [{"op_type": t.op_type, "op_args": t.op_args} for t in ops]
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Stamp the run as fully failed; do not abort the request.
+        run_row = await repo.create_run(
+            plan_id=plan_id,
+            dataset_id=dataset.id,
+            result_blob={"steps": []},
+            status="failed",
+            error=f"Failed to load dataset: {exc}",
+            user_id=user_id,
+        )
+        return AnalysisPlanRunRead.model_validate(run_row)
+
+    outcome = run_plan(steps=list(plan.steps or []), df=df)
+    run_row = await repo.create_run(
+        plan_id=plan_id,
+        dataset_id=dataset.id,
+        result_blob=outcome.result_blob,
+        status=outcome.status,
+        error=outcome.error,
+        user_id=user_id,
+    )
+    return AnalysisPlanRunRead.model_validate(run_row)
+
+
+@router.get(
+    "/projects/{project_id}/analysis-plans/{plan_id}/runs",
+    response_model=list[AnalysisPlanRunRead],
+)
+async def list_runs(
+    project_id: str,
+    plan_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> list[AnalysisPlanRunRead]:
+    repo = SqliteAnalysisPlanRepository(session)
+    plan = await repo.get(plan_id, user_id)
+    if plan is None or plan.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    rows = await repo.list_runs(plan_id, user_id)
+    return [AnalysisPlanRunRead.model_validate(r) for r in rows]
+
+
+@router.get(
+    "/projects/{project_id}/analysis-plan-runs/{run_id}",
+    response_model=AnalysisPlanRunRead,
+)
+async def get_run(
+    project_id: str,
+    run_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisPlanRunRead:
+    repo = SqliteAnalysisPlanRepository(session)
+    run = await repo.get_run(run_id, user_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    plan = await repo.get(run.plan_id, user_id)
+    if plan is None or plan.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return AnalysisPlanRunRead.model_validate(run)

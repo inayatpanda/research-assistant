@@ -591,6 +591,102 @@ async def test_psm_rejects_unknown_treatment_column(client):
     assert r.status_code == 422
 
 
+# ── Phase 13.5 — Plots + analysis plans + stats report isolation ─────
+
+
+@pytest.mark.asyncio
+async def test_plots_cross_user_404(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    ds = await _upload_dataset(client, project_a)
+    cp = await client.post(
+        f"/api/projects/{project_a}/datasets/{ds['id']}/plots",
+        json={"geom": "histogram", "x": "score"},
+    )
+    plot_id = cp.json()["id"]
+
+    _switch_user("user-b")
+    r = await client.get(f"/api/projects/{project_a}/plots/{plot_id}")
+    assert r.status_code == 404
+    r2 = await client.delete(f"/api/projects/{project_a}/plots/{plot_id}")
+    assert r2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_plots_cross_project_404(client):
+    project_x = await _make_project(client, title="X")
+    project_y = await _make_project(client, title="Y")
+    ds = await _upload_dataset(client, project_x)
+    cp = await client.post(
+        f"/api/projects/{project_x}/datasets/{ds['id']}/plots",
+        json={"geom": "histogram", "x": "score"},
+    )
+    plot_id = cp.json()["id"]
+    r = await client.get(f"/api/projects/{project_y}/plots/{plot_id}")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_analysis_plan_cross_user_404(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    cp = await client.post(
+        f"/api/projects/{project_a}/analysis-plans",
+        json={"name": "p", "steps": []},
+    )
+    plan_id = cp.json()["id"]
+
+    _switch_user("user-b")
+    r = await client.get(f"/api/projects/{project_a}/analysis-plans/{plan_id}")
+    assert r.status_code == 404
+    r2 = await client.delete(f"/api/projects/{project_a}/analysis-plans/{plan_id}")
+    assert r2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_analysis_plan_run_cross_user_404(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    ds = await _upload_dataset(client, project_a)
+    cp = await client.post(
+        f"/api/projects/{project_a}/analysis-plans",
+        json={"name": "p", "steps": []},
+    )
+    plan_id = cp.json()["id"]
+
+    _switch_user("user-b")
+    r = await client.post(
+        f"/api/projects/{project_a}/analysis-plans/{plan_id}/run",
+        json={"dataset_id": ds["id"]},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_analysis_plans_listing_isolated(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    await client.post(
+        f"/api/projects/{project_a}/analysis-plans",
+        json={"name": "p", "steps": []},
+    )
+
+    _switch_user("user-b")
+    r = await client.get(f"/api/projects/{project_a}/analysis-plans")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_stats_report_cross_user_404(client):
+    _switch_user("user-a")
+    project_a = await _make_project(client, title="A")
+    ds = await _upload_dataset(client, project_a)
+
+    _switch_user("user-b")
+    r = await client.post(f"/api/projects/{project_a}/datasets/{ds['id']}/report")
+    assert r.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_psm_persists_matched_dataset_linked_back(client):
     project_a = await _make_project(client, title="A")

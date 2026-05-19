@@ -896,6 +896,109 @@ class ReviewerResponse(Base):
     )
 
 
+class DatasetPlot(Base):
+    """Phase 13.5 (MP13.5) — saved plot for a dataset.
+
+    The grammar-of-graphics ``spec`` JSON (``{geom, x, y?, color?, facet?,
+    args?}``) is replayed on demand by the plot renderer. ``png_data_uri``
+    caches the most recent render so the UI can list plots without paying
+    the seaborn cost on every fetch.
+    """
+
+    __tablename__ = "dataset_plots"
+    __table_args__ = (
+        Index("ix_dataset_plots_dataset_user", "dataset_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    spec: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    png_data_uri: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Python-side default with microsecond precision so two plots inserted
+    # in the same wall-clock second still sort deterministically by ``created_at``.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.utcnow(),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.utcnow(),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class AnalysisPlan(Base):
+    """Phase 13.5 (MP13.5) — named ordered list of steps, scoped per (project, user).
+
+    Each step is a JSON dict ``{type: "transform"|"test"|"plot", args: {...}}``.
+    Plans are re-usable templates; the source of truth for any one execution
+    lives in ``analysis_plan_runs``.
+    """
+
+    __tablename__ = "analysis_plans"
+    __table_args__ = (
+        Index("ix_analysis_plans_project_user", "project_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class AnalysisPlanRun(Base):
+    """Phase 13.5 (MP13.5) — append-only run record for a plan.
+
+    ``result_blob`` holds the per-step output list; each entry is shaped
+    ``{step_index, type, status: "ok"|"failed", output: {...}, error?: str}``.
+    A single failed step does NOT abort the run — the run continues, but
+    the roll-up ``status`` becomes "partial". An exception escaping the
+    runner itself stamps the run "failed" with the ``error`` field set.
+    """
+
+    __tablename__ = "analysis_plan_runs"
+    __table_args__ = (
+        Index("ix_analysis_plan_runs_plan", "plan_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    plan_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("analysis_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    result_blob: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class ManuscriptComment(Base):
     """Phase 11 — margin comment anchored to a manuscript section.
 

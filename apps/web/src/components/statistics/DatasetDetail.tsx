@@ -1,4 +1,4 @@
-import { Code2, Plus, Scale, Table2 } from 'lucide-react'
+import { BarChart3, Code2, Plus, Scale, Table2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -23,6 +23,7 @@ import { useTransformations } from '@/hooks/useTransformations'
 
 import { DataView } from './DataView'
 import { PSMWizard } from './PSMWizard'
+import { PlotWorkspace } from './PlotWorkspace'
 import { SyntaxView } from './SyntaxView'
 import { TransformationStackPanel } from './TransformationStackPanel'
 
@@ -53,7 +54,7 @@ const TYPE_TONE: Record<VariableType, string> = {
   unknown: 'bg-muted text-muted-foreground border-border',
 }
 
-type Tab = 'variables' | 'data'
+type Tab = 'variables' | 'data' | 'plots'
 
 export function DatasetDetail({
   projectId,
@@ -131,12 +132,21 @@ export function DatasetDetail({
               label="Data view"
               icon={<Table2 className="h-3.5 w-3.5 mr-1" />}
             />
+            <TabButton
+              active={tab === 'plots'}
+              onClick={() => setTab('plots')}
+              label="Plots"
+              icon={<BarChart3 className="h-3.5 w-3.5 mr-1" />}
+            />
           </nav>
           {tab === 'variables' && (
             <VariablesTable projectId={projectId} dataset={dataset} />
           )}
           {tab === 'data' && (
             <DataView projectId={projectId} dataset={dataset} />
+          )}
+          {tab === 'plots' && (
+            <PlotWorkspace projectId={projectId} dataset={dataset} />
           )}
         </div>
         <aside className="space-y-3">

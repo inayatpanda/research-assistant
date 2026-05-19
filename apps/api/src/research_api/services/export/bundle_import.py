@@ -20,6 +20,8 @@ from ...db.models import (
     Abbreviation,
     Affiliation,
     Analysis,
+    AnalysisPlan,
+    AnalysisPlanRun,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -29,6 +31,7 @@ from ...db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
@@ -128,6 +131,7 @@ async def _do_import(
         "contributions": 0, "project_frontmatter": 0,
         "manuscript_snapshots": 0, "manuscript_comments": 0,
         "cover_letter": 0, "reviewer_responses": 0,
+        "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
     }
 
     proj_in = bundle["project"]
@@ -756,6 +760,66 @@ async def _do_import(
         ))
         counts["reviewer_responses"] += 1
     if counts["reviewer_responses"]:
+        await session.flush()
+
+    # ── Phase 13.5 — Dataset plots ─────────────────────────────────────
+    for plot in bundle.get("dataset_plots") or []:
+        new_ds = dataset_map.get(plot.get("dataset_id"))
+        if new_ds is None:
+            continue
+        spec = plot.get("spec")
+        if not isinstance(spec, dict):
+            continue
+        session.add(DatasetPlot(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            dataset_id=new_ds,
+            title=plot.get("title") or "",
+            spec=spec,
+            png_data_uri=plot.get("png_data_uri") or "",
+        ))
+        counts["dataset_plots"] += 1
+    if counts["dataset_plots"]:
+        await session.flush()
+
+    # ── Phase 13.5 — Analysis plans + runs ────────────────────────────
+    plan_map: dict[str, str] = {}
+    for plan in bundle.get("analysis_plans") or []:
+        new_plan_id = _new_id()
+        steps = plan.get("steps")
+        if not isinstance(steps, list):
+            steps = []
+        session.add(AnalysisPlan(
+            id=new_plan_id,
+            user_id=target_user_id,
+            project_id=new_project_id,
+            name=plan.get("name") or "Imported plan",
+            description=plan.get("description"),
+            steps=steps,
+        ))
+        if plan.get("id"):
+            plan_map[plan["id"]] = new_plan_id
+        counts["analysis_plans"] += 1
+    if counts["analysis_plans"]:
+        await session.flush()
+
+    for run in bundle.get("analysis_plan_runs") or []:
+        new_plan = plan_map.get(run.get("plan_id"))
+        if new_plan is None:
+            continue
+        new_ds = dataset_map.get(run.get("dataset_id"))
+        session.add(AnalysisPlanRun(
+            id=_new_id(),
+            user_id=target_user_id,
+            plan_id=new_plan,
+            dataset_id=new_ds or (run.get("dataset_id") or ""),
+            result_blob=run.get("result_blob") or {},
+            status=run.get("status") or "ok",
+            error=run.get("error"),
+        ))
+        counts["analysis_plan_runs"] += 1
+    if counts["analysis_plan_runs"]:
         await session.flush()
 
     for cm in bundle.get("manuscript_comments") or []:

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import {
+  BookmarkPlus,
   FileSpreadsheet,
   Loader2,
   RefreshCw,
@@ -22,6 +23,7 @@ import {
   useInterpretAnalysis,
   usePushToManuscript,
 } from '@/hooks/useAnalyses'
+import { useCreateAnalysisPlan } from '@/hooks/useAnalysisPlans'
 
 import { AssumptionPills } from './AssumptionPills'
 import { ChartImage } from './ChartImage'
@@ -40,6 +42,7 @@ export function AnalysisResultCard({
   const interpret = useInterpretAnalysis(projectId, dataset.id)
   const push = usePushToManuscript(projectId)
   const del = useDeleteAnalysis(projectId, dataset.id)
+  const savePlan = useCreateAnalysisPlan(projectId)
 
   const result = analysis.result
   const summary = (result?.summary ?? {}) as Record<string, unknown>
@@ -65,6 +68,42 @@ export function AnalysisResultCard({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <StatusBadge status={analysis.status} />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => {
+              const name = prompt(
+                'Plan name?',
+                `${TEST_LABELS[analysis.chosen_test]} workflow`,
+              )
+              if (!name) return
+              savePlan.mutate(
+                {
+                  name: name.trim(),
+                  description: `Saved from analysis ${analysis.id}`,
+                  steps: [
+                    {
+                      type: 'test',
+                      args: {
+                        test_key: analysis.chosen_test,
+                        question_type: analysis.question_type,
+                        variables: analysis.variables,
+                      },
+                    },
+                  ],
+                },
+                {
+                  onSuccess: () => toast.success('Saved as plan'),
+                  onError: (e: Error) => toast.error(e.message),
+                },
+              )
+            }}
+            aria-label="Save as plan"
+            data-testid={`save-as-plan-${analysis.id}`}
+          >
+            <BookmarkPlus className="h-4 w-4 text-muted-foreground" />
+          </Button>
           <Button
             size="icon"
             variant="ghost"

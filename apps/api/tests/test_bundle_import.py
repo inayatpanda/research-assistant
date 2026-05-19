@@ -272,6 +272,8 @@ async def test_import_full_round_trip_lossless(session):
         "manuscript_snapshots": 0, "manuscript_comments": 0,
         # Phase 12 additions — bundle source didn't include any rows.
         "cover_letter": 0, "reviewer_responses": 0,
+        # Phase 13.5 additions — bundle source didn't include any rows.
+        "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

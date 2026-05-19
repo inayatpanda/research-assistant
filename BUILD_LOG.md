@@ -5,6 +5,67 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-19 · Mini-phase 13.5 — Plots + plans + reports + output viewer ✅ COMPLETE
+
+**Scope**
+
+Four streams landed under one mini-phase tag:
+
+1. **Plot workspace.** Saved plots live in a new `dataset_plots` table
+   (migration `0017_plots_and_plans`). `services/stats/plot_renderer.py`
+   is a pure `render_plot(df, spec) -> bytes` for 9 geoms (point, line,
+   bar, box, violin, histogram, density, heatmap, pair) using seaborn +
+   matplotlib. Routes provide CRUD + regenerate. Frontend tab
+   `PlotWorkspace` is mounted on the Dataset detail.
+2. **Analysis plans.** New tables `analysis_plans` + `analysis_plan_runs`
+   (in same migration). The runner `services/stats/plan_runner.py` walks
+   each step (transform | test | plot) against an evolving DataFrame.
+   A single failed step does **not** abort the run — the step is stamped
+   `failed`, the run rolls up to `partial`, and execution continues.
+   Frontend: `AnalysisPlanBuilder` + `AnalysisPlanRunner` (dialog from
+   Statistics header). "Save as plan" button on `AnalysisResultCard`
+   seeds a single-test plan.
+3. **Statistical report PDF.** `services/export/stats_report.py` uses
+   reportlab.platypus to build a multi-page PDF: title page → dataset
+   transformations → analyses (heading + variables + stats table +
+   assumption pills + chart image + AI interpretation) → all dataset
+   plots → references. `POST /api/projects/{pid}/datasets/{did}/report`
+   streams the PDF; an "Export statistical report" button on the
+   Statistics page triggers a browser download.
+4. **Output Viewer.** `components/statistics/OutputViewer.tsx` replaces
+   the old "Analyses ({n})" list. Cards are expandable / pinnable /
+   drag-reorderable (dnd-kit), with delete-with-confirm on each card.
+   The viewer's pin/order/expanded state is persisted per-dataset in
+   localStorage (`output-viewer-v1::{datasetId}`). Mounted as the
+   dominant pane beneath `DatasetDetail` on the Statistics page.
+
+**Bundle round-trip** — `bundle_export` / `bundle_import` extended to
+include `dataset_plots`, `analysis_plans`, and `analysis_plan_runs`.
+
+**Security** — `test_security_stats_isolation.py` gained 6 new tests
+covering cross-user and cross-project 404s for plots, plan CRUD, plan
+runs, and the stats-report PDF export.
+
+**Bug found + fixed** — `test_list_plots_returns_in_creation_order`
+was flaky: SQLite's `CURRENT_TIMESTAMP` is second-resolution, so two
+plots inserted within the same second tied on `created_at` and the
+descending sort became non-deterministic. Fix: the `DatasetPlot` model
+now sets a Python-side `default=lambda: datetime.utcnow()` (microsecond
+precision) for both `created_at` and `updated_at`, so newest-first
+ordering is stable even within a single SQL second.
+
+**Tests**
+
+- Backend ~+30 (plot_renderer, plan_runner, stats_report, routes,
+  isolation, bundle round-trip).
+- Frontend +12 vitest across `PlotWorkspace`, `AnalysisPlanBuilder`,
+  `AnalysisPlanRunner`, `OutputViewer`.
+- Final: backend **1466** all green, vitest **197** all green.
+
+**Tag**: `phase-13p5`.
+
+---
+
 ## 2026-05-18 · Mini-phase 12.6 — Polish round ✅ COMPLETE
 
 **Scope**

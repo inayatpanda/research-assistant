@@ -27,6 +27,8 @@ from ..db.models import (
     Abbreviation,
     Affiliation,
     Analysis,
+    AnalysisPlan,
+    AnalysisPlanRun,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -36,6 +38,7 @@ from ..db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
@@ -77,6 +80,14 @@ from ..services.export.bundle_export import BundleInputs, build_bundle
 from ..services.export.bundle_import import BundleImportError, import_bundle
 from ..services.export.docx_export import FrontMatterPayload, render_docx
 from ..services.export.pdf_export import render_pdf
+from ..services.export.stats_report import (
+    ReportAnalysis,
+    ReportDataset,
+    ReportPlot,
+    ReportProject,
+    ReportTransformation,
+    build_stats_report,
+)
 from ..services.export.submission_package import (
     CoverLetterPayload,
     FigurePackageItem,
@@ -552,6 +563,31 @@ async def _collect_bundle_inputs(
         ).order_by(ReviewerResponse.created_at.asc())
     )).scalars().all())
 
+    # Phase 13.5 — dataset plots + analysis plans + plan runs
+    dataset_plots: list[DatasetPlot] = []
+    if dataset_ids:
+        dataset_plots = list((await session.execute(
+            select(DatasetPlot).where(
+                DatasetPlot.user_id == user_id,
+                DatasetPlot.dataset_id.in_(dataset_ids),
+            )
+        )).scalars().all())
+    analysis_plans = list((await session.execute(
+        select(AnalysisPlan).where(
+            AnalysisPlan.project_id == project_id,
+            AnalysisPlan.user_id == user_id,
+        )
+    )).scalars().all())
+    plan_ids = [p.id for p in analysis_plans]
+    analysis_plan_runs: list[AnalysisPlanRun] = []
+    if plan_ids:
+        analysis_plan_runs = list((await session.execute(
+            select(AnalysisPlanRun).where(
+                AnalysisPlanRun.user_id == user_id,
+                AnalysisPlanRun.plan_id.in_(plan_ids),
+            )
+        )).scalars().all())
+
     return BundleInputs(
         project=project,
         articles=articles,
@@ -582,6 +618,9 @@ async def _collect_bundle_inputs(
         manuscript_comments=manuscript_comments,
         cover_letter=cover_letter_row,
         reviewer_responses=reviewer_response_rows,
+        dataset_plots=dataset_plots,
+        analysis_plans=analysis_plans,
+        analysis_plan_runs=analysis_plan_runs,
     )
 
 
@@ -840,6 +879,146 @@ async def export_submission_package(
     return StreamingResponse(
         io.BytesIO(data),
         media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+_STATS_TEST_LABELS = {
+    "independent_t": "Independent t-test",
+    "paired_t": "Paired t-test",
+    "mann_whitney": "Mann-Whitney U",
+    "wilcoxon_signed": "Wilcoxon signed-rank",
+    "chi_squared": "Chi-squared",
+    "fisher_exact": "Fisher's exact",
+    "one_way_anova": "One-way ANOVA",
+    "kruskal_wallis": "Kruskal-Wallis",
+    "rm_anova": "Repeated-measures ANOVA",
+    "pearson": "Pearson correlation",
+    "spearman": "Spearman correlation",
+    "linear_regression": "Linear regression",
+    "multiple_linear": "Multiple linear regression",
+    "logistic": "Logistic regression",
+    "kaplan_meier": "Kaplan-Meier survival",
+    "cox_ph": "Cox proportional hazards",
+    "icc": "Intraclass correlation",
+    "cohen_kappa": "Cohen's kappa",
+    "mixed_effects_lm": "Mixed-effects linear",
+    "glm_poisson": "GLM Poisson",
+    "glm_binomial": "GLM Binomial",
+    "glm_gamma": "GLM Gamma",
+    "gee": "Generalised estimating equations",
+    "bootstrap_mean_diff": "Bootstrap mean difference",
+    "permutation_test": "Permutation test",
+    "tost_equivalence": "TOST equivalence",
+    "tost_noninferiority": "TOST non-inferiority",
+}
+
+
+@router.post("/projects/{project_id}/datasets/{dataset_id}/report")
+async def export_stats_report(
+    project_id: str,
+    dataset_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> StreamingResponse:
+    """Phase 13.5 — Build the full statistical report PDF for a dataset."""
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ds = (await session.execute(
+        select(Dataset).where(
+            Dataset.id == dataset_id,
+            Dataset.user_id == user_id,
+            Dataset.project_id == project_id,
+        )
+    )).scalar_one_or_none()
+    if ds is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    transformations = list((await session.execute(
+        select(DatasetTransformation).where(
+            DatasetTransformation.dataset_id == dataset_id,
+            DatasetTransformation.user_id == user_id,
+        ).order_by(DatasetTransformation.position.asc())
+    )).scalars().all())
+
+    analyses = list((await session.execute(
+        select(Analysis).where(
+            Analysis.dataset_id == dataset_id,
+            Analysis.user_id == user_id,
+        ).order_by(Analysis.created_at.asc())
+    )).scalars().all())
+
+    analysis_ids = [a.id for a in analyses]
+    results: list[AnalysisResult] = []
+    if analysis_ids:
+        results = list((await session.execute(
+            select(AnalysisResult).where(
+                AnalysisResult.user_id == user_id,
+                AnalysisResult.analysis_id.in_(analysis_ids),
+            )
+        )).scalars().all())
+    results_by_aid = {r.analysis_id: r for r in results}
+
+    plot_rows = list((await session.execute(
+        select(DatasetPlot).where(
+            DatasetPlot.dataset_id == dataset_id,
+            DatasetPlot.user_id == user_id,
+        ).order_by(DatasetPlot.created_at.asc())
+    )).scalars().all())
+
+    report_analyses: list[ReportAnalysis] = []
+    for a in analyses:
+        r = results_by_aid.get(a.id)
+        summary = dict(r.summary) if r and r.summary else {}
+        assumptions = dict(r.assumptions) if r and r.assumptions else {}
+        chart_uri: str | None = None
+        if r and r.chart and isinstance(r.chart, dict):
+            chart_uri = r.chart.get("data_uri")
+        report_analyses.append(ReportAnalysis(
+            test_label=_STATS_TEST_LABELS.get(a.chosen_test, a.chosen_test),
+            variables=dict(a.variables or {}),
+            summary=summary,
+            assumptions=assumptions,
+            chart_data_uri=chart_uri,
+            ai_interpretation=(r.ai_interpretation if r else None),
+        ))
+
+    report_plots = [
+        ReportPlot(
+            title=p.title,
+            geom=(p.spec or {}).get("geom", "plot"),
+            png_data_uri=p.png_data_uri,
+        )
+        for p in plot_rows
+    ]
+    report_transforms = [
+        ReportTransformation(
+            op_type=t.op_type,
+            label=t.label,
+            op_args=dict(t.op_args or {}),
+        )
+        for t in transformations
+    ]
+    data = build_stats_report(
+        project=ReportProject(title=project.title, study_type=project.study_type),
+        dataset=ReportDataset(
+            id=ds.id,
+            filename=ds.filename,
+            n_rows=ds.n_rows,
+            n_columns=ds.n_columns,
+        ),
+        analyses=report_analyses,
+        plots=report_plots,
+        transformations=report_transforms,
+    )
+
+    slug = _slugify_filename(project.title)
+    filename = f"{slug}-stats-report-{_today()}.pdf"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

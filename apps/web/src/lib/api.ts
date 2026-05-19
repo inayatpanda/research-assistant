@@ -2537,3 +2537,208 @@ export const psmApi = {
     return PSMResponseSchema.parse(r.data)
   },
 }
+
+// ── Phase 13.5 (MP13.5): Dataset plots ────────────────────────────────
+
+export const PlotGeomSchema = z.enum([
+  'point',
+  'bar',
+  'line',
+  'box',
+  'violin',
+  'heatmap',
+  'histogram',
+  'density',
+  'pair',
+])
+export type PlotGeom = z.infer<typeof PlotGeomSchema>
+
+export const PlotSpecSchema = z.object({
+  geom: PlotGeomSchema,
+  x: z.string().nullable().optional(),
+  y: z.string().nullable().optional(),
+  color: z.string().nullable().optional(),
+  facet: z.string().nullable().optional(),
+  args: z.record(z.string(), z.unknown()).optional(),
+})
+export type PlotSpec = z.infer<typeof PlotSpecSchema>
+
+export const PlotReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  dataset_id: z.string(),
+  title: z.string(),
+  spec: z.record(z.string(), z.unknown()),
+  png_data_uri: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type PlotRead = z.infer<typeof PlotReadSchema>
+
+export type PlotCreate = {
+  geom: PlotGeom
+  x?: string | null
+  y?: string | null
+  color?: string | null
+  facet?: string | null
+  args?: Record<string, unknown>
+  title?: string
+}
+
+export const plotsApi = {
+  list: async (projectId: string, datasetId: string): Promise<PlotRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/datasets/${datasetId}/plots`,
+    )
+    return z.array(PlotReadSchema).parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    datasetId: string,
+    body: PlotCreate,
+  ): Promise<PlotRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/plots`,
+      body,
+      { timeout: 60_000 },
+    )
+    return PlotReadSchema.parse(r.data)
+  },
+  delete: async (projectId: string, plotId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/plots/${plotId}`)
+  },
+  regenerate: async (
+    projectId: string,
+    plotId: string,
+  ): Promise<PlotRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/plots/${plotId}/regenerate`,
+      {},
+      { timeout: 60_000 },
+    )
+    return PlotReadSchema.parse(r.data)
+  },
+}
+
+// ── Phase 13.5 (MP13.5): Analysis plans + runs ─────────────────────────
+
+export const PlanStepTypeSchema = z.enum(['transform', 'test', 'plot'])
+export type PlanStepType = z.infer<typeof PlanStepTypeSchema>
+
+export const PlanStepSchema = z.object({
+  type: PlanStepTypeSchema,
+  args: z.record(z.string(), z.unknown()).default({}),
+})
+export type PlanStep = z.infer<typeof PlanStepSchema>
+
+export const AnalysisPlanReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  steps: z.array(z.record(z.string(), z.unknown())),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type AnalysisPlanRead = z.infer<typeof AnalysisPlanReadSchema>
+
+export type AnalysisPlanCreate = {
+  name: string
+  description?: string | null
+  steps: PlanStep[]
+}
+export type AnalysisPlanUpdate = Partial<AnalysisPlanCreate>
+
+export const PlanRunStatusSchema = z.enum(['ok', 'partial', 'failed'])
+export type PlanRunStatus = z.infer<typeof PlanRunStatusSchema>
+
+export const AnalysisPlanRunReadSchema = z.object({
+  id: z.string(),
+  plan_id: z.string(),
+  dataset_id: z.string(),
+  executed_at: z.string(),
+  result_blob: z.record(z.string(), z.unknown()),
+  status: PlanRunStatusSchema,
+  error: z.string().nullable(),
+})
+export type AnalysisPlanRunRead = z.infer<typeof AnalysisPlanRunReadSchema>
+
+export const analysisPlansApi = {
+  list: async (projectId: string): Promise<AnalysisPlanRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/analysis-plans`)
+    return z.array(AnalysisPlanReadSchema).parse(r.data)
+  },
+  get: async (projectId: string, planId: string): Promise<AnalysisPlanRead> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/analysis-plans/${planId}`,
+    )
+    return AnalysisPlanReadSchema.parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: AnalysisPlanCreate,
+  ): Promise<AnalysisPlanRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analysis-plans`,
+      body,
+    )
+    return AnalysisPlanReadSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    planId: string,
+    body: AnalysisPlanUpdate,
+  ): Promise<AnalysisPlanRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/analysis-plans/${planId}`,
+      body,
+    )
+    return AnalysisPlanReadSchema.parse(r.data)
+  },
+  delete: async (projectId: string, planId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/analysis-plans/${planId}`)
+  },
+  run: async (
+    projectId: string,
+    planId: string,
+    datasetId: string,
+  ): Promise<AnalysisPlanRunRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/analysis-plans/${planId}/run`,
+      { dataset_id: datasetId },
+      { timeout: 120_000 },
+    )
+    return AnalysisPlanRunReadSchema.parse(r.data)
+  },
+  listRuns: async (
+    projectId: string,
+    planId: string,
+  ): Promise<AnalysisPlanRunRead[]> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/analysis-plans/${planId}/runs`,
+    )
+    return z.array(AnalysisPlanRunReadSchema).parse(r.data)
+  },
+  getRun: async (
+    projectId: string,
+    runId: string,
+  ): Promise<AnalysisPlanRunRead> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/analysis-plan-runs/${runId}`,
+    )
+    return AnalysisPlanRunReadSchema.parse(r.data)
+  },
+}
+
+// ── Phase 13.5 (MP13.5): Statistical report PDF export ────────────────
+
+export const statsReportApi = {
+  export: async (projectId: string, datasetId: string): Promise<Blob> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/report`,
+      {},
+      { responseType: 'blob', timeout: 120_000 },
+    )
+    return r.data as Blob
+  },
+}

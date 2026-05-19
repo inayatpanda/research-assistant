@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .container import get_container
 from .routes.abbreviations import router as abbreviations_router
 from .routes.analyses import router as analyses_router
+from .routes.analysis_plans import router as analysis_plans_router
 from .routes.articles import router as articles_router
 from .routes.comments import router as comments_router
 from .routes.compilation import router as compilation_router
@@ -20,6 +21,7 @@ from .routes.ingest import router as ingest_router
 from .routes.journal_templates import router as journal_templates_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
+from .routes.plots import router as plots_router
 from .routes.power import router as power_router
 from .routes.projects import router as projects_router
 from .routes.psm import router as psm_router
@@ -70,3 +72,5 @@ app.include_router(power_router, prefix="/api")
 app.include_router(psm_router, prefix="/api")
 app.include_router(transformations_router, prefix="/api")
 app.include_router(cross_dataset_router, prefix="/api")
+app.include_router(plots_router, prefix="/api")
+app.include_router(analysis_plans_router, prefix="/api")

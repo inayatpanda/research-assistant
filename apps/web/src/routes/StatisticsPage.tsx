@@ -1,8 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { BarChart3, Calculator, Combine } from 'lucide-react'
+import {
+  BarChart3,
+  Calculator,
+  Combine,
+  FileText,
+  Loader2,
+  Workflow,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import {
   ResizableHandle,
@@ -10,15 +18,23 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { Button } from '@/components/ui/button'
-import { AnalysisResultCard } from '@/components/statistics/AnalysisResultCard'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { AnalysisPlanBuilder } from '@/components/statistics/AnalysisPlanBuilder'
+import { AnalysisPlanRunner } from '@/components/statistics/AnalysisPlanRunner'
 import { CrossDatasetDialog } from '@/components/statistics/CrossDatasetDialog'
 import { DatasetDetail } from '@/components/statistics/DatasetDetail'
 import { DatasetList } from '@/components/statistics/DatasetList'
 import { DatasetUpload } from '@/components/statistics/DatasetUpload'
 import { NewAnalysisWizard } from '@/components/statistics/NewAnalysisWizard'
+import { OutputViewer } from '@/components/statistics/OutputViewer'
 import { PowerCalculatorDialog } from '@/components/statistics/PowerCalculator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { type Dataset, projectsApi } from '@/lib/api'
+import { type Dataset, projectsApi, statsReportApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
 import { useProjectId } from '@/lib/projectContext'
 import { useAnalysesForDataset } from '@/hooks/useAnalyses'
@@ -36,6 +52,8 @@ function StatisticsInner({ projectId }: { projectId: string }) {
   const [wizardDataset, setWizardDataset] = useState<Dataset | null>(null)
   const [powerOpen, setPowerOpen] = useState(false)
   const [crossOpen, setCrossOpen] = useState(false)
+  const [plansOpen, setPlansOpen] = useState(false)
+  const [reportPending, setReportPending] = useState(false)
 
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
@@ -102,6 +120,55 @@ function StatisticsInner({ projectId }: { projectId: string }) {
           >
             <Calculator className="h-4 w-4 mr-1.5" />
             Power calculator
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPlansOpen(true)}
+            data-testid="open-analysis-plans"
+          >
+            <Workflow className="h-4 w-4 mr-1.5" />
+            Analysis plans
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (!activeDatasetId) {
+                toast.error('Pick a dataset first.')
+                return
+              }
+              setReportPending(true)
+              try {
+                const blob = await statsReportApi.export(
+                  projectId,
+                  activeDatasetId,
+                )
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'statistical-report.pdf'
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                toast.success('Report downloaded')
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Export failed'
+                toast.error(msg)
+              } finally {
+                setReportPending(false)
+              }
+            }}
+            disabled={reportPending || !datasets.length}
+            data-testid="export-stats-report"
+          >
+            {reportPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4 mr-1.5" />
+            )}
+            Export statistical report
           </Button>
         </div>
       </header>
@@ -197,6 +264,18 @@ function StatisticsInner({ projectId }: { projectId: string }) {
         projectId={projectId}
         datasets={datasets}
       />
+
+      <Dialog open={plansOpen} onOpenChange={setPlansOpen}>
+        <DialogContent className="max-w-4xl" data-testid="analysis-plans-dialog">
+          <DialogHeader>
+            <DialogTitle>Analysis plans</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6">
+            <AnalysisPlanBuilder projectId={projectId} />
+            <AnalysisPlanRunner projectId={projectId} datasets={datasets} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }
@@ -221,33 +300,12 @@ function ActiveDatasetPanel({
         onNewAnalysis={onNewAnalysis}
       />
 
-      {dataset && analyses.length > 0 && (
-        <section className="space-y-3">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-            Analyses ({analyses.length})
-          </div>
-          <div className="space-y-3">
-            {analyses.map((a) => (
-              <AnalysisResultCard
-                key={a.id}
-                projectId={projectId}
-                dataset={dataset}
-                analysis={a}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {dataset && analyses.length === 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-white/40 p-8 text-center">
-          <BarChart3 className="h-6 w-6 mx-auto text-muted-foreground" />
-          <div className="mt-2 text-[14px] font-medium">No analyses yet</div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
-            Click <span className="font-medium">New analysis</span> to recommend
-            and run a statistical test on this dataset.
-          </div>
-        </div>
+      {dataset && (
+        <OutputViewer
+          projectId={projectId}
+          dataset={dataset}
+          analyses={analyses}
+        />
       )}
     </div>
   )

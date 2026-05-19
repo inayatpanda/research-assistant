@@ -21,6 +21,8 @@ from ...db.models import (
     Abbreviation,
     Affiliation,
     Analysis,
+    AnalysisPlan,
+    AnalysisPlanRun,
     AnalysisResult,
     Article,
     ArticleNote,
@@ -30,6 +32,7 @@ from ...db.models import (
     Contribution,
     CoverLetter,
     Dataset,
+    DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
     ExtractionRecord,
@@ -90,6 +93,10 @@ class BundleInputs:
     # Phase 12 — cover letter + reviewer responses
     cover_letter: CoverLetter | None = None
     reviewer_responses: list[ReviewerResponse] = field(default_factory=list)
+    # Phase 13.5 — plots + analysis plans + plan runs
+    dataset_plots: list[DatasetPlot] = field(default_factory=list)
+    analysis_plans: list[AnalysisPlan] = field(default_factory=list)
+    analysis_plan_runs: list[AnalysisPlanRun] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -178,5 +185,10 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         ),
         "reviewer_responses": [
             _row_to_dict(r) for r in inputs.reviewer_responses
+        ],
+        "dataset_plots": [_row_to_dict(p) for p in inputs.dataset_plots],
+        "analysis_plans": [_row_to_dict(p) for p in inputs.analysis_plans],
+        "analysis_plan_runs": [
+            _row_to_dict(r) for r in inputs.analysis_plan_runs
         ],
     }
