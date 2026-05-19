@@ -629,6 +629,24 @@ export const datasetsApi = {
     )
     return DatasetVariableSchema.parse(r.data)
   },
+  preview: async (
+    projectId: string,
+    datasetId: string,
+    offset = 0,
+    limit = 50,
+  ): Promise<{
+    columns: string[]
+    rows: Array<Record<string, unknown> & { __row_index: number }>
+    offset: number
+    limit: number
+    total: number
+  }> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/datasets/${datasetId}/data`,
+      { params: { offset, limit } },
+    )
+    return r.data
+  },
 }
 
 // --- Analyses ---

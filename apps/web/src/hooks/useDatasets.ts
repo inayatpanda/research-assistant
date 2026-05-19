@@ -52,3 +52,17 @@ export function useUpdateVariableType(projectId: string, datasetId: string) {
     },
   })
 }
+
+export function useDatasetPreview(
+  projectId: string | undefined,
+  datasetId: string | undefined,
+  offset = 0,
+  limit = 50,
+) {
+  return useQuery({
+    queryKey: ['dataset-preview', projectId, datasetId, offset, limit],
+    queryFn: () => datasetsApi.preview(projectId!, datasetId!, offset, limit),
+    enabled: !!projectId && !!datasetId,
+    staleTime: 30_000,
+  })
+}

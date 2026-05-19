@@ -58,10 +58,31 @@ def detect_table_mime(data: bytes) -> str:
         b"xl/workbook.xml" in data or b"[Content_Types]" in data
     ):
         return XLSX_MIME
+    # Reject the obvious non-table magic bytes up front (PDF, PNG, JPEG, etc.)
+    rejected_magic = (
+        b"%PDF-",
+        b"\x89PNG",
+        b"\xff\xd8\xff",
+        b"GIF87a",
+        b"GIF89a",
+        b"\x00\x00\x00",
+    )
+    for m in rejected_magic:
+        if data.startswith(m):
+            raise ValueError("unsupported table mime")
     head = data[:1024].decode("utf-8", errors="ignore")
-    if head and any(d in head for d in (",", ";", "\t")):
-        if "\n" in head or "\r" in head or len(head) < 1024:
-            return CSV_MIME
+    if not head:
+        raise ValueError("unsupported table mime")
+    has_separator = any(d in head for d in (",", ";", "\t"))
+    has_newline = "\n" in head or "\r" in head
+    # Multi-column CSV is the easy case.
+    if has_separator and (has_newline or len(head) < 1024):
+        return CSV_MIME
+    # Single-column CSV: rows separated by newlines, no commas. Accept
+    # ASCII/UTF-8 printable text + a newline, but reject obvious binary
+    # (a NUL byte anywhere in the first KB).
+    if has_newline and b"\x00" not in data[:1024]:
+        return CSV_MIME
     raise ValueError("unsupported table mime")
 
 

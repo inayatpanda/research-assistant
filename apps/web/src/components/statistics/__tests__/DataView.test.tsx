@@ -8,7 +8,10 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { addMock } = vi.hoisted(() => ({ addMock: vi.fn() }))
+const { addMock, previewMock } = vi.hoisted(() => ({
+  addMock: vi.fn(),
+  previewMock: vi.fn(),
+}))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -17,6 +20,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
     transformationsApi: {
       ...actual.transformationsApi,
       add: addMock,
+    },
+    datasetsApi: {
+      ...actual.datasetsApi,
+      preview: previewMock,
     },
   }
 })
@@ -56,6 +63,18 @@ const DATASET: Dataset = {
   ],
 }
 
+const PREVIEW_PAYLOAD = {
+  columns: ['age', 'bmi'],
+  rows: [
+    { __row_index: 0, age: 65, bmi: 25.1 },
+    { __row_index: 1, age: 72, bmi: 28.4 },
+    { __row_index: 2, age: 58, bmi: 22.0 },
+  ],
+  offset: 0,
+  limit: 50,
+  total: 3,
+}
+
 function wrap(node: React.ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -68,10 +87,12 @@ function wrap(node: React.ReactNode) {
 afterEach(() => {
   cleanup()
   addMock.mockReset()
+  previewMock.mockReset()
 })
 
 describe('DataView — cell editing', () => {
   beforeEach(() => {
+    previewMock.mockResolvedValue(PREVIEW_PAYLOAD)
     addMock.mockResolvedValue({
       id: 'tx-new',
       dataset_id: 'ds-1',
@@ -86,14 +107,17 @@ describe('DataView — cell editing', () => {
   it('emits a mutate op into the transformation stack on cell save', async () => {
     wrap(<DataView projectId="p-1" dataset={DATASET} />)
 
-    // Click the (0, age) cell to begin editing.
-    const cell = screen.getByTestId('cell-r-0-age')
+    // Wait for the preview to load and the (0, age) cell to render.
+    const cell = await screen.findByTestId('cell-r-0-age')
     fireEvent.click(cell)
 
-    const input = (await screen.findByTestId('cell-input')) as HTMLInputElement
+    const input = (await screen.findByTestId(
+      'cell-input',
+      {},
+      { timeout: 2000 },
+    )) as HTMLInputElement
     fireEvent.change(input, { target: { value: '99' } })
     expect(input.value).toBe('99')
-    // Click the save button (Check icon).
     fireEvent.click(screen.getByLabelText('Save edit'))
 
     await waitFor(() => expect(addMock).toHaveBeenCalledTimes(1))
@@ -106,12 +130,38 @@ describe('DataView — cell editing', () => {
 
   it('does NOT emit an op when the edited value is unchanged', async () => {
     wrap(<DataView projectId="p-1" dataset={DATASET} />)
-    const cell = screen.getByTestId('cell-r-0-age')
+    const cell = await screen.findByTestId('cell-r-0-age')
     fireEvent.click(cell)
     const input = await screen.findByTestId('cell-input')
-    // Press Enter without changing the value (it pre-fills to '65').
     fireEvent.keyDown(input, { key: 'Enter' })
     await new Promise((r) => setTimeout(r, 20))
     expect(addMock).not.toHaveBeenCalled()
+  })
+
+  it('renders the actual row count from the preview endpoint', async () => {
+    // Even though dataset.n_rows says 3, the preview is the source of truth.
+    previewMock.mockResolvedValue({
+      ...PREVIEW_PAYLOAD,
+      total: 120,
+    })
+    wrap(<DataView projectId="p-1" dataset={{ ...DATASET, n_rows: 120 }} />)
+    await screen.findByTestId('cell-r-0-age')
+    expect(
+      screen.getByText(/of 120 rows/i, { exact: false }),
+    ).toBeTruthy()
+  })
+
+  it('shows a friendly empty state when the dataset has zero rows', async () => {
+    previewMock.mockResolvedValue({
+      columns: ['age', 'bmi'],
+      rows: [],
+      offset: 0,
+      limit: 50,
+      total: 0,
+    })
+    wrap(<DataView projectId="p-1" dataset={{ ...DATASET, n_rows: 0 }} />)
+    await waitFor(() =>
+      expect(screen.queryByText(/dataset has no rows/i)).toBeTruthy(),
+    )
   })
 })

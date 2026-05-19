@@ -241,6 +241,109 @@ async def update_variable(
     return DatasetVariableRead.model_validate(updated)
 
 
+@router.get(
+    "/projects/{project_id}/datasets/{dataset_id}/data",
+)
+async def preview_dataset(
+    project_id: str,
+    dataset_id: str,
+    offset: int = 0,
+    limit: int = 50,
+    container: Container = Depends(get_container),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> dict:
+    """Return real dataset rows (post-transformation) for the editable grid.
+
+    The grid was previously fed by ``DatasetVariable.sample_values`` which
+    only carried 5 distinct values per column; that made a 120-row table
+    look like a 5-row one. This endpoint hydrates the raw bytes through
+    ``read_dataset`` + the transformation stack, then slices ``offset/limit``.
+    """
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    repo = SqliteDatasetRepository(session)
+    dataset = await repo.get(dataset_id, user_id)
+    if dataset is None or dataset.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    if limit <= 0 or limit > 500:
+        limit = 50
+    if offset < 0:
+        offset = 0
+
+    from ..repositories.transformations import SqliteTransformationRepository
+    from ..services.stats.ingest import read_dataset
+    from ..services.stats.transform import apply_transformations
+    from ..services.storage import StorageRef
+
+    ref = StorageRef(
+        backend=dataset.file_ref["backend"], key=dataset.file_ref["key"]
+    )
+    try:
+        data = await container.storage.read(ref)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Dataset file unreadable: %s", exc)
+        raise HTTPException(status_code=410, detail="Dataset file is missing") from None
+    try:
+        df = read_dataset(data, dataset)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Dataset parse failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Could not read dataset: {exc}") from None
+
+    trepo = SqliteTransformationRepository(session)
+    ops = await trepo.list_for_dataset(dataset_id, user_id)
+    if ops:
+        try:
+            df = apply_transformations(
+                df, [{"op_type": t.op_type, "op_args": t.op_args} for t in ops]
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Transformation replay failed: %s", exc)
+            # Don't 500 — show the pre-transform rows so the user can
+            # inspect what's going wrong.
+    n_rows = int(df.shape[0])
+    sliced = df.iloc[offset : offset + limit]
+    columns = [str(c) for c in df.columns]
+    # Coerce every cell to a JSON-safe scalar. NaN / NaT → None, numpy
+    # scalars unwrapped to native Python.
+    import math
+
+    import numpy as np
+
+    def _coerce(v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, float) and math.isnan(v):
+            return None
+        if isinstance(v, (np.integer,)):
+            return int(v)
+        if isinstance(v, (np.floating,)):
+            f = float(v)
+            return None if math.isnan(f) else f
+        if isinstance(v, np.bool_):
+            return bool(v)
+        if isinstance(v, (int, float, bool, str)):
+            return v
+        # pd.Timestamp etc.
+        return str(v)
+
+    rows_out: list[dict] = []
+    for idx, row in sliced.iterrows():
+        cells: dict[str, object] = {"__row_index": int(idx)}
+        for c in columns:
+            cells[c] = _coerce(row[c])
+        rows_out.append(cells)
+    return {
+        "columns": columns,
+        "rows": rows_out,
+        "offset": offset,
+        "limit": limit,
+        "total": n_rows,
+    }
+
+
 @router.delete(
     "/projects/{project_id}/datasets/{dataset_id}",
     status_code=status.HTTP_204_NO_CONTENT,

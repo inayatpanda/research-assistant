@@ -2,7 +2,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
@@ -15,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Loader2,
   Trash2,
   X,
 } from 'lucide-react'
@@ -23,20 +23,28 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { Dataset } from '@/lib/api'
 import { useAddTransformation } from '@/hooks/useTransformations'
+import { useDatasetPreview } from '@/hooks/useDatasets'
 
 const PAGE_SIZE = 50
 
-type Row = Record<string, string> & { __row_id: string }
+type Row = Record<string, unknown> & { __row_id: string; __row_index: number }
 
 /**
- * Editable preview grid backed by `Dataset.variables[*].sample_values`.
+ * Editable grid backed by the server's transformation-aware data preview.
  *
- * The server is source of truth: every cell-edit, row-drop, or "mark missing"
- * action appends a transformation op (mutate / filter / recode) to the
- * dataset's transformation stack. The backend re-applies the stack before
- * any analysis runs, so users never destructively edit the raw CSV.
+ * Before stats-refine, this component synthesised pseudo-rows from
+ * ``DatasetVariable.sample_values`` (≤ 5 distinct values per column),
+ * which made a 120-row table appear to have only 5 rows. We now fetch
+ * the actual post-transformation rows in pages via
+ * ``GET /datasets/{id}/data?offset=&limit=`` and let users edit / drop
+ * / mark-missing against those.
+ *
+ * The server remains source of truth: every cell edit, row drop, or
+ * "mark missing" appends a transformation op (mutate / filter / recode)
+ * to the dataset's stack. The raw CSV is never mutated.
  */
 export function DataView({
   projectId,
@@ -46,28 +54,28 @@ export function DataView({
   dataset: Dataset
 }) {
   const addTx = useAddTransformation(projectId, dataset.id)
-  const variables = dataset.variables
-  const columnNames = useMemo(
-    () => variables.map((v) => v.name),
-    [variables],
+  const [page, setPage] = useState(0)
+  const offset = page * PAGE_SIZE
+  const { data: preview, isLoading } = useDatasetPreview(
+    projectId,
+    dataset.id,
+    offset,
+    PAGE_SIZE,
   )
 
-  // Build pseudo-rows from sample_values. Each variable contributes up to N
-  // samples; we transpose into row-of-objects shape for react-table.
-  const initialRows = useMemo<Row[]>(() => {
-    const maxLen = Math.max(0, ...variables.map((v) => v.sample_values.length))
-    const out: Row[] = []
-    for (let i = 0; i < maxLen; i += 1) {
-      const row: Row = { __row_id: `r-${i}` }
-      for (const v of variables) {
-        row[v.name] = v.sample_values[i] ?? ''
-      }
-      out.push(row)
-    }
-    return out
-  }, [variables])
+  const columnNames = useMemo<string[]>(
+    () => preview?.columns ?? dataset.variables.map((v) => v.name),
+    [preview, dataset.variables],
+  )
 
-  const [rows, setRows] = useState<Row[]>(initialRows)
+  // Edits / drops / mark-missing are tracked as in-memory overlays on top
+  // of the server-fetched preview. The transformation stack on the server
+  // is the durable source of truth, so this overlay only needs to last
+  // until the next refetch.
+  const [edits, setEdits] = useState<Map<string, Record<string, string>>>(
+    () => new Map(),
+  )
+  const [drops, setDrops] = useState<Set<string>>(new Set())
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [sorting, setSorting] = useState<SortingState>([])
   const [filters, setFilters] = useState<ColumnFiltersState>([])
@@ -75,29 +83,47 @@ export function DataView({
     null,
   )
   const editValueRef = useRef('')
+
+  const rows = useMemo<Row[]>(() => {
+    if (!preview) return []
+    const merged: Row[] = []
+    for (const r of preview.rows) {
+      const rowId = `r-${r.__row_index}`
+      if (drops.has(rowId)) continue
+      const overlay = edits.get(rowId)
+      merged.push({
+        ...r,
+        ...(overlay ?? {}),
+        __row_id: rowId,
+      } as Row)
+    }
+    return merged
+  }, [preview, edits, drops])
+
   const rowsRef = useRef(rows)
   useEffect(() => {
     rowsRef.current = rows
   }, [rows])
 
-  // Keep local rows in sync if dataset changes (different dataset selected).
-  useEffect(() => {
-    setRows(initialRows)
-  }, [initialRows])
+  const totalRows = preview?.total ?? dataset.n_rows
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
 
   const commitEdit = useCallback(() => {
     if (!editing) return
     const { rowId, col } = editing
     const oldRow = rowsRef.current.find((r) => r.__row_id === rowId)
-    const oldValue = oldRow?.[col] ?? ''
+    const oldValue = String(oldRow?.[col] ?? '')
     const newValue = editValueRef.current
     if (newValue === oldValue) {
       setEditing(null)
       return
     }
-    setRows((prev) =>
-      prev.map((r) => (r.__row_id === rowId ? { ...r, [col]: newValue } : r)),
-    )
+    setEdits((prev) => {
+      const next = new Map(prev)
+      const row = next.get(rowId) ?? {}
+      next.set(rowId, { ...row, [col]: newValue })
+      return next
+    })
     addTx.mutate(
       {
         op_type: 'mutate',
@@ -121,11 +147,14 @@ export function DataView({
   }, [])
 
   function markMissing(rowId: string, col: string) {
-    const oldRow = rows.find((r) => r.__row_id === rowId)
-    const oldValue = oldRow?.[col] ?? ''
-    setRows((prev) =>
-      prev.map((r) => (r.__row_id === rowId ? { ...r, [col]: '' } : r)),
-    )
+    const oldRow = rowsRef.current.find((r) => r.__row_id === rowId)
+    const oldValue = String(oldRow?.[col] ?? '')
+    setEdits((prev) => {
+      const next = new Map(prev)
+      const row = next.get(rowId) ?? {}
+      next.set(rowId, { ...row, [col]: '' })
+      return next
+    })
     addTx.mutate(
       {
         op_type: 'recode',
@@ -156,7 +185,11 @@ export function DataView({
       },
       {
         onSuccess: () => {
-          setRows((prev) => prev.filter((r) => !selectedRows.has(r.__row_id)))
+          setDrops((prev) => {
+            const next = new Set(prev)
+            rowIds.forEach((id) => next.add(id))
+            return next
+          })
           setSelectedRows(new Set())
           toast.success(`Dropped ${rowIds.length} row(s)`)
         },
@@ -178,9 +211,7 @@ export function DataView({
     const cols: ColumnDef<Row>[] = [
       {
         id: '__select',
-        header: () => (
-          <span className="sr-only">Row selection</span>
-        ),
+        header: () => <span className="sr-only">Row selection</span>,
         enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => (
@@ -200,7 +231,9 @@ export function DataView({
         header: () => <span className="font-medium">{name}</span>,
         cell: ({ row }) => {
           const rowId = row.original.__row_id
-          const value = row.original[name]
+          const raw = row.original[name]
+          const value =
+            raw === null || raw === undefined ? '' : String(raw)
           const isEditing =
             editing && editing.rowId === rowId && editing.col === name
           if (isEditing) {
@@ -243,7 +276,8 @@ export function DataView({
         },
         filterFn: (row, columnId, value) => {
           if (!value) return true
-          const v = String(row.getValue(columnId) ?? '').toLowerCase()
+          const raw = row.getValue(columnId)
+          const v = String(raw ?? '').toLowerCase()
           return v.includes(String(value).toLowerCase())
         },
       })
@@ -261,17 +295,29 @@ export function DataView({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: PAGE_SIZE } },
   })
 
-  const pageInfo = table.getState().pagination
+  if (isLoading && !preview) {
+    return (
+      <div className="space-y-2" data-testid="data-view">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="h-[300px] w-full rounded-lg" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2" data-testid="data-view">
       <header className="flex items-center justify-between gap-2">
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-          Data view ({rows.length} rows shown · {dataset.n_rows} total)
+          Data view ({rows.length} of {totalRows} rows
+          {totalRows > rows.length ? ` · page ${page + 1}/${totalPages}` : ''})
+          {isLoading ? (
+            <Loader2
+              data-testid="data-view-loading"
+              className="inline h-3 w-3 ml-2 animate-spin"
+            />
+          ) : null}
         </div>
         <Button
           size="sm"
@@ -341,7 +387,9 @@ export function DataView({
                   colSpan={columns.length}
                   className="text-center px-3 py-6 text-muted-foreground"
                 >
-                  No rows to display.
+                  {totalRows === 0
+                    ? 'This dataset has no rows. Try removing filters in the transformation stack.'
+                    : 'No rows on this page match the active filters.'}
                 </td>
               </tr>
             ) : (
@@ -367,15 +415,15 @@ export function DataView({
 
       <footer className="flex items-center justify-between gap-2 text-[12px]">
         <div className="text-muted-foreground">
-          Page {pageInfo.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+          Page {page + 1} of {totalPages}
         </div>
         <div className="flex items-center gap-1">
           <Button
             size="icon"
             variant="outline"
             className="h-7 w-7"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
             aria-label="Previous page"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -384,8 +432,8 @@ export function DataView({
             size="icon"
             variant="outline"
             className="h-7 w-7"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
             aria-label="Next page"
           >
             <ChevronRight className="h-3.5 w-3.5" />
