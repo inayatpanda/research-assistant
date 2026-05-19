@@ -38,6 +38,7 @@ from ...db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
     ManuscriptSnapshot,
@@ -135,6 +136,7 @@ async def _do_import(
         "cover_letter": 0, "reviewer_responses": 0,
         "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
         "grade_assessments": 0, "prospero_draft": 0,
+        "living_review_job": 0,
     }
 
     proj_in = bundle["project"]
@@ -623,6 +625,31 @@ async def _do_import(
             ))
             await session.flush()
             counts["prospero_draft"] = 1
+
+        # ── Living-review job (Phase 15) ───────────────────────────────
+        # Hits are intentionally NOT carried — they reset on import so the
+        # imported project starts fresh against the live PubMed corpus.
+        # The lease_holder is also dropped so the new instance can claim it.
+        living_in = bundle.get("living_review_job")
+        if isinstance(living_in, dict):
+            schedule = living_in.get("schedule") or "weekly"
+            if schedule not in {"daily", "weekly", "monthly"}:
+                schedule = "weekly"
+            session.add(LivingReviewJob(
+                id=_new_id(),
+                user_id=target_user_id,
+                project_id=new_project_id,
+                review_id=new_review_id,
+                pubmed_query=(living_in.get("pubmed_query") or "").strip()
+                    or "imported query",
+                schedule=schedule,
+                enabled=bool(living_in.get("enabled", True)),
+                last_run_at=None,
+                last_hit_count=None,
+                lease_holder=None,
+            ))
+            await session.flush()
+            counts["living_review_job"] = 1
 
     # ── ICMJE front-matter (Phase 10) ──────────────────────────────────
     author_map: dict[str, str] = {}

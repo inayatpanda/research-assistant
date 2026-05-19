@@ -1113,6 +1113,96 @@ class ProsperoDraft(Base):
     )
 
 
+class LivingReviewJob(Base):
+    """Phase 15 (MP15) — auto-rerun job for a saved PubMed query.
+
+    One job per ``review_id``. The scheduler claims a lease via a conditional
+    UPDATE before running so multiple processes can share the same DB without
+    double-firing. ``last_hit_count`` is the number of *new* PMIDs from the
+    most recent run (not the cumulative total).
+    """
+
+    __tablename__ = "living_review_jobs"
+    __table_args__ = (
+        Index(
+            "uq_living_review_jobs_review",
+            "review_id",
+            unique=True,
+        ),
+        Index(
+            "ix_living_review_jobs_user_enabled",
+            "user_id", "enabled",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    review_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False
+    )
+    pubmed_query: Mapped[str] = mapped_column(Text, nullable=False)
+    schedule: Mapped[str] = mapped_column(String(16), nullable=False, default="weekly")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_hit_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lease_holder: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class LivingReviewHit(Base):
+    """Phase 15 (MP15) — a single new PMID surfaced by a living-review run.
+
+    Decision flow: every fresh PMID lands as ``new``; the user accepts (→
+    imported as an Article) or dismisses it. Hits are transient — they are
+    NOT carried in the project bundle so an import starts the rerun history
+    fresh.
+    """
+
+    __tablename__ = "living_review_hits"
+    __table_args__ = (
+        Index(
+            "ix_living_review_hits_job_decision",
+            "job_id", "decision",
+        ),
+        Index(
+            "uq_living_review_hits_job_pmid",
+            "job_id", "pmid",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey("living_review_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    pmid: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), default="new", nullable=False)
+    seen_in_baseline: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class ManuscriptComment(Base):
     """Phase 11 — margin comment anchored to a manuscript section.
 

@@ -5,6 +5,86 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-19 · Mini-phase 15 — Living systematic review ✅ COMPLETE
+
+**Scope**
+
+Auto-rerun PubMed searches for a saved review on a cron schedule and surface
+new PMIDs in a triage queue. Migration `0019_living_review` adds two tables:
+
+- `living_review_jobs` — one row per `review_id` carrying `pubmed_query`,
+  `schedule` (`daily`|`weekly`|`monthly`), `enabled`, run-bookkeeping
+  (`last_run_at`, `last_hit_count`), and `lease_holder` for multi-instance
+  safety. UNIQUE on `review_id`, indexed by `(user_id, enabled)`.
+- `living_review_hits` — append-only batch of new PMIDs per run, tri-state
+  `decision` (`new`|`dismissed`|`accepted`), indexed by `(job_id, decision)`
+  and unique on `(job_id, pmid)`.
+
+**Scheduler** — `services/scheduler/runner.py` wires APScheduler's
+`BackgroundScheduler` (threaded, daemon=True) into the FastAPI lifespan.
+Tests set `SCHEDULER_DISABLED=1` (in `conftest.py`) so the suite never spins
+up a real thread. `init_scheduler` reads every enabled job at startup and
+registers one CronTrigger per row (`daily` → 02:00 UTC; `weekly` → Mon 02:00
+UTC; `monthly` → day 1 02:00 UTC). Each trigger calls `_kick_run`, which
+opens its own asyncio loop and awaits `run_job`. `run_job` claims a lease via
+the conditional UPDATE
+`SET lease_holder=<host>-<pid> WHERE id=? AND lease_holder IS NULL`; if the
+rowcount is 0, another process holds the lease and the run skips silently.
+The PubMed call (existing `services/ingest/pubmed.search_pubmed`) is then
+diffed against `living_review_hits.pmid` via the pure
+`services/review/living.diff_new_hits` helper, new rows are inserted with
+`decision="new"`, `last_run_at`/`last_hit_count` updated, and the lease
+released. Lease release is symmetric and keyed on the holder so a foreign
+release can never null out our claim.
+
+**Routes** — `routes/living.py` exposes the full lifecycle under
+`/api/projects/{pid}/review/living`: GET / POST (upsert) / PATCH / DELETE /
+POST `run-now` / GET `hits?decision=` / PATCH `hits/{hid}` / POST
+`hits/{hid}/import-as-article` (calls `fetch_pmid_metadata` and creates an
+Article row). The route validates that the hit belongs to the project's job
+AND has `decision="accepted"` before accepting an import.
+
+**Bundle** — `living_review_job` rides the bundle; `living_review_hits` are
+transient and explicitly excluded so an imported project starts fresh against
+the live PubMed corpus. The import also clears `last_run_at`,
+`last_hit_count`, and `lease_holder` on landing so the receiver can run cleanly.
+
+**Frontend** — `lib/api.ts::livingReviewApi` covers all eight endpoints;
+`hooks/useLivingReview.ts` exposes TanStack Query wrappers. New
+`components/review/LivingReviewPanel.tsx` ships the setup card (textarea +
+schedule radio + enabled checkbox + Save / Run-now / Delete) and a hits list
+filterable by decision with Accept / Dismiss buttons (Accept routes through
+the import endpoint and refreshes the articles list). A ninth tab
+"Living review" was appended to `SystematicReviewPage.tsx` after PROSPERO.
+
+**Bug found + fixed** — initial run of the test_scheduler_runner suite hit a
+SQLite FOREIGN KEY constraint when seeding (`LivingReviewJob` inserted
+before the parent `Project`/`Review` had been flushed). The fix was an
+explicit `await session.flush()` between the three `session.add()` calls in
+the `_seed` helper — the test fixture's session doesn't auto-flush parents
+before child inserts. Separately, `test_bundle_import_full_round_trip`'s
+exhaustive counter-dict assertion needed the new `living_review_job: 0` key.
+
+**Tests**
+
+- Backend +27 across 5 new files
+  (`test_living_service.py` ×5, `test_scheduler_runner.py` ×6,
+  `test_living_route.py` ×7, `test_security_living_isolation.py` ×6,
+  `test_bundle_living_review_round_trip.py` ×3).
+- Frontend +5 vitest in `lib/__tests__/livingReviewApi.test.ts`.
+- Final: backend **1545** all green, vitest **212** all green.
+
+**Tag**: `phase-15`.
+
+**Out of scope (deferred)**
+
+- Email / push notifications on new hits — defers to multi-user auth.
+- Cross-database living search (Embase, Scopus) — single PubMed source only.
+- Per-hit AI screening suggestion at run-time (the existing AI screening
+  endpoint can be run on demand after import).
+
+---
+
 ## 2026-05-19 · Mini-phase 14 — GRADE certainty + PROSPERO helper ✅ COMPLETE
 
 **Scope**

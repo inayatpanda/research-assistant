@@ -39,6 +39,7 @@ from ...db.models import (
     Figure,
     GradeAssessment,
     Highlight,
+    LivingReviewJob,
     ManuscriptComment,
     ManuscriptSection,
     ManuscriptSnapshot,
@@ -102,6 +103,9 @@ class BundleInputs:
     # Phase 14 (MP14) — GRADE assessments + PROSPERO drafts
     grade_assessments: list[GradeAssessment] = field(default_factory=list)
     prospero_draft: ProsperoDraft | None = None
+    # Phase 15 (MP15) — Living review job (hits intentionally excluded; they're
+    # transient and reset on import).
+    living_review_job: LivingReviewJob | None = None
 
 
 def _serialise(value: Any) -> Any:
@@ -202,6 +206,11 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "prospero_draft": (
             _row_to_dict(inputs.prospero_draft)
             if inputs.prospero_draft is not None
+            else None
+        ),
+        "living_review_job": (
+            _row_to_dict(inputs.living_review_job)
+            if inputs.living_review_job is not None
             else None
         ),
     }

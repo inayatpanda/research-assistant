@@ -31,6 +31,7 @@ dependencies = [
   "svglib==1.4.1",
   "Pillow>=10.0",
   "bibtexparser>=1.4,<2",
+  "apscheduler>=3.10",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { EmptyReviewState } from '@/components/review/EmptyReviewState'
 import { ExtractionTable } from '@/components/review/ExtractionTable'
+import { LivingReviewPanel } from '@/components/review/LivingReviewPanel'
 import { PRISMAFlowChart } from '@/components/review/PRISMAFlowChart'
 import { PROSPEROForm } from '@/components/review/PROSPEROForm'
 import { ReviewHeader } from '@/components/review/ReviewHeader'
@@ -52,6 +53,7 @@ type ReviewTab =
   | 'prisma'
   | 'grade'
   | 'prospero'
+  | 'living'
 
 const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'search', label: 'Search log' },
@@ -62,6 +64,7 @@ const TABS: { id: ReviewTab; label: string }[] = [
   { id: 'prisma', label: 'PRISMA flow' },
   { id: 'grade', label: 'GRADE' },
   { id: 'prospero', label: 'PROSPERO' },
+  { id: 'living', label: 'Living review' },
 ]
 
 export default function SystematicReviewPage() {
@@ -144,6 +147,7 @@ function ReviewInner({ projectId }: { projectId: string }) {
         {tab === 'prisma' && <PRISMAFlowChart projectId={projectId} />}
         {tab === 'grade' && <GradeTabContent projectId={projectId} />}
         {tab === 'prospero' && <PROSPEROForm projectId={projectId} />}
+        {tab === 'living' && <LivingReviewPanel projectId={projectId} />}
       </div>
     </motion.div>
   )

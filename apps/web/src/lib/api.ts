@@ -2904,3 +2904,116 @@ export const prosperoApi = {
     return typeof r.data === 'string' ? r.data : String(r.data)
   },
 }
+
+// ── Phase 15 (MP15): Living systematic review ─────────────────────────
+
+export const LivingScheduleSchema = z.enum(['daily', 'weekly', 'monthly'])
+export type LivingSchedule = z.infer<typeof LivingScheduleSchema>
+
+export const LivingHitDecisionSchema = z.enum(['new', 'dismissed', 'accepted'])
+export type LivingHitDecision = z.infer<typeof LivingHitDecisionSchema>
+
+export const LivingReviewJobReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  review_id: z.string(),
+  pubmed_query: z.string(),
+  schedule: LivingScheduleSchema,
+  enabled: z.boolean(),
+  last_run_at: z.string().nullable(),
+  last_hit_count: z.number().int().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type LivingReviewJobRead = z.infer<typeof LivingReviewJobReadSchema>
+
+export const LivingReviewHitReadSchema = z.object({
+  id: z.string(),
+  job_id: z.string(),
+  run_at: z.string(),
+  pmid: z.string(),
+  title: z.string(),
+  decision: LivingHitDecisionSchema,
+  seen_in_baseline: z.boolean(),
+  created_at: z.string(),
+})
+export type LivingReviewHitRead = z.infer<typeof LivingReviewHitReadSchema>
+
+export const LivingReviewRunResultSchema = z.object({
+  job_id: z.string(),
+  new_hits: z.number().int(),
+  total_fetched: z.number().int(),
+  ran_at: z.string(),
+})
+export type LivingReviewRunResult = z.infer<typeof LivingReviewRunResultSchema>
+
+export type LivingReviewJobUpsert = {
+  pubmed_query: string
+  schedule: LivingSchedule
+  enabled: boolean
+}
+
+export type LivingReviewJobPatch = Partial<LivingReviewJobUpsert>
+
+export const livingReviewApi = {
+  get: async (projectId: string): Promise<LivingReviewJobRead | null> => {
+    try {
+      const r = await api.get(`/api/projects/${projectId}/review/living`)
+      return LivingReviewJobReadSchema.parse(r.data)
+    } catch (e) {
+      // 404 = no job configured yet — surface as null for the UI's empty state.
+      if (e instanceof Error && /not found|404/i.test(e.message)) return null
+      throw e
+    }
+  },
+  upsert: async (
+    projectId: string,
+    body: LivingReviewJobUpsert,
+  ): Promise<LivingReviewJobRead> => {
+    const r = await api.post(`/api/projects/${projectId}/review/living`, body)
+    return LivingReviewJobReadSchema.parse(r.data)
+  },
+  patch: async (
+    projectId: string,
+    body: LivingReviewJobPatch,
+  ): Promise<LivingReviewJobRead> => {
+    const r = await api.patch(`/api/projects/${projectId}/review/living`, body)
+    return LivingReviewJobReadSchema.parse(r.data)
+  },
+  remove: async (projectId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/review/living`)
+  },
+  runNow: async (projectId: string): Promise<LivingReviewRunResult> => {
+    const r = await api.post(`/api/projects/${projectId}/review/living/run-now`)
+    return LivingReviewRunResultSchema.parse(r.data)
+  },
+  listHits: async (
+    projectId: string,
+    decision?: LivingHitDecision,
+  ): Promise<LivingReviewHitRead[]> => {
+    const r = await api.get(`/api/projects/${projectId}/review/living/hits`, {
+      params: decision ? { decision } : undefined,
+    })
+    return z.array(LivingReviewHitReadSchema).parse(r.data)
+  },
+  updateHit: async (
+    projectId: string,
+    hitId: string,
+    decision: 'dismissed' | 'accepted',
+  ): Promise<LivingReviewHitRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/review/living/hits/${hitId}`,
+      { decision },
+    )
+    return LivingReviewHitReadSchema.parse(r.data)
+  },
+  importHitAsArticle: async (
+    projectId: string,
+    hitId: string,
+  ): Promise<Article> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/review/living/hits/${hitId}/import-as-article`,
+    )
+    return ArticleSchema.parse(r.data)
+  },
+}

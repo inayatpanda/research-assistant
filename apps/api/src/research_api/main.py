@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +22,7 @@ from .routes.health import router as health_router
 from .routes.highlights import router as highlights_router
 from .routes.ingest import router as ingest_router
 from .routes.journal_templates import router as journal_templates_router
+from .routes.living import router as living_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
 from .routes.plots import router as plots_router
@@ -35,7 +38,24 @@ from .routes.transformations import router as transformations_router
 from .routes.cross_dataset import router as cross_dataset_router
 from .routes.writing import router as writing_router
 
-app = FastAPI(title="Research Manuscript Assistant API", version="0.0.1")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Lazy import — keeps app import cheap and avoids touching the scheduler
+    # module during static analysis of the bare module.
+    from .services.scheduler.runner import init_scheduler, shutdown_scheduler
+
+    await init_scheduler(_app)
+    try:
+        yield
+    finally:
+        await shutdown_scheduler(_app)
+
+
+app = FastAPI(
+    title="Research Manuscript Assistant API",
+    version="0.0.1",
+    lifespan=_lifespan,
+)
 
 _settings = get_container().settings
 app.add_middleware(
@@ -78,3 +98,4 @@ app.include_router(plots_router, prefix="/api")
 app.include_router(analysis_plans_router, prefix="/api")
 app.include_router(grade_router, prefix="/api")
 app.include_router(prospero_router, prefix="/api")
+app.include_router(living_router, prefix="/api")

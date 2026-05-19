@@ -276,6 +276,8 @@ async def test_import_full_round_trip_lossless(session):
         "dataset_plots": 0, "analysis_plans": 0, "analysis_plan_runs": 0,
         # Phase 14 (MP14) additions — bundle source didn't include any rows.
         "grade_assessments": 0, "prospero_draft": 0,
+        # Phase 15 (MP15) additions — bundle source didn't include any rows.
+        "living_review_job": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

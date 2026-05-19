@@ -1,9 +1,15 @@
 """Shared test fixtures."""
+import os
 from pathlib import Path
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Globally disable the APScheduler thread during tests — the lifespan honours
+# this flag and never starts a real BackgroundScheduler. Tests that want to
+# exercise the scheduler set up their own MemoryJobStore-backed instance.
+os.environ.setdefault("SCHEDULER_DISABLED", "1")
 
 from research_api.db.base import Base, make_engine, make_session_factory
 from research_api.services.ai import AIProvider, CardContext, CitationMetadata, SectionDraftContext
