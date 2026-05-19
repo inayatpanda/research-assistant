@@ -159,6 +159,70 @@ describe('reviewsApi schemas', () => {
     expect(p('')).toBeNull()
   })
 
+  // E2E-sweep bug #UX1 — fetch wrapper used to surface "Network Error"
+  // instead of the FastAPI `detail` body. The new extractor walks several
+  // body shapes before falling back.
+  describe('extractErrorMessage', () => {
+    const extract = __internal.extractErrorMessage
+
+    function fakeError(opts: {
+      status?: number
+      statusText?: string
+      data?: unknown
+      message?: string
+    }) {
+      // Minimal AxiosError shape — only `response` + `message` are
+      // touched by the extractor.
+      return {
+        isAxiosError: true,
+        message: opts.message ?? 'Network Error',
+        response: opts.status
+          ? { status: opts.status, statusText: opts.statusText ?? '', data: opts.data }
+          : undefined,
+      } as unknown as Parameters<typeof extract>[0]
+    }
+
+    it('uses string `detail` when present', () => {
+      expect(
+        extract(
+          fakeError({ status: 500, data: { detail: 'population_id required' } }),
+        ),
+      ).toBe('population_id required')
+    })
+
+    it('joins Pydantic list-style `detail` entries with loc prefixes', () => {
+      const msg = extract(
+        fakeError({
+          status: 422,
+          data: {
+            detail: [
+              { msg: 'field required', loc: ['body', 'name'] },
+              { msg: 'must be int', loc: ['body', 'year'] },
+            ],
+          },
+        }),
+      )
+      expect(msg).toContain('body.name: field required')
+      expect(msg).toContain('body.year: must be int')
+    })
+
+    it('falls back to body.message', () => {
+      expect(
+        extract(fakeError({ status: 500, data: { message: 'boom' } })),
+      ).toBe('boom')
+    })
+
+    it('falls back to status text when body has nothing useful', () => {
+      expect(
+        extract(fakeError({ status: 503, statusText: 'Service Unavailable', data: {} })),
+      ).toBe('503 Service Unavailable')
+    })
+
+    it('returns `Request failed` for raw network errors', () => {
+      expect(extract(fakeError({ message: 'Network Error' }))).toBe('Request failed')
+    })
+  })
+
   it('parses a Prisma response', () => {
     const parsed = PrismaResponseSchema.parse({
       counts: {

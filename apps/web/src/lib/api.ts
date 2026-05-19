@@ -8,15 +8,58 @@ export const api = axios.create({
   timeout: 30_000,
 })
 
+/**
+ * Coerce the FastAPI / generic JSON error body into a human string.
+ *
+ * Sources we try, in order:
+ *   1. `body.detail` if string → use directly.
+ *   2. `body.detail` if list of `{msg, loc}` (Pydantic validation) → join
+ *      messages with semicolons; format the field path if `loc` is set.
+ *   3. `body.message` (some endpoints use this shape) → use directly.
+ *   4. Stringified body if compact JSON object.
+ *   5. Axios's `error.message`.
+ *   6. Generic `'Request failed'` fallback.
+ */
+function extractErrorMessage(error: AxiosError): string {
+  const data = error.response?.data
+  if (data && typeof data === 'object') {
+    const body = data as Record<string, unknown>
+    const detail = body.detail
+    if (typeof detail === 'string' && detail.length > 0) return detail
+    if (Array.isArray(detail) && detail.length > 0) {
+      const parts: string[] = []
+      for (const d of detail) {
+        if (typeof d === 'string') {
+          parts.push(d)
+        } else if (d && typeof d === 'object' && 'msg' in d) {
+          const obj = d as { msg?: unknown; loc?: unknown }
+          const msg = typeof obj.msg === 'string' ? obj.msg : ''
+          const loc = Array.isArray(obj.loc)
+            ? obj.loc.filter((x) => typeof x === 'string' || typeof x === 'number').join('.')
+            : ''
+          parts.push(loc ? `${loc}: ${msg}` : msg)
+        }
+      }
+      const joined = parts.filter(Boolean).join('; ')
+      if (joined.length > 0) return joined
+    }
+    if (typeof body.message === 'string' && body.message.length > 0) {
+      return body.message
+    }
+  }
+  if (typeof data === 'string' && data.length > 0) return data
+  if (error.response) {
+    const status = error.response.status
+    const statusText = error.response.statusText || 'Request failed'
+    return `${status} ${statusText}`
+  }
+  if (error.message && error.message !== 'Network Error') return error.message
+  return 'Request failed'
+}
+
 api.interceptors.response.use(
   (r) => r,
-  (error: AxiosError) => {
-    const detail =
-      (error.response?.data as { detail?: unknown } | undefined)?.detail ??
-      error.message ??
-      'Network error'
-    return Promise.reject(new Error(typeof detail === 'string' ? detail : 'Request failed'))
-  },
+  (error: AxiosError) => Promise.reject(new Error(extractErrorMessage(error))),
 )
 
 // --- Schemas (runtime + types) ---
@@ -210,8 +253,11 @@ export const articlesApi = {
   upload: async (projectId: string, file: File): Promise<UploadResponse> => {
     const fd = new FormData()
     fd.append('file', file)
+    // Do NOT set Content-Type manually: the browser injects the proper
+    // multipart boundary automatically when the body is a FormData
+    // instance. Setting it explicitly (a) strips the boundary and breaks
+    // parsing on the server, and (b) forces a CORS preflight.
     const r = await api.post(`/api/projects/${projectId}/articles/upload`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120_000,
     })
     return UploadResponseSchema.parse(r.data)
@@ -553,8 +599,10 @@ export const datasetsApi = {
   upload: async (projectId: string, file: File): Promise<Dataset> => {
     const fd = new FormData()
     fd.append('file', file)
+    // Do NOT set Content-Type manually: fetch/axios attach the correct
+    // multipart boundary automatically when the body is FormData. Setting
+    // it explicitly drops the boundary AND forces a CORS preflight.
     const r = await api.post(`/api/projects/${projectId}/datasets`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120_000,
     })
     return DatasetSchema.parse(r.data)
@@ -1375,8 +1423,8 @@ export const exportApi = {
     }
     const fd = new FormData()
     fd.append('file', file)
+    // No explicit Content-Type — see articlesApi.upload for the rationale.
     const r = await api.post('/api/projects/import/bundle', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120_000,
     })
     return BundleImportResponseSchema.parse(r.data)
@@ -1684,10 +1732,10 @@ export const ingestApi = {
   ): Promise<ArticleMetadata[]> => {
     const fd = new FormData()
     fd.append('file', file)
+    // No explicit Content-Type — see articlesApi.upload for the rationale.
     const r = await api.post(
       `/api/projects/${projectId}/articles/import-ris`,
       fd,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     )
     return z.array(ArticleMetadataSchema).parse(r.data)
   },
@@ -1697,10 +1745,10 @@ export const ingestApi = {
   ): Promise<ArticleMetadata[]> => {
     const fd = new FormData()
     fd.append('file', file)
+    // No explicit Content-Type — see articlesApi.upload for the rationale.
     const r = await api.post(
       `/api/projects/${projectId}/articles/import-bibtex`,
       fd,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     )
     return z.array(ArticleMetadataSchema).parse(r.data)
   },
@@ -1725,6 +1773,7 @@ export const ingestApi = {
 export const __internal = {
   parseContentDispositionFilename,
   triggerBlobDownload,
+  extractErrorMessage,
 }
 
 
