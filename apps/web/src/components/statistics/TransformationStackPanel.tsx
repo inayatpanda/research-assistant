@@ -96,28 +96,94 @@ function OpIcon({ type }: { type: TransformationOpType }) {
   }
 }
 
+/**
+ * DEMO-FIX-D MEDIUM-3 — Per-op-row summary line.
+ *
+ * Before this fix a ``log_transform`` row just showed the input column name
+ * (e.g. ``vas_pain_6m_postop``) which gave no hint of what the op did. The
+ * panel now renders the output expression so the row tells the user
+ * exactly what gets added to the dataset:
+ *   - log_transform / z_score:  ``<new> = log(<col>)`` or ``<new> = z(<col>)``
+ *   - mutate:                   ``<new> = <expr>``
+ *   - filter (expr shape):      ``filter: <expr>``
+ *   - filter (structured):      ``filter: <col> <op> <value>``
+ *   - recode:                   ``recode <col>: a→x, b→y``
+ *   - drop_na / select / etc.   unchanged
+ */
 function argsSummary(t: TransformationRead): string {
   const args = t.op_args ?? {}
   switch (t.op_type) {
-    case 'filter':
-      return typeof args.expr === 'string' ? args.expr : ''
-    case 'mutate':
-      return typeof args.column === 'string'
-        ? `${args.column} = ${args.expr ?? '…'}`
-        : ''
+    case 'filter': {
+      if (typeof args.expr === 'string' && args.expr) {
+        return `filter: ${args.expr}`
+      }
+      // Legacy structured shape — keep it readable.
+      if (typeof args.column === 'string' && typeof args.op === 'string') {
+        const val =
+          args.value === undefined || args.value === null
+            ? ''
+            : Array.isArray(args.value)
+              ? `[${(args.value as unknown[]).join(', ')}]`
+              : JSON.stringify(args.value)
+        return `filter: ${args.column} ${args.op} ${val}`.trim()
+      }
+      return 'filter'
+    }
+    case 'mutate': {
+      const out =
+        typeof args.new_column === 'string'
+          ? args.new_column
+          : typeof args.column === 'string'
+            ? args.column
+            : '?'
+      const expr =
+        typeof args.expression === 'string'
+          ? args.expression
+          : typeof args.expr === 'string'
+            ? args.expr
+            : '…'
+      return `${out} = ${expr}`
+    }
     case 'select':
       return Array.isArray(args.columns)
         ? (args.columns as string[]).join(', ')
         : ''
-    case 'recode':
-      return typeof args.column === 'string' ? `${args.column}` : ''
+    case 'recode': {
+      const col = typeof args.column === 'string' ? args.column : '?'
+      const mapping = args.mapping
+      let mapStr = ''
+      if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
+        const entries = Object.entries(mapping as Record<string, unknown>)
+        mapStr = entries
+          .slice(0, 4)
+          .map(([k, v]) => `${k}→${String(v)}`)
+          .join(', ')
+        if (entries.length > 4) mapStr += `, +${entries.length - 4} more`
+      }
+      return mapStr ? `recode ${col}: ${mapStr}` : `recode ${col}`
+    }
     case 'drop_na':
-      return Array.isArray(args.columns)
+      return Array.isArray(args.columns) && (args.columns as string[]).length > 0
         ? (args.columns as string[]).join(', ')
         : '(all columns)'
-    case 'log_transform':
-    case 'z_score':
-      return typeof args.column === 'string' ? args.column : ''
+    case 'log_transform': {
+      const input = typeof args.column === 'string' ? args.column : '?'
+      const output =
+        typeof args.new_column === 'string' && args.new_column.length > 0
+          ? args.new_column
+          : `log_${input}`
+      const base = args.base
+      const fn = base === '10' ? 'log10' : base === '2' ? 'log2' : 'log'
+      return `${output} = ${fn}(${input})`
+    }
+    case 'z_score': {
+      const input = typeof args.column === 'string' ? args.column : '?'
+      const output =
+        typeof args.new_column === 'string' && args.new_column.length > 0
+          ? args.new_column
+          : `z_${input}`
+      return `${output} = z(${input})`
+    }
     case 'group_summarise':
       return Array.isArray(args.group_by)
         ? `by ${(args.group_by as string[]).join(', ')}`
