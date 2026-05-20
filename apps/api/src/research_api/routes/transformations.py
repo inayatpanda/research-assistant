@@ -33,6 +33,61 @@ from ..services.stats.transform import OP_TYPES
 router = APIRouter(tags=["transformations"])
 
 
+# DEMO-FIX-D HIGH-3 — Per-op-type column-type contracts. Keys are the op
+# types that REQUIRE specific column dtypes; values are the set of
+# user-facing type names (matching ``DatasetVariable.inferred_type`` /
+# ``user_type``) that the target column must satisfy. We validate at
+# op-add time so the UI surfaces a precise 422 instead of an opaque
+# runner-time failure deep inside numpy.
+OP_REQUIRED_TYPES: dict[str, set[str]] = {
+    "log_transform": {"numeric"},
+    "z_score": {"numeric"},
+}
+
+# Pretty labels for error prose.
+_TYPE_LABELS = {
+    "numeric": "Numeric",
+    "nominal": "Nominal",
+    "ordinal": "Ordinal",
+    "time": "Time",
+}
+
+
+def _validate_op_column_types(
+    op_type: str, op_args: dict, variables: list
+) -> None:
+    """Reject numeric-only ops applied to non-numeric columns at op-add time.
+
+    Raises HTTPException(422) with a user-readable message naming the column
+    and its current type. No-op for ops that have no type contract.
+    """
+    required = OP_REQUIRED_TYPES.get(op_type)
+    if not required:
+        return
+    col_name = (op_args or {}).get("column")
+    if not isinstance(col_name, str):
+        return  # let downstream structural validation catch this
+    type_by_name = {
+        v.name: (v.user_type or v.inferred_type) for v in variables
+    }
+    actual = type_by_name.get(col_name)
+    if actual is None:
+        # Unknown column — let the runner raise on apply; we don't want to
+        # block ops that reference yet-to-be-created columns (e.g. created
+        # by an earlier mutate op).
+        return
+    if actual not in required:
+        pretty_op = op_type.replace("_", " ").capitalize()
+        pretty_actual = _TYPE_LABELS.get(actual, actual)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{pretty_op} requires a numeric column; "
+                f"{col_name!r} is {pretty_actual}."
+            ),
+        )
+
+
 async def _session(
     container: Container = Depends(get_container),
 ) -> AsyncIterator[AsyncSession]:
@@ -86,6 +141,12 @@ async def create_transformation(
     await _require_dataset(session, project_id, dataset_id, user_id)
     if body.op_type not in OP_TYPES:
         raise HTTPException(status_code=422, detail=f"Unknown op_type {body.op_type!r}")
+    # DEMO-FIX-D HIGH-3 — Reject numeric-only ops on non-numeric columns up
+    # front so users see a precise message instead of an opaque runner crash.
+    variables = await SqliteDatasetRepository(session).list_variables(
+        dataset_id, user_id
+    )
+    _validate_op_column_types(body.op_type, body.op_args or {}, variables)
     repo = SqliteTransformationRepository(session)
     row = await repo.create(
         dataset_id=dataset_id,
@@ -115,6 +176,13 @@ async def update_transformation(
     row = await repo.get(transformation_id, user_id)
     if row is None or row.dataset_id != dataset_id:
         raise HTTPException(status_code=404, detail="Transformation not found")
+    # DEMO-FIX-D HIGH-3 — also re-validate on PATCH so editing an existing
+    # op to target a non-numeric column raises the same precise 422.
+    if body.op_args is not None:
+        variables = await SqliteDatasetRepository(session).list_variables(
+            dataset_id, user_id
+        )
+        _validate_op_column_types(row.op_type, body.op_args or {}, variables)
     updated = await repo.update(
         transformation_id=transformation_id,
         user_id=user_id,
