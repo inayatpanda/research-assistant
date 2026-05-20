@@ -5,6 +5,62 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-20 · Mini-phase 16 — Citation depth ✅ COMPLETE
+
+**Scope**
+
+* Migration `0025_citation_depth.py` — `articles.reference_type` (TEXT, default `journal_article`),
+  `articles.url` (TEXT, NULL), `projects.inline_citation_mode` (TEXT, default `bracket_numeric`).
+* `services/citation_format.py` — extended `CitationStyle` Literal with 6 new variants
+  (`lancet`, `nejm`, `bjj`, `jbjs_am`, `bjsm`, `jama`), surfaced
+  `ET_AL_THRESHOLDS`, added `format_inline_citation(number, mode)` for the
+  TipTap CitationNodeView. NEJM uses 3-author et-al; ICMJE-style variants
+  (Lancet/BJJ/JBJS-Am/BJSM/JAMA) keep the 6-author threshold.
+* Grey-literature dispatch — `_grey_lit_entry` renders `web_resource`,
+  `thesis`, `preprint`, `registry_record`, `report`, `book`,
+  `book_chapter`, `conference_abstract`, `other` shapes ahead of the
+  per-style formatter so behaviour is consistent across all 10 styles.
+* `services/ingest/citation_text_parser.py` — pure-function paste parser
+  (numbered, blank-line, or author-start splitting) + DOI/PMID regex
+  extraction + Crossref/PubMed/fuzzy-title resolution waterfall. Public
+  `parse_citation_text` accepts injected `doi_resolver` / `pmid_resolver`
+  / `title_resolver` for testability.
+* Route `POST /api/projects/{pid}/articles/import-from-text` returns a
+  preview list (no DB writes); the existing `import-from-metadata` route
+  finalises the bulk add.
+* `services/figures/numbering.py` — pure `assign_figure_numbers` /
+  `assign_table_numbers` by first in-text reference order, with stale-ref
+  + missing-reference fallbacks.
+* Route `POST /api/projects/{pid}/figures/renumber` — auto-numbers by
+  first-mention order via the existing two-step reorder pass.
+* Frontend: `CitationStylePicker`, `InlineCitationModeSelector`,
+  `CitationTextImportDialog`, `GreyLiteratureEntryForm`,
+  `FigureNumberingPanel`; `bibliographyApi` + `articlesApi` extended for
+  the 10-style enum + `reference_type` + `url`; new `citationImportApi`
+  and `figuresApi.renumber`.
+* Bundle export already reflects every column via `_row_to_dict` — pinned
+  by `test_bundle_mp16_round_trip.py`.
+
+**Bug found while writing tests**: the initial ORM column for
+`projects.inline_citation_mode` used only a Python-side `default=`. Three
+older ingest-schema tests use raw `INSERT INTO projects (...)` SQL and
+trip the NOT-NULL constraint because raw SQL doesn't consult the Python
+default. Fixed by adding `server_default="bracket_numeric"` (and the
+matching `server_default="journal_article"` on `articles.reference_type`).
+
+**Tests** — 64 new backend tests (target ~50): `test_citation_format_new_styles`
+(14), `test_citation_text_parser` (14), `test_grey_literature_styles` (14),
+`test_figure_numbering` (6), `test_inline_citation_mode` (5),
+`test_citation_text_route` (5), `test_security_citation_import_isolation` (6),
+`test_bundle_mp16_round_trip` (2). Vitest +8:
+`CitationStylePicker` (2), `CitationTextImportDialog` (2),
+`GreyLiteratureEntryForm` (2), `FigureNumberingPanel` (2). Final
+counts: 2120 backend + 300 vitest green.
+
+**Tag**: `phase-16`.
+
+---
+
 ## 2026-05-20 · Mini-phase 20 — Interactive reporting checklists ✅ COMPLETE
 
 **Scope**
