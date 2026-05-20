@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 from pathlib import Path
 
@@ -19,8 +20,27 @@ config = context.config
 #   parents[3] = repo root
 _repo_root = Path(__file__).resolve().parents[3]
 _data_dir = _repo_root / "data"
-_data_dir.mkdir(parents=True, exist_ok=True)
-config.set_main_option("sqlalchemy.url", f"sqlite:///{_data_dir / 'research.db'}")
+
+# DEMO-FIX-D HIGH-1 — allow callers (e.g. the FastAPI lifespan auto-migrate
+# step, plus tests pointing at a tmp DB) to override the alembic target URL
+# via either the Config object (set BEFORE calling command.upgrade) or the
+# ``ALEMBIC_SQLALCHEMY_URL`` env var. Falls back to the canonical repo path.
+_explicit_url = config.get_main_option("sqlalchemy.url")
+_env_url = os.environ.get("ALEMBIC_SQLALCHEMY_URL")
+if _env_url:
+    config.set_main_option("sqlalchemy.url", _env_url)
+elif (
+    not _explicit_url
+    or _explicit_url.startswith("sqlite:///../")
+    or _explicit_url == "sqlite:///./data/research.db"
+):
+    # Only fall back to the canonical repo DB when no caller-supplied URL is
+    # configured. This preserves the previous default behaviour for plain
+    # ``alembic upgrade head`` invocations from the apps/api directory.
+    _data_dir.mkdir(parents=True, exist_ok=True)
+    config.set_main_option(
+        "sqlalchemy.url", f"sqlite:///{_data_dir / 'research.db'}"
+    )
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

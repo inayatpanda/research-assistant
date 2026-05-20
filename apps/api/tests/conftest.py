@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # exercise the scheduler set up their own MemoryJobStore-backed instance.
 os.environ.setdefault("SCHEDULER_DISABLED", "1")
 
+# DEMO-FIX-D HIGH-1 — tests build their schema via ``Base.metadata.create_all``
+# against a per-test temp SQLite file. Skip the lifespan's auto-migrate so we
+# don't double-create tables (or run alembic against a non-canonical DB path).
+# The startup-migration is exercised explicitly by tests that unset this flag.
+os.environ.setdefault("DISABLE_AUTO_MIGRATE", "1")
+
 from research_api.db.base import Base, make_engine, make_session_factory
 from research_api.services.ai import AIProvider, CardContext, CitationMetadata, SectionDraftContext
 from research_api.services.ai.base import WritingAction
