@@ -283,6 +283,8 @@ async def test_import_full_round_trip_lossless(session):
         "narrative_synthesis_entries": 0, "outcome_instruments": 0,
         # Phase 17 (MP17) additions — bundle source didn't include any rows.
         "analysis_populations": 0, "imputation_runs": 0,
+        # Phase 18 (MP18) additions — bundle source didn't include any rows.
+        "economic_analyses": 0, "economic_results": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

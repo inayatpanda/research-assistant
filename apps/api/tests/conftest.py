@@ -154,6 +154,35 @@ class FakeAIProvider(AIProvider):
         ]
         return {"comments": comments, "model": "fake-model"}
 
+    async def interpret_economic_result(
+        self,
+        *,
+        name: str,
+        perspective: str,
+        time_horizon_months: int,
+        currency: str,
+        discount_rate_costs: float,
+        discount_rate_qalys: float,
+        intervention_label: str,
+        comparator_label: str,
+        value_set: str,
+        mean_cost_diff: float,
+        mean_qaly_diff: float,
+        icer: float | None,
+        dominance_status: str,
+        nmb_at_thresholds: dict | None,
+        ceac_data: list | None,
+        wtp_thresholds: list | None,
+        sensitivity: dict | None,
+        cite_token: str,
+    ) -> str:
+        self.calls.append("interpret_economic_result")
+        return (
+            f"Economic CEA {name}: dCost={mean_cost_diff:.2f}, "
+            f"dQALY={mean_qaly_diff:.4f}, ICER={icer}, "
+            f"dominance={dominance_status}. {cite_token}"
+        )
+
 
 @pytest_asyncio.fixture
 async def session(tmp_path: Path) -> AsyncSession:
