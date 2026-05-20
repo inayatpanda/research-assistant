@@ -169,6 +169,8 @@ class GeminiProvider(AIProvider):
         summary: dict[str, Any],
         assumptions: dict[str, Any] | None,
         cite_token: str,
+        variables: dict[str, Any] | None = None,
+        display_labels: dict[str, str] | None = None,
     ) -> str:
         if not cite_token or not cite_token.strip():
             raise AISourceInsufficient("missing cite_token", provider="gemini")
@@ -178,6 +180,8 @@ class GeminiProvider(AIProvider):
             summary=summary,
             assumptions=assumptions,
             cite_token=cite_token,
+            variables=variables,
+            display_labels=display_labels,
         )
         return (await self._generate_with_resilience(prompt)).strip()
 

@@ -53,6 +53,8 @@ class AIProvider(Protocol):
         summary: dict[str, Any],
         assumptions: dict[str, Any] | None,
         cite_token: str,
+        variables: dict[str, Any] | None = None,
+        display_labels: dict[str, str] | None = None,
     ) -> str: ...
 
     # Phase 7

@@ -57,6 +57,8 @@ class FakeAIProvider(AIProvider):
         summary: dict,
         assumptions: dict | None,
         cite_token: str,
+        variables: dict | None = None,
+        display_labels: dict[str, str] | None = None,
     ) -> str:
         self.calls.append("interpret_result")
         return (

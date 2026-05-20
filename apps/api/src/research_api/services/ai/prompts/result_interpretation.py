@@ -6,7 +6,7 @@ RESULT_INTERPRETATION_PROMPT = """You are helping a medical researcher write a R
 
 TEST: {test_label}
 RATIONALE WHY THIS TEST: {rationale}
-
+{variables_block}
 NUMERIC RESULT (the truth - do not invent or alter these numbers):
 - statistic = {statistic}
 - p_value = {p_value}
@@ -62,6 +62,34 @@ def _format_assumptions(assumptions: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
+def _format_variables_block(
+    variables: dict[str, Any] | None,
+    display_labels: dict[str, str] | None,
+) -> str:
+    """DEMO-FIX-C — Render the variable list using display labels.
+
+    Without ``variables`` (legacy callers), returns an empty string so the
+    prompt is identical to pre-DEMO-FIX-C output. With ``display_labels``,
+    every variable is rendered in human-readable form.
+    """
+    if not variables:
+        return ""
+    dl = display_labels or {}
+    lines: list[str] = []
+    for role, val in variables.items():
+        if isinstance(val, str):
+            lines.append(f"  {role}: {dl.get(val, val)}")
+        elif isinstance(val, list):
+            mapped = [dl.get(item, item) if isinstance(item, str) else str(item) for item in val]
+            if mapped:
+                lines.append(f"  {role}: " + ", ".join(mapped))
+        elif val is not None:
+            lines.append(f"  {role}: {val}")
+    if not lines:
+        return ""
+    return "VARIABLES:\n" + "\n".join(lines) + "\n"
+
+
 def build_result_interpretation_prompt(
     *,
     test_label: str,
@@ -69,6 +97,8 @@ def build_result_interpretation_prompt(
     summary: dict[str, Any],
     assumptions: dict[str, Any] | None,
     cite_token: str,
+    variables: dict[str, Any] | None = None,
+    display_labels: dict[str, str] | None = None,
 ) -> str:
     import json
 
@@ -87,4 +117,5 @@ def build_result_interpretation_prompt(
         df=summary.get("df"),
         extras_json=extras_json,
         assumptions_block=_format_assumptions(assumptions),
+        variables_block=_format_variables_block(variables, display_labels),
     )
