@@ -10,9 +10,10 @@ Endpoints (under /api/projects/{project_id}/reviewer-responses):
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,9 +32,24 @@ from ..services.ai import (
     AIRateLimited,
     AISourceInsufficient,
 )
+from ..services.export.docx_export import html_to_docx_bytes
+from ..services.export.submission_package import (
+    ReviewerResponsePayload,
+    _build_response_to_reviewers_html,
+)
 
 router = APIRouter(tags=["reviewer-responses"])
 log = logging.getLogger("research_api.reviewer_response")
+
+
+_SLUG_RE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _slugify_for_filename(text: str | None) -> str:
+    """Filesystem-safe slug for the standalone DOCX download filename."""
+    raw = (text or "").strip().replace(" ", "-")
+    s = _SLUG_RE.sub("", raw).strip("-_")
+    return (s or "reviewer-response")[:80]
 
 
 async def _session(
@@ -199,3 +215,55 @@ async def delete_reviewer_response(
         raise HTTPException(status_code=404, detail="Reviewer response not found")
     await repo.delete(response_id, user_id)
     return None
+
+
+@router.post(
+    "/projects/{project_id}/reviewer-responses/{response_id}/export/docx",
+)
+async def export_reviewer_response_docx(
+    project_id: str,
+    response_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> Response:
+    """Sub-export sweep HIGH bug — standalone DOCX for one reviewer row.
+
+    The submission-package zip aggregates *all* reviewer responses into a
+    single `response_to_reviewers.docx`. During iteration researchers also
+    want per-row downloads so they can paste a single reviewer's reply
+    into their journal portal without unzipping the full package.
+
+    Returns 422 when the row has no comments — emitting a blank DOCX
+    file would just confuse the recipient.
+    """
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    repo = SqliteReviewerResponseRepository(session)
+    row = await repo.get(response_id, user_id)
+    if row is None or row.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Reviewer response not found")
+    if not row.comments:
+        raise HTTPException(
+            status_code=422,
+            detail="No comments to export — paste raw comments and draft first",
+        )
+
+    payload = ReviewerResponsePayload(
+        reviewer_label=row.reviewer_label,
+        comments=list(row.comments or []),
+    )
+    body_html = _build_response_to_reviewers_html([payload])
+    title = f"Response — {row.reviewer_label}"
+    data = html_to_docx_bytes(body_html, title=title)
+
+    slug = _slugify_for_filename(row.reviewer_label)
+    filename = f"{slug}_response.docx"
+    return Response(
+        content=data,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

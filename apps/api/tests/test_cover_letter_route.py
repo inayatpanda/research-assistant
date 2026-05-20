@@ -1,6 +1,9 @@
 """Phase 12 — Cover-letter route tests (GET / PATCH / POST draft)."""
 from __future__ import annotations
 
+import io
+import zipfile
+
 import pytest
 
 
@@ -112,3 +115,53 @@ async def test_novelty_points_trimmed_blank(client) -> None:
     )
     assert r.status_code == 200
     assert r.json()["novelty_points"] == ["real"]
+
+
+# ── Sub-export sweep — standalone cover-letter DOCX download ─────────
+
+
+@pytest.mark.asyncio
+async def test_export_docx_returns_valid_attachment(client) -> None:
+    """Regression: cover-letter editor needs a standalone DOCX download —
+    without it researchers must export the entire submission package zip
+    just to email the cover letter to a co-author for review.
+    """
+    pid = await _make_project(client)
+    await client.patch(
+        f"/api/projects/{pid}/cover-letter",
+        json={
+            "target_journal": "jbjs",
+            "body_html": "<p>Dear Editor,</p><p>Please consider …</p>",
+        },
+    )
+    r = await client.post(f"/api/projects/{pid}/cover-letter/export/docx")
+    assert r.status_code == 200, r.text
+    cd = r.headers.get("content-disposition", "")
+    assert "attachment" in cd and ".docx" in cd
+    # DOCX is a zip — magic bytes start with 'PK'
+    assert r.content[:2] == b"PK"
+    # Unzip the OOXML container and confirm the body text + title landed
+    # in document.xml. The whole file is gzipped so a raw `in` check on the
+    # response bytes won't find the words — extract and read instead.
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        document_xml = zf.read("word/document.xml").decode("utf-8")
+    assert "Dear Editor" in document_xml
+    assert "Cover Letter" in document_xml
+
+
+@pytest.mark.asyncio
+async def test_export_docx_422_when_body_empty(client) -> None:
+    """Regression: emitting a blank DOCX confuses the user — must 422."""
+    pid = await _make_project(client)
+    # Auto-creates an empty row; no body_html.
+    r = await client.post(f"/api/projects/{pid}/cover-letter/export/docx")
+    assert r.status_code == 422
+    assert "empty" in r.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_export_docx_404_when_project_missing(client) -> None:
+    r = await client.post(
+        "/api/projects/does-not-exist/cover-letter/export/docx"
+    )
+    assert r.status_code == 404

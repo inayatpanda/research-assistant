@@ -36,6 +36,7 @@ import {
   useUpdateCoverLetter,
 } from '@/hooks/useCoverLetter'
 import { useJournalTemplates } from '@/hooks/useJournalTemplates'
+import { coverLetterApi } from '@/lib/api'
 
 const NONE_VALUE = '__none__'
 
@@ -49,6 +50,7 @@ export function CoverLetterEditor({ projectId }: { projectId: string }) {
   const [novelty, setNovelty] = useState<string[]>([])
   const [body, setBody] = useState('')
   const [newBullet, setNewBullet] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   // Hydrate state once the server data lands.
   useEffect(() => {
@@ -89,6 +91,24 @@ export function CoverLetterEditor({ projectId }: { projectId: string }) {
       toast.success('Cover letter saved')
     } catch (e) {
       toast.error((e as Error).message || 'Could not save cover letter')
+    }
+  }
+
+  async function handleDownload() {
+    if (!body.trim()) {
+      toast.error('Draft or paste the letter body first')
+      return
+    }
+    setDownloading(true)
+    try {
+      const filename = await coverLetterApi.downloadDocx(projectId)
+      toast.success(`Downloaded ${filename}`)
+    } catch (e) {
+      const msg = (e as Error).message || ''
+      if (/422/.test(msg)) toast.error('Cover letter is empty')
+      else toast.error(msg || 'Could not download DOCX')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -216,7 +236,15 @@ export function CoverLetterEditor({ projectId }: { projectId: string }) {
           />
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownload}
+            disabled={downloading || !body.trim()}
+            data-testid="cover-download-button"
+          >
+            {downloading ? 'Downloading…' : 'Download DOCX'}
+          </Button>
           <Button
             onClick={handleSave}
             disabled={update.isPending}

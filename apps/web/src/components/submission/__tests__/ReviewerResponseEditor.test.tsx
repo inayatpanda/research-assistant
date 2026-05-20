@@ -8,7 +8,8 @@ import {
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { createMock, updateMock } = vi.hoisted(() => ({
+const { createMock, updateMock, downloadDocxMock } = vi.hoisted(() => ({
+  downloadDocxMock: vi.fn(async () => 'Reviewer-1_response.docx'),
   createMock: vi.fn(
     async (_pid: string, body: { reviewer_label: string }) => ({
       id: 'rr1',
@@ -63,6 +64,7 @@ vi.mock('@/lib/api', async (orig) => {
       create: createMock,
       update: updateMock,
       delete: vi.fn(async () => undefined),
+      downloadDocx: downloadDocxMock,
     },
   }
 })
@@ -117,5 +119,15 @@ describe('ReviewerResponseEditor', () => {
       comments: { comment_text: string }[]
     }
     expect(body.comments[0]?.comment_text).toBe('Edited by user')
+  })
+
+  // Sub-export sweep HIGH bug — per-row standalone DOCX download.
+  it('downloads a single reviewer response as standalone DOCX', async () => {
+    wrap(<ReviewerResponseEditor projectId="p1" />)
+    await waitFor(() => screen.getByTestId('rr-download-rr1'))
+    fireEvent.click(screen.getByTestId('rr-download-rr1'))
+    await waitFor(() => {
+      expect(downloadDocxMock).toHaveBeenCalledWith('p1', 'rr1')
+    })
   })
 })

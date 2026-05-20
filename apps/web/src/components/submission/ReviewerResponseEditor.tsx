@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { CommentResponse, ReviewerResponseRead } from '@/lib/api'
+import { reviewerResponseApi } from '@/lib/api'
 import {
   useCreateReviewerResponse,
   useDeleteReviewerResponse,
@@ -123,6 +124,7 @@ function ReviewerResponseRow({
   const remove = useDeleteReviewerResponse(projectId)
   const [label, setLabel] = useState(row.reviewer_label)
   const [comments, setComments] = useState<CommentResponse[]>(row.comments)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     setLabel(row.reviewer_label)
@@ -157,6 +159,24 @@ function ReviewerResponseRow({
     }
   }
 
+  async function handleDownload() {
+    if (!comments.length) {
+      toast.error('No comments to download')
+      return
+    }
+    setDownloading(true)
+    try {
+      const filename = await reviewerResponseApi.downloadDocx(projectId, row.id)
+      toast.success(`Downloaded ${filename}`)
+    } catch (e) {
+      const msg = (e as Error).message || ''
+      if (/422/.test(msg)) toast.error('No comments to export')
+      else toast.error(msg || 'Could not download DOCX')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div
       className="rounded border border-border bg-white p-3 space-y-3"
@@ -181,6 +201,15 @@ function ReviewerResponseRow({
           data-testid={`rr-delete-${row.id}`}
         >
           Delete
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDownload}
+          disabled={downloading || !comments.length}
+          data-testid={`rr-download-${row.id}`}
+        >
+          {downloading ? 'Downloading…' : 'Download DOCX'}
         </Button>
         <Button
           onClick={handleSave}

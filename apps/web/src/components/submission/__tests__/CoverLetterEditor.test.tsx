@@ -8,7 +8,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { draftMock, updateMock } = vi.hoisted(() => ({
+const { draftMock, updateMock, downloadDocxMock } = vi.hoisted(() => ({
   draftMock: vi.fn(async () => ({
     id: 'cl1',
     project_id: 'p1',
@@ -31,6 +31,7 @@ const { draftMock, updateMock } = vi.hoisted(() => ({
       updated_at: 'x',
     }),
   ),
+  downloadDocxMock: vi.fn(async () => 'cover_letter.docx'),
 }))
 
 vi.mock('@/lib/api', async (orig) => {
@@ -50,6 +51,7 @@ vi.mock('@/lib/api', async (orig) => {
       })),
       update: updateMock,
       draft: draftMock,
+      downloadDocx: downloadDocxMock,
     },
     journalTemplatesApi: {
       list: vi.fn(async () => [
@@ -128,5 +130,33 @@ describe('CoverLetterEditor', () => {
     expect(updateMock.mock.calls[0]?.[1]).toMatchObject({
       body_html: '<p>Manually edited</p>',
     })
+  })
+
+  // Sub-export sweep HIGH bug — the editor must expose a standalone DOCX
+  // download so researchers can email the letter without unzipping the
+  // full submission package zip.
+  it('downloads the cover letter as a standalone DOCX', async () => {
+    wrap(<CoverLetterEditor projectId="p1" />)
+    await waitFor(() => screen.getByTestId('cover-body-input'))
+    const body = screen.getByTestId('cover-body-input') as HTMLTextAreaElement
+    // Button is disabled while the body is empty — populate it first.
+    fireEvent.change(body, { target: { value: '<p>Manually edited</p>' } })
+    const dlBtn = screen.getByTestId(
+      'cover-download-button',
+    ) as HTMLButtonElement
+    expect(dlBtn.disabled).toBe(false)
+    fireEvent.click(dlBtn)
+    await waitFor(() => {
+      expect(downloadDocxMock).toHaveBeenCalledWith('p1')
+    })
+  })
+
+  it('disables the download button while the body is empty', async () => {
+    wrap(<CoverLetterEditor projectId="p1" />)
+    await waitFor(() => screen.getByTestId('cover-download-button'))
+    const dlBtn = screen.getByTestId(
+      'cover-download-button',
+    ) as HTMLButtonElement
+    expect(dlBtn.disabled).toBe(true)
   })
 })

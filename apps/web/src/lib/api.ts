@@ -2466,6 +2466,16 @@ export const coverLetterApi = {
     )
     return CoverLetterReadSchema.parse(r.data)
   },
+  // Sub-export sweep HIGH bug — researchers want the cover letter as its
+  // own DOCX file without unzipping the full submission package.
+  downloadDocx: async (projectId: string): Promise<string> => {
+    const { blob, filename } = await postForBlob(
+      `/api/projects/${projectId}/cover-letter/export/docx`,
+      `cover_letter-${todayStamp()}.docx`,
+    )
+    triggerBlobDownload(blob, filename)
+    return filename
+  },
 }
 
 // ── Phase 12: Reviewer responses ───────────────────────────────────────
@@ -2526,6 +2536,20 @@ export const reviewerResponseApi = {
     await api.delete(
       `/api/projects/${projectId}/reviewer-responses/${responseId}`,
     )
+  },
+  // Sub-export sweep HIGH bug — single-row DOCX export so researchers can
+  // paste one reviewer's response into a journal portal without unzipping
+  // the full submission package.
+  downloadDocx: async (
+    projectId: string,
+    responseId: string,
+  ): Promise<string> => {
+    const { blob, filename } = await postForBlob(
+      `/api/projects/${projectId}/reviewer-responses/${responseId}/export/docx`,
+      `response-${todayStamp()}.docx`,
+    )
+    triggerBlobDownload(blob, filename)
+    return filename
   },
 }
 

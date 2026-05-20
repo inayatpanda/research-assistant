@@ -1,6 +1,9 @@
 """Phase 12 — Reviewer-response route tests (list / create / patch / delete)."""
 from __future__ import annotations
 
+import io
+import zipfile
+
 import pytest
 
 
@@ -124,5 +127,64 @@ async def test_patch_404_for_unknown_id(client) -> None:
     r = await client.patch(
         f"/api/projects/{pid}/reviewer-responses/nope",
         json={"reviewer_label": "x"},
+    )
+    assert r.status_code == 404
+
+
+# ── Sub-export sweep — standalone reviewer-response DOCX download ────
+
+
+@pytest.mark.asyncio
+async def test_export_docx_returns_valid_attachment(client) -> None:
+    """Regression: reviewer-row needs a single-row DOCX download —
+    without it researchers must export the full submission package zip
+    just to share one reviewer's response with a co-author.
+    """
+    pid = await _make_project(client)
+    create = await client.post(
+        f"/api/projects/{pid}/reviewer-responses",
+        json={"reviewer_label": "Reviewer 1", "raw_comments": "1. A.\n\n2. B."},
+    )
+    rid = create.json()["id"]
+    r = await client.post(
+        f"/api/projects/{pid}/reviewer-responses/{rid}/export/docx"
+    )
+    assert r.status_code == 200, r.text
+    cd = r.headers.get("content-disposition", "")
+    assert "attachment" in cd and ".docx" in cd
+    assert r.content[:2] == b"PK"  # DOCX is a zip
+    # OOXML compresses document.xml so we can't grep raw bytes — extract.
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        document_xml = zf.read("word/document.xml").decode("utf-8")
+    assert "Reviewer 1" in document_xml
+    assert "Comment" in document_xml
+
+
+@pytest.mark.asyncio
+async def test_export_docx_422_when_comments_empty(client) -> None:
+    """Regression: an export with zero comments must 422 — emitting an
+    empty DOCX confuses reviewers and journal editors."""
+    pid = await _make_project(client)
+    create = await client.post(
+        f"/api/projects/{pid}/reviewer-responses",
+        json={"reviewer_label": "R1", "raw_comments": "1. A."},
+    )
+    rid = create.json()["id"]
+    # Clear comments via PATCH
+    await client.patch(
+        f"/api/projects/{pid}/reviewer-responses/{rid}",
+        json={"comments": []},
+    )
+    r = await client.post(
+        f"/api/projects/{pid}/reviewer-responses/{rid}/export/docx"
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_export_docx_404_when_row_missing(client) -> None:
+    pid = await _make_project(client)
+    r = await client.post(
+        f"/api/projects/{pid}/reviewer-responses/nope/export/docx"
     )
     assert r.status_code == 404

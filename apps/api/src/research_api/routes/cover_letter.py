@@ -10,9 +10,10 @@ Endpoints (under /api/projects/{project_id}/cover-letter):
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,10 +38,26 @@ from ..services.ai import (
     AIRateLimited,
     AISourceInsufficient,
 )
+from ..services.export.docx_export import html_to_docx_bytes
 from ..services.journal_templates.catalogue import JOURNALS
 
 router = APIRouter(tags=["cover-letter"])
 log = logging.getLogger("research_api.cover_letter")
+
+
+_SLUG_RE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _slugify_for_filename(title: str | None) -> str:
+    """Filesystem-safe slug for the standalone DOCX download.
+
+    Mirrors the rule used by `submission_package.slugify_for_zip` so the
+    standalone export and the bundled package share the same filename stem
+    when the user downloads both.
+    """
+    raw = (title or "").strip().replace(" ", "-")
+    s = _SLUG_RE.sub("", raw).strip("-_")
+    return (s or "project")[:80]
 
 
 async def _session(
@@ -304,3 +321,53 @@ async def draft_cover_letter(
     if updated is None:
         raise HTTPException(status_code=404, detail="Cover letter not found")
     return CoverLetterRead.model_validate(updated)
+
+
+@router.post(
+    "/projects/{project_id}/cover-letter/export/docx",
+)
+async def export_cover_letter_docx(
+    project_id: str,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> Response:
+    """Sub-export sweep HIGH bug — standalone DOCX for the cover letter.
+
+    The submission-package zip embeds `cover_letter.docx`, but researchers
+    iterating on the prose want to download the letter on its own without
+    pulling the entire manuscript bundle.
+
+    Returns 422 when no cover letter has been drafted yet (body_html
+    empty) — generating an "(Empty)" DOCX on the user's machine would be
+    misleading.
+    """
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    repo = SqliteCoverLetterRepository(session)
+    row = await repo.get_or_create(project_id=project_id, user_id=user_id)
+    body_html = (row.body_html or "").strip()
+    if not body_html:
+        raise HTTPException(
+            status_code=422,
+            detail="Cover letter is empty — draft or paste a body first",
+        )
+
+    journal = JOURNALS.get(row.target_journal or "") if row.target_journal else None
+    title = (
+        f"Cover Letter — {journal.label}"
+        if journal is not None
+        else "Cover Letter"
+    )
+    data = html_to_docx_bytes(body_html, title=title)
+
+    slug = _slugify_for_filename(project.title)
+    filename = f"{slug}_cover_letter.docx"
+    return Response(
+        content=data,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
