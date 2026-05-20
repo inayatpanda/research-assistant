@@ -13,6 +13,7 @@ from .routes.compilation import router as compilation_router
 from .routes.cover_letter import router as cover_letter_router
 from .routes.datasets import router as datasets_router
 from .routes.consort import router as consort_router
+from .routes.diagnostics import router as diagnostics_router
 from .routes.export import router as export_router
 from .routes.figures import router as figures_router
 from .routes.files import router as files_router
@@ -111,3 +112,5 @@ app.include_router(meta_extensions_router, prefix="/api")
 # Phase 17 (MP17) — Stats depth: populations / imputation / CACE / sensitivity
 # / IRR / instruments / post-hoc / instrument-binding.
 app.include_router(stats_depth_router, prefix="/api")
+# DEMO-FIX-A — Standalone diagnostic-tests panel (Shapiro / Levene / KS / etc.)
+app.include_router(diagnostics_router, prefix="/api")

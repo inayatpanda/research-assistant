@@ -3877,6 +3877,98 @@ export const analysisPlanLockApi = {
   },
 }
 
+// ── DEMO-FIX-A: standalone diagnostic-tests panel ─────────────────────
+
+export const DiagnosticTestKeySchema = z.enum([
+  'shapiro_wilk',
+  'anderson_darling',
+  'kolmogorov_smirnov',
+  'dagostino_pearson',
+  'levene',
+  'bartlett',
+])
+export type DiagnosticTestKey = z.infer<typeof DiagnosticTestKeySchema>
+
+export const DIAGNOSTIC_TEST_LABELS: Record<DiagnosticTestKey, string> = {
+  shapiro_wilk: 'Shapiro-Wilk (normality)',
+  anderson_darling: 'Anderson-Darling (normality)',
+  kolmogorov_smirnov: 'Kolmogorov-Smirnov (vs normal)',
+  dagostino_pearson: "D'Agostino-Pearson (normality)",
+  levene: "Levene (equal variance, Brown-Forsythe)",
+  bartlett: 'Bartlett (equal variance)',
+}
+
+/** Two-group / multi-group tests need a group column; single-sample tests don't. */
+export const DIAGNOSTIC_NEEDS_GROUP: Record<DiagnosticTestKey, boolean> = {
+  shapiro_wilk: false,
+  anderson_darling: false,
+  kolmogorov_smirnov: false,
+  dagostino_pearson: false,
+  levene: true,
+  bartlett: true,
+}
+
+export const DiagnosticResultSchema = z.object({
+  test_key: DiagnosticTestKeySchema,
+  statistic: z.number(),
+  p: z.number().nullable(),
+  n: z.number().int(),
+  interpretation: z.string(),
+  ok: z.boolean(),
+  critical_values: z.record(z.string(), z.number()).nullable().optional(),
+  significance_levels: z.array(z.number()).nullable().optional(),
+  k: z.number().int().nullable().optional(),
+  center: z.string().nullable().optional(),
+  extras: z.record(z.string(), z.unknown()).nullable().optional(),
+})
+export type DiagnosticResult = z.infer<typeof DiagnosticResultSchema>
+
+export type DiagnosticRequest = {
+  test_key: DiagnosticTestKey
+  column_name: string
+  group_column?: string | null
+}
+
+export const diagnosticsApi = {
+  run: async (
+    projectId: string,
+    datasetId: string,
+    body: DiagnosticRequest,
+  ): Promise<DiagnosticResult> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/diagnostics/run`,
+      body,
+    )
+    return DiagnosticResultSchema.parse(r.data)
+  },
+  qqPlot: async (
+    projectId: string,
+    datasetId: string,
+    columnName: string,
+    title?: string,
+  ): Promise<string> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/diagnostics/qq-plot`,
+      { column_name: columnName, title: title ?? null },
+      { responseType: 'blob' },
+    )
+    return URL.createObjectURL(r.data as Blob)
+  },
+  histogram: async (
+    projectId: string,
+    datasetId: string,
+    columnName: string,
+    title?: string,
+  ): Promise<string> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/diagnostics/histogram`,
+      { column_name: columnName, title: title ?? null },
+      { responseType: 'blob' },
+    )
+    return URL.createObjectURL(r.data as Blob)
+  },
+}
+
 export const sapApi = {
   exportUrl: (projectId: string, planId: string, format: 'docx' | 'pdf'): string =>
     `/api/projects/${projectId}/analysis-plans/${planId}/sap?format=${format}`,

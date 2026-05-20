@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   Code2,
+  FlaskConical,
   Layers,
   Plus,
   Repeat,
@@ -37,6 +38,7 @@ import { useAnalysesForDataset } from '@/hooks/useAnalyses'
 import { useTransformations } from '@/hooks/useTransformations'
 
 import { DataView } from './DataView'
+import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { PSMWizard } from './PSMWizard'
 import { PlotWorkspace } from './PlotWorkspace'
 import { SyntaxView } from './SyntaxView'
@@ -69,7 +71,7 @@ const TYPE_TONE: Record<VariableType, string> = {
   unknown: 'bg-muted text-muted-foreground border-border',
 }
 
-type Tab = 'variables' | 'data' | 'plots'
+type Tab = 'variables' | 'data' | 'plots' | 'diagnostics'
 
 export function DatasetDetail({
   projectId,
@@ -200,6 +202,12 @@ export function DatasetDetail({
               label="Plots"
               icon={<BarChart3 className="h-3.5 w-3.5 mr-1" />}
             />
+            <TabButton
+              active={tab === 'diagnostics'}
+              onClick={() => setTab('diagnostics')}
+              label="Diagnostics"
+              icon={<FlaskConical className="h-3.5 w-3.5 mr-1" />}
+            />
           </nav>
           {tab === 'variables' && (
             <VariablesTable projectId={projectId} dataset={dataset} />
@@ -209,6 +217,9 @@ export function DatasetDetail({
           )}
           {tab === 'plots' && (
             <PlotWorkspace projectId={projectId} dataset={dataset} />
+          )}
+          {tab === 'diagnostics' && (
+            <DiagnosticsPanel projectId={projectId} dataset={dataset} />
           )}
         </div>
         <aside className="space-y-3">
