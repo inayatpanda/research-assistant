@@ -673,6 +673,16 @@ async def _collect_bundle_inputs(
             )
         )).scalars().all())
 
+    # Phase 20 (MP20) — Interactive reporting checklists.
+    from ..db.models import ChecklistRun  # local import keeps import surface minimal
+
+    checklist_runs = list((await session.execute(
+        select(ChecklistRun).where(
+            ChecklistRun.project_id == project_id,
+            ChecklistRun.user_id == user_id,
+        )
+    )).scalars().all())
+
     # Phase 19 — SR depth tables.
     mesh_terms = list((await session.execute(
         select(MeshTerm).where(
@@ -747,6 +757,7 @@ async def _collect_bundle_inputs(
         imputation_runs=imputation_runs,
         economic_analyses=economic_analyses,
         economic_results=economic_results,
+        checklist_runs=checklist_runs,
     )
 
 

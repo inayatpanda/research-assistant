@@ -1,0 +1,117 @@
+{
+  "key": "SQUIRE_2",
+  "name": "SQUIRE 2.0",
+  "description": "Standards for Quality Improvement Reporting Excellence (revised 2015).",
+  "version": "2.0",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "Indicate that the manuscript concerns an initiative to improve healthcare (broadly defined to include quality, safety, effectiveness, patient-centeredness, timeliness, cost, efficiency, and equity).",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Abstract",
+      "description": "Provide adequate information to aid in searching and indexing; summarise all key information from various sections of the text using the abstract format of the intended publication.",
+      "section_hint": "Abstract"
+    },
+    {
+      "id": "3",
+      "title": "Problem description",
+      "description": "Nature and significance of the local problem.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Available knowledge",
+      "description": "Summary of what is currently known about the problem, including relevant previous studies.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "5",
+      "title": "Rationale",
+      "description": "Informal or formal frameworks, models, concepts, and/or theories used to explain the problem, any reasons or assumptions used to develop the intervention(s), and reasons why the intervention(s) was expected to work.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "6",
+      "title": "Specific aims",
+      "description": "Purpose of the project and of this report.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "7",
+      "title": "Context",
+      "description": "Contextual elements considered important at the outset of introducing the intervention(s).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Intervention(s)",
+      "description": "Description of the intervention(s) in sufficient detail that others could reproduce it; specifics of the team involved in the work.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Study of the intervention(s)",
+      "description": "Approach chosen for assessing the impact of the intervention(s); approach used to establish whether observed outcomes were due to the intervention(s).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Measures",
+      "description": "Measures chosen for studying processes and outcomes of the intervention(s), including rationale for choosing them, their operational definitions, and their validity and reliability; description of the approach to the ongoing assessment of contextual elements that contributed to the success, failure, efficiency, and cost; methods employed for assessing completeness and accuracy of data.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Analysis",
+      "description": "Qualitative and quantitative methods used to draw inferences from the data; methods for understanding variation within the data, including the effects of time as a variable.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Ethical considerations",
+      "description": "Ethical aspects of implementing and studying the intervention(s) and how they were addressed, including, but not limited to, formal ethics review and potential conflict(s) of interest.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Results",
+      "description": "Initial steps of the intervention(s) and their evolution over time (e.g. timeline diagram, flow chart, or table), including modifications made to the intervention during the project; details of the process measures and outcome; contextual elements that interacted with the intervention(s); observed associations between outcomes, interventions, and relevant contextual elements; unintended consequences such as unexpected benefits, problems, failures, or costs associated with the intervention(s); details about missing data.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "14",
+      "title": "Summary",
+      "description": "Key findings, including relevance to the rationale and specific aims; particular strengths of the project.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "15",
+      "title": "Interpretation",
+      "description": "Nature of the association between the intervention(s) and the outcomes; comparison of results with findings from other publications; impact of the project on people and systems; reasons for any differences between observed and anticipated outcomes, including the influence of context; costs and strategic trade-offs, including opportunity costs.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "16",
+      "title": "Limitations",
+      "description": "Limits to the generalizability of the work; factors that might have limited internal validity such as confounding, bias, or imprecision in the design, methods, measurement, or analysis; efforts made to minimise and adjust for limitations.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "17",
+      "title": "Conclusions",
+      "description": "Usefulness of the work; sustainability; potential for spread to other contexts; implications for practice and for further study in the field; suggested next steps.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "18",
+      "title": "Funding",
+      "description": "Sources of funding that supported this work; role, if any, of the funding organisation in the design, implementation, interpretation, and reporting.",
+      "section_hint": "Other"
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "key": "TRIPOD_AI",
+  "name": "TRIPOD-AI",
+  "description": "Transparent Reporting of a multivariable prediction model for Individual Prognosis Or Diagnosis — AI extension.",
+  "version": "2024",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "Identify the study as developing or evaluating the performance of a multivariable prediction model using machine learning or AI, the target population, and the outcome to be predicted.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Abstract",
+      "description": "Provide a structured summary of objectives, study design, setting, participants, data sources, predictors, outcomes, statistical analysis, results, and conclusions.",
+      "section_hint": "Abstract"
+    },
+    {
+      "id": "3",
+      "title": "Background and rationale",
+      "description": "Explain the medical context (including whether diagnostic or prognostic) and rationale for developing or evaluating the prediction model, including references to existing models.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Objectives",
+      "description": "Specify the objectives, including whether the study describes the development or validation of the model, or both.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "5",
+      "title": "Source of data",
+      "description": "Describe the study design or source of data (e.g. randomised trial, cohort, EHR), and key dates including start and end of data collection.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Participants",
+      "description": "Specify key elements of the study setting (e.g. primary care, secondary care, general population), including number and location of centres; describe eligibility criteria for participants.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Outcome",
+      "description": "Clearly define the outcome that is predicted by the model, including how and when assessed; specify any actions to blind assessment of the outcome to be predicted.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Predictors",
+      "description": "Clearly define all predictors used in developing or validating the model, including how and when measured; specify any actions to blind assessment of predictors for the outcome and other predictors.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Sample size",
+      "description": "Explain how the study size was arrived at.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Missing data",
+      "description": "Describe how missing data were handled (e.g. complete-case analysis, single imputation, multiple imputation) with details of any imputation method.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Statistical analysis: development",
+      "description": "Describe how predictors were handled in the analyses; specify the type of model, all model-building procedures (including any predictor selection), and method for internal validation.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Statistical analysis: validation",
+      "description": "For validation, describe how the predictions were calculated; describe any re-calibration of the model or its predictors.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Risk groups",
+      "description": "Provide details on how risk groups were created, if done.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Development vs. validation",
+      "description": "For validation, identify any differences from the development data in setting, eligibility criteria, outcome, and predictors.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "15",
+      "title": "AI/ML methods",
+      "description": "Describe the type of AI/ML algorithm used, the rationale for choosing it, the hyperparameters and how they were tuned, the software, version, and computational resources used.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "16",
+      "title": "Fairness and bias",
+      "description": "Describe any pre-specified fairness or bias analyses across protected groups and how potential algorithmic bias was assessed and mitigated.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "17",
+      "title": "Explainability and interpretability",
+      "description": "Describe any analyses for model explainability or interpretability (e.g. SHAP, LIME, partial dependence plots).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "18",
+      "title": "Participants flow",
+      "description": "Describe the flow of participants through the study, including the number with and without the outcome and (if applicable) a summary of follow-up time; consider a flow diagram.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "19",
+      "title": "Participants characteristics",
+      "description": "Describe the characteristics of the participants (basic demographics, clinical features, available predictors), including the number with missing data for predictors and outcome.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "20",
+      "title": "Model development",
+      "description": "Specify the number of participants and outcome events in each analysis; for any unadjusted association between each candidate predictor and outcome, provide the corresponding estimate.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "21",
+      "title": "Model specification",
+      "description": "Present the full prediction model to allow predictions for individuals (e.g. formula, code, or web link); explain how to use the prediction model.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "22",
+      "title": "Model performance",
+      "description": "Report performance measures (with CIs) for the prediction model and any comparators.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "23",
+      "title": "Model updating",
+      "description": "If applicable, report the results of any model updating (e.g. recalibration) resulting from the validation, either overall or in pre-specified subgroups.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "24",
+      "title": "Limitations",
+      "description": "Discuss any limitations of the study (such as non-representative sample, few events per predictor, missing data, including potential bias from algorithmic decisions or training data).",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "25",
+      "title": "Interpretation",
+      "description": "Give an overall interpretation of the results, considering objectives, limitations, results from similar studies, and other relevant evidence; discuss clinical utility.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "26",
+      "title": "Implications",
+      "description": "Discuss the potential clinical use of the model and implications for future research, including any planned external validation or impact studies.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "27",
+      "title": "Supplementary information, funding, and code availability",
+      "description": "Provide information about the availability of supplementary resources (study protocol, web calculator, datasets, training code, trained model); state the source of funding and conflicts of interest.",
+      "section_hint": "Other"
+    }
+  ]
+}

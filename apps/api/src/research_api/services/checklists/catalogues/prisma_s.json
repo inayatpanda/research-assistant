@@ -1,0 +1,105 @@
+{
+  "key": "PRISMA_S",
+  "name": "PRISMA-S",
+  "description": "PRISMA extension for reporting literature searches in systematic reviews.",
+  "version": "2021",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Database name",
+      "description": "Name each individual database searched, stating the platform for each.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "2",
+      "title": "Multi-database searching",
+      "description": "If databases were searched simultaneously on a single platform, state the name of the platform and list the databases searched together.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "3",
+      "title": "Study registries",
+      "description": "List any study registries searched.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "4",
+      "title": "Online resources and browsing",
+      "description": "Describe any online or print resources searched, and the date of last search.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Citation searching",
+      "description": "Indicate whether cited references or citing references were examined, and describe any methods used for forward and backward citation searching.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Contacts",
+      "description": "Indicate whether additional studies or data were sought by contacting authors, experts, manufacturers, or others.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Other methods",
+      "description": "Describe any additional information sources or search methods used.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Full search strategies",
+      "description": "Include the search strategies for each database and information source, copied and pasted exactly as run.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Limits and restrictions",
+      "description": "Specify any restrictions to the search such as date or language limits.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Search filters",
+      "description": "Indicate any search filters used and their source; cite the filter or provide a reference.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Prior work",
+      "description": "Indicate when search strategies from other literature reviews were adapted or reused, citing the original.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Updates",
+      "description": "Report the methods used to update the search.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Dates of searches",
+      "description": "For each search, report the date(s) on which the search was conducted.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Total records",
+      "description": "Document the total number of records identified from each database and other information sources.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "15",
+      "title": "Deduplication",
+      "description": "Describe the processes and any software used to deduplicate records from multiple database searches and other sources.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "16",
+      "title": "Peer review",
+      "description": "Describe any search peer review process (e.g. PRESS).",
+      "section_hint": "Methodology"
+    }
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "key": "CHEERS_2022",
+  "name": "CHEERS 2022",
+  "description": "Consolidated Health Economic Evaluation Reporting Standards 2022.",
+  "version": "2022",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "Identify the study as an economic evaluation and specify the interventions being compared.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Abstract",
+      "description": "Provide a structured summary that highlights context, key methods, results, and alternative analyses.",
+      "section_hint": "Abstract"
+    },
+    {
+      "id": "3",
+      "title": "Background and objectives",
+      "description": "Give the context for the study, the study question, and its practical relevance for decision-making in policy or practice.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Health economic analysis plan",
+      "description": "Indicate whether a health economic analysis plan was developed and where available.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Study population",
+      "description": "Describe characteristics of the study population (such as age range, demographics, socioeconomic, or clinical characteristics).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Setting and location",
+      "description": "Provide relevant contextual information that may influence findings.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Comparators",
+      "description": "Describe the interventions or strategies being compared and why chosen.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Perspective",
+      "description": "State the perspective(s) adopted by the study and why chosen.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Time horizon",
+      "description": "State the time horizon for the study and why appropriate.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Discount rate",
+      "description": "Report the discount rate(s) and reason chosen.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Selection of outcomes",
+      "description": "Describe what outcomes were used as the measure(s) of benefit(s) and harm(s).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Measurement of outcomes",
+      "description": "Describe how outcomes used to capture benefit(s) and harm(s) were measured.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Valuation of outcomes",
+      "description": "Describe the population and methods used to measure and value outcomes.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Measurement and valuation of resources and costs",
+      "description": "Describe how costs were valued.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "15",
+      "title": "Currency, price date, and conversion",
+      "description": "Report the dates of the estimated resource quantities and unit costs, plus the currency and year of conversion.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "16",
+      "title": "Rationale and description of model",
+      "description": "If modelling is used, describe in detail and why used; report if the model is publicly available and where it can be accessed.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "17",
+      "title": "Analytics and assumptions",
+      "description": "Describe any methods for analyses or statistical analyses; describe any structural or other assumptions underpinning the analysis.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "18",
+      "title": "Characterising heterogeneity",
+      "description": "Describe any methods used for estimating how the results of the study vary for sub-groups.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "19",
+      "title": "Characterising distributional effects",
+      "description": "Describe how impacts are distributed across different individuals or adjustments made to reflect priority populations.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "20",
+      "title": "Characterising uncertainty",
+      "description": "Describe methods for characterising any sources of uncertainty.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "21",
+      "title": "Approach to engagement with patients and others",
+      "description": "Describe any approaches to engage patients or service recipients, the general public, communities, or stakeholders in the design.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "22",
+      "title": "Study parameters",
+      "description": "Report the values, ranges, references, and probability distributions for all parameters.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "23",
+      "title": "Summary of main results",
+      "description": "Report the mean values for the main categories of costs and outcomes of interest and summarise them in the most appropriate overall measure.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "24",
+      "title": "Effect of uncertainty",
+      "description": "Describe how uncertainty about analytic judgments, inputs, or projections affect findings.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "25",
+      "title": "Effect of engagement with patients and others",
+      "description": "Report on any difference patient/service recipient, general public, community, or stakeholder engagement made.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "26",
+      "title": "Study findings, limitations, generalisability, and current knowledge",
+      "description": "Report key findings, limitations, ethical or equity considerations, and how patients/the public could benefit.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "27",
+      "title": "Funding and conflicts of interest",
+      "description": "Describe how the study was funded and any role of the funder; identify any conflicts of interest.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "28",
+      "title": "Data availability",
+      "description": "Describe to what extent data, code, or other materials underlying the analysis are publicly available.",
+      "section_hint": "Other"
+    }
+  ]
+}

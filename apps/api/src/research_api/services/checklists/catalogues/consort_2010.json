@@ -1,0 +1,159 @@
+{
+  "key": "CONSORT_2010",
+  "name": "CONSORT 2010",
+  "description": "Reporting of randomised trials (parallel-group RCTs).",
+  "version": "2010",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title and abstract",
+      "description": "Identification as a randomised trial in the title; structured summary of trial design, methods, results, and conclusions.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Background and objectives",
+      "description": "Scientific background and explanation of rationale; specific objectives or hypotheses.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "3",
+      "title": "Trial design",
+      "description": "Description of trial design (e.g. parallel, factorial) including allocation ratio; important changes to methods after trial commencement and reasons.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "4",
+      "title": "Participants",
+      "description": "Eligibility criteria for participants; settings and locations where data were collected.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Interventions",
+      "description": "Interventions for each group with sufficient details to allow replication, including when and how they were actually administered.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Outcomes",
+      "description": "Completely defined pre-specified primary and secondary outcomes; any changes to trial outcomes after the trial commenced, with reasons.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Sample size",
+      "description": "How sample size was determined; when applicable, explanation of any interim analyses and stopping guidelines.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Randomisation: sequence generation",
+      "description": "Method used to generate the random allocation sequence; type of randomisation (e.g. blocking and block size).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Randomisation: allocation concealment",
+      "description": "Mechanism used to implement the random allocation sequence, describing any steps taken to conceal the sequence until interventions were assigned.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Randomisation: implementation",
+      "description": "Who generated the random allocation sequence, who enrolled participants, and who assigned participants to interventions.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Blinding",
+      "description": "If done, who was blinded after assignment to interventions (e.g. participants, care providers, assessors); description of similarity of interventions.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Statistical methods",
+      "description": "Statistical methods used to compare groups for primary and secondary outcomes; methods for additional analyses such as subgroup and adjusted analyses.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Participant flow",
+      "description": "For each group, the numbers of participants who were randomly assigned, received intended treatment, and were analysed for the primary outcome; losses and exclusions after randomisation, with reasons.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "14",
+      "title": "Recruitment",
+      "description": "Dates defining the periods of recruitment and follow-up; why the trial ended or was stopped.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "15",
+      "title": "Baseline data",
+      "description": "A table showing baseline demographic and clinical characteristics for each group.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "16",
+      "title": "Numbers analysed",
+      "description": "For each group, number of participants (denominator) included in each analysis and whether the analysis was by original assigned groups.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "17",
+      "title": "Outcomes and estimation",
+      "description": "For each primary and secondary outcome, results for each group and the estimated effect size and its precision (such as 95% CI); for binary outcomes, presentation of both absolute and relative effect sizes is recommended.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "18",
+      "title": "Ancillary analyses",
+      "description": "Results of any other analyses performed, including subgroup and adjusted analyses, distinguishing pre-specified from exploratory.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "19",
+      "title": "Harms",
+      "description": "All important harms or unintended effects in each group.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "20",
+      "title": "Limitations",
+      "description": "Trial limitations, addressing sources of potential bias, imprecision, and, if relevant, multiplicity of analyses.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "21",
+      "title": "Generalisability",
+      "description": "Generalisability (external validity, applicability) of the trial findings.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "22",
+      "title": "Interpretation",
+      "description": "Interpretation consistent with results, balancing benefits and harms, and considering other relevant evidence.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "23",
+      "title": "Registration",
+      "description": "Registration number and name of trial registry.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "24",
+      "title": "Protocol",
+      "description": "Where the full trial protocol can be accessed, if available.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "25",
+      "title": "Funding",
+      "description": "Sources of funding and other support (such as supply of drugs), and role of funders.",
+      "section_hint": "Other"
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "key": "PRISMA_SCR",
+  "name": "PRISMA-ScR",
+  "description": "PRISMA extension for Scoping Reviews.",
+  "version": "2018",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "Identify the report as a scoping review.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Structured summary",
+      "description": "Provide a structured summary that includes (as applicable): background, objectives, eligibility criteria, sources of evidence, charting methods, results, and conclusions that relate to the review questions and objectives.",
+      "section_hint": "Abstract"
+    },
+    {
+      "id": "3",
+      "title": "Rationale",
+      "description": "Describe the rationale for the review in the context of what is already known; explain why the review questions/objectives lend themselves to a scoping review approach.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Objectives",
+      "description": "Provide an explicit statement of the questions and objectives being addressed with reference to their key elements (e.g. population, concepts, context) or other relevant key elements used to conceptualise the review questions and/or objectives.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "5",
+      "title": "Protocol and registration",
+      "description": "Indicate whether a review protocol exists; state if and where it can be accessed (e.g. a web address) and registration information including the registration number.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Eligibility criteria",
+      "description": "Specify characteristics of the sources of evidence used as eligibility criteria (e.g. years considered, language, publication status), and provide a rationale.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Information sources",
+      "description": "Describe all information sources in the search (e.g. databases with dates of coverage, contact with authors to identify additional sources), as well as the date the most recent search was executed.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Search",
+      "description": "Present the full electronic search strategy for at least 1 database, including any limits used, such that it could be repeated.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Selection of sources of evidence",
+      "description": "State the process for selecting sources of evidence (i.e. screening and eligibility) included in the scoping review.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Data charting process",
+      "description": "Describe the methods of charting data from the included sources of evidence (e.g. calibrated forms or forms that have been tested by the team before their use, and whether data charting was done independently or in duplicate) and any processes for obtaining and confirming data from investigators.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Data items",
+      "description": "List and define all variables for which data were sought and any assumptions and simplifications made.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Critical appraisal of individual sources of evidence",
+      "description": "If done, provide a rationale for conducting a critical appraisal of included sources of evidence; describe the methods used and how this information was used in any data synthesis (if appropriate).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Synthesis of results",
+      "description": "Describe the methods of handling and summarising the data that were charted.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Selection of sources of evidence",
+      "description": "Give numbers of sources of evidence screened, assessed for eligibility, and included in the review, with reasons for exclusions at each stage, ideally using a flow diagram.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "15",
+      "title": "Characteristics of sources of evidence",
+      "description": "For each source of evidence, present characteristics for which data were charted and provide the citations.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "16",
+      "title": "Critical appraisal within sources of evidence",
+      "description": "If done, present data on critical appraisal of included sources of evidence.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "17",
+      "title": "Results of individual sources of evidence",
+      "description": "For each included source of evidence, present the relevant data that were charted that relate to the review questions and objectives.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "18",
+      "title": "Synthesis of results",
+      "description": "Summarise and/or present the charting results as they relate to the review questions and objectives.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "19",
+      "title": "Summary of evidence",
+      "description": "Summarise the main results (including an overview of concepts, themes, and types of evidence available); link to the review questions and objectives, and consider the relevance to key groups.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "20",
+      "title": "Limitations",
+      "description": "Discuss the limitations of the scoping review process.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "21",
+      "title": "Conclusions",
+      "description": "Provide a general interpretation of the results with respect to the review questions and objectives, as well as potential implications and/or next steps.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "22",
+      "title": "Funding",
+      "description": "Describe sources of funding for the included sources of evidence, as well as sources of funding for the scoping review; describe role of funders.",
+      "section_hint": "Other"
+    }
+  ]
+}

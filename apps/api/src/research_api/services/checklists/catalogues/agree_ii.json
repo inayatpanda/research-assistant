@@ -1,0 +1,147 @@
+{
+  "key": "AGREE_II",
+  "name": "AGREE II",
+  "description": "Appraisal of Guidelines for Research and Evaluation II — evaluating clinical practice guidelines.",
+  "version": "II",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Scope and purpose: overall objective(s)",
+      "description": "The overall objective(s) of the guideline is (are) specifically described.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "2",
+      "title": "Scope and purpose: health questions",
+      "description": "The health question(s) covered by the guideline is (are) specifically described.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "3",
+      "title": "Scope and purpose: population",
+      "description": "The population (patients, public, etc.) to whom the guideline is meant to apply is specifically described.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Stakeholder involvement: relevant groups",
+      "description": "The guideline development group includes individuals from all the relevant professional groups.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Stakeholder involvement: views of target population",
+      "description": "The views and preferences of the target population (patients, public, etc.) have been sought.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Stakeholder involvement: target users",
+      "description": "The target users of the guideline are clearly defined.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Rigour of development: systematic search",
+      "description": "Systematic methods were used to search for evidence.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Rigour of development: selection criteria",
+      "description": "The criteria for selecting the evidence are clearly described.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Rigour of development: strengths/limitations of evidence",
+      "description": "The strengths and limitations of the body of evidence are clearly described.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Rigour of development: methods for formulating recommendations",
+      "description": "The methods for formulating the recommendations are clearly described.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Rigour of development: health benefits, side effects, risks",
+      "description": "The health benefits, side effects, and risks have been considered in formulating the recommendations.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Rigour of development: link between recommendations and evidence",
+      "description": "There is an explicit link between the recommendations and the supporting evidence.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Rigour of development: external review",
+      "description": "The guideline has been externally reviewed by experts prior to its publication.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Rigour of development: updating procedure",
+      "description": "A procedure for updating the guideline is provided.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "15",
+      "title": "Clarity of presentation: specific and unambiguous",
+      "description": "The recommendations are specific and unambiguous.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "16",
+      "title": "Clarity of presentation: management options",
+      "description": "The different options for management of the condition or health issue are clearly presented.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "17",
+      "title": "Clarity of presentation: identifiable key recommendations",
+      "description": "Key recommendations are easily identifiable.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "18",
+      "title": "Applicability: facilitators and barriers",
+      "description": "The guideline describes facilitators and barriers to its application.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "19",
+      "title": "Applicability: implementation advice/tools",
+      "description": "The guideline provides advice and/or tools on how the recommendations can be put into practice.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "20",
+      "title": "Applicability: resource implications",
+      "description": "The potential resource implications of applying the recommendations have been considered.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "21",
+      "title": "Applicability: monitoring and auditing criteria",
+      "description": "The guideline presents monitoring and/or auditing criteria.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "22",
+      "title": "Editorial independence: funding body",
+      "description": "The views of the funding body have not influenced the content of the guideline.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "23",
+      "title": "Editorial independence: conflicts of interest",
+      "description": "Competing interests of guideline development group members have been recorded and addressed.",
+      "section_hint": "Other"
+    }
+  ]
+}

@@ -1583,3 +1583,53 @@ class EconomicResult(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ChecklistRun(Base):
+    """Phase 20 (MP20) — One filled-in reporting checklist for a project.
+
+    The catalogue (CONSORT 2010, PRISMA 2020, CHEERS 2022, STROBE cohort/
+    case-control/cross-sectional, TRIPOD-AI, SPIRIT 2013, SQUIRE 2.0,
+    CARE, AGREE II, SAMPL, PRISMA-S, PRISMA-ScR) is static — kept in
+    ``services/checklists/catalogues/*.json``. This table stores the
+    user-edited *answers* keyed by ``(project_id, user_id,
+    checklist_key, title)``.
+
+    A project can hold multiple runs of the same checklist for different
+    submission versions — the ``title`` discriminator (e.g. ``"v1
+    submission to JBJS"``) keeps them separate.
+    """
+
+    __tablename__ = "checklist_runs"
+    __table_args__ = (
+        Index("ix_checklist_runs_project_user", "project_id", "user_id"),
+        Index(
+            "uq_checklist_runs_project_user_key_title",
+            "project_id",
+            "user_id",
+            "checklist_key",
+            "title",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    checklist_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    items: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    overall_compliance_pct: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

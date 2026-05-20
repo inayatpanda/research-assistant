@@ -29,6 +29,7 @@ from ...db.models import (
     ArticleNote,
     Author,
     AuthorAffiliation,
+    ChecklistRun,
     ConsortData,
     Contribution,
     CoverLetter,
@@ -128,6 +129,8 @@ class BundleInputs:
     # Phase 18 (MP18) — Health economics: analyses + results.
     economic_analyses: list[EconomicAnalysis] = field(default_factory=list)
     economic_results: list[EconomicResult] = field(default_factory=list)
+    # Phase 20 (MP20) — Interactive reporting checklists.
+    checklist_runs: list[ChecklistRun] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -257,4 +260,6 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         "economic_results": [
             _row_to_dict(r) for r in inputs.economic_results
         ],
+        # Phase 20 (MP20) — Interactive reporting checklists.
+        "checklist_runs": [_row_to_dict(c) for c in inputs.checklist_runs],
     }

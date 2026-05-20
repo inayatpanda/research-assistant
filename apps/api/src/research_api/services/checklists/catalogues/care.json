@@ -1,0 +1,87 @@
+{
+  "key": "CARE",
+  "name": "CARE",
+  "description": "CAse REport guidelines for case reports.",
+  "version": "2013",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "The diagnoses or intervention of primary focus followed by the words \"case report\".",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Key words",
+      "description": "2-5 key words that identify diagnoses or interventions in this case report, including \"case report\".",
+      "section_hint": "Other"
+    },
+    {
+      "id": "3",
+      "title": "Abstract",
+      "description": "Introduction: What is unique and why is it important? The main symptoms and important clinical findings. Main diagnoses, therapeutic interventions, and outcomes. Conclusion — what is the main \"take-away\" lesson?",
+      "section_hint": "Abstract"
+    },
+    {
+      "id": "4",
+      "title": "Introduction",
+      "description": "Brief background summary of this case referencing the relevant medical literature.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "5",
+      "title": "Patient information",
+      "description": "De-identified patient specific information; primary concerns and symptoms of the patient; medical, family, and psycho-social history including diet, lifestyle, and genetic information; pertinent co-morbidities and relevant interventions, including self care.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Clinical findings",
+      "description": "Describe the relevant physical examination and other clinical findings.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Timeline",
+      "description": "Important dates and times in the case (table or figure).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Diagnostic assessment",
+      "description": "Diagnostic methods (e.g. PE, laboratory testing, imaging, surveys); diagnostic challenges; diagnostic reasoning including other diagnoses considered; prognostic characteristics (e.g. staging in oncology) where applicable.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Therapeutic intervention",
+      "description": "Types of intervention (e.g. pharmacologic, surgical, preventive, self-care); administration of intervention (e.g. dosage, strength, duration); changes in intervention with explanations.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Follow-up and outcomes",
+      "description": "Clinician- and patient-assessed outcomes (if available); important follow-up diagnostic and other test results; intervention adherence and tolerability (and how this was assessed); adverse and unanticipated events.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "11",
+      "title": "Discussion",
+      "description": "A scientific discussion of the strengths AND limitations associated with this case report; discussion of the relevant medical literature; the rationale for conclusions (including assessments of cause and effect); the main \"take-away\" lessons from this case report.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "12",
+      "title": "Patient perspective",
+      "description": "The patient should share their perspective or experience whenever possible.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "13",
+      "title": "Informed consent",
+      "description": "Did the patient give informed consent? Please provide if requested.",
+      "section_hint": "Other"
+    }
+  ]
+}

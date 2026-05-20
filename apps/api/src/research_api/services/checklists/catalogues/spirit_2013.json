@@ -1,0 +1,207 @@
+{
+  "key": "SPIRIT_2013",
+  "name": "SPIRIT 2013",
+  "description": "Standard Protocol Items: Recommendations for Interventional Trials.",
+  "version": "2013",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title",
+      "description": "Descriptive title identifying the study design, population, interventions, and, if applicable, trial acronym.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Trial registration",
+      "description": "Trial identifier and registry name; if not yet registered, name of intended registry.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "3",
+      "title": "Protocol version",
+      "description": "Date and version identifier.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "4",
+      "title": "Funding",
+      "description": "Sources and types of financial, material, and other support.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "5",
+      "title": "Roles and responsibilities",
+      "description": "Names, affiliations, and roles of protocol contributors, sponsor and funders, and trial committees.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "6",
+      "title": "Background and rationale",
+      "description": "Description of research question and justification for undertaking the trial, including summary of relevant studies (published and unpublished); explanation for choice of comparators.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "7",
+      "title": "Objectives",
+      "description": "Specific objectives or hypotheses.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "8",
+      "title": "Trial design",
+      "description": "Description of trial design including type of trial (e.g. parallel group, crossover, factorial, single group), allocation ratio, and framework (e.g. superiority, equivalence, non-inferiority, exploratory).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Study setting",
+      "description": "Description of study settings (e.g. community clinic, academic hospital) and list of countries where data will be collected.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Eligibility criteria",
+      "description": "Inclusion and exclusion criteria for participants; criteria for individuals performing the interventions if applicable.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Interventions",
+      "description": "Interventions for each group with sufficient detail to allow replication, including how and when they will be administered; criteria for discontinuing or modifying allocated interventions; strategies to improve adherence; and relevant concomitant care.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Outcomes",
+      "description": "Primary, secondary, and other outcomes, including the specific measurement variable (e.g. systolic blood pressure), analysis metric, method of aggregation, and time point.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Participant timeline",
+      "description": "Time schedule of enrolment, interventions, assessments, and visits for participants; a schematic diagram is highly recommended.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "14",
+      "title": "Sample size",
+      "description": "Estimated number of participants needed to achieve study objectives and how it was determined, including all assumptions supporting the sample size calculation.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "15",
+      "title": "Recruitment",
+      "description": "Strategies for achieving adequate participant enrolment to reach target sample size.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "16",
+      "title": "Allocation: sequence generation",
+      "description": "Method of generating the allocation sequence; method of any restriction (e.g. blocking, stratification).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "17",
+      "title": "Allocation: concealment mechanism",
+      "description": "Mechanism of implementing the allocation sequence describing any steps to conceal the sequence until interventions are assigned.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "18",
+      "title": "Allocation: implementation",
+      "description": "Who will generate the allocation sequence, who will enrol participants, and who will assign participants to interventions.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "19",
+      "title": "Blinding (masking)",
+      "description": "Who will be blinded after assignment to interventions and how; if blinding is to be broken, the circumstances under which unblinding is permissible and procedures.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "20",
+      "title": "Data collection methods",
+      "description": "Plans for assessment and collection of outcome, baseline, and other trial data, including any related processes to promote data quality; reference to study instruments.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "21",
+      "title": "Data management",
+      "description": "Plans for data entry, coding, security, and storage, including any related processes to promote data quality; reference to study protocols.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "22",
+      "title": "Statistical methods",
+      "description": "Statistical methods for analysing primary and secondary outcomes; methods for any additional analyses; definition of analysis population; methods for handling missing data.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "23",
+      "title": "Data monitoring",
+      "description": "Composition of data monitoring committee (DMC); summary of its role and reporting structure; statement of whether it is independent from sponsor and competing interests; reference to where further details about its charter can be found.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "24",
+      "title": "Harms",
+      "description": "Plans for collecting, assessing, reporting, and managing solicited and spontaneously reported adverse events.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "25",
+      "title": "Auditing",
+      "description": "Frequency and procedures for auditing trial conduct, if any, and whether the process is independent.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "26",
+      "title": "Research ethics approval",
+      "description": "Plans for seeking research ethics committee/institutional review board approval.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "27",
+      "title": "Protocol amendments",
+      "description": "Plans for communicating important protocol modifications to relevant parties.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "28",
+      "title": "Consent or assent",
+      "description": "Who will obtain informed consent or assent from potential trial participants or authorised surrogates, and how.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "29",
+      "title": "Confidentiality",
+      "description": "How personal information about participants will be collected, shared, and maintained to protect confidentiality before, during, and after the trial.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "30",
+      "title": "Declaration of interests",
+      "description": "Financial and other competing interests for principal investigators for the overall trial and each study site.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "31",
+      "title": "Access to data",
+      "description": "Statement of who will have access to the final trial dataset and disclosure of contractual agreements that limit such access for investigators.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "32",
+      "title": "Dissemination policy",
+      "description": "Plans for investigators and sponsor to communicate trial results to participants, healthcare professionals, the public, and other relevant groups (e.g. trial registry results database, regulatory bodies).",
+      "section_hint": "Other"
+    },
+    {
+      "id": "33",
+      "title": "Informed consent and biological specimens",
+      "description": "Model consent form and other related documentation given to participants and authorised surrogates; plans for collection, laboratory evaluation, and storage of biological specimens for genetic or molecular analysis in the current trial and for future use in ancillary studies, if applicable.",
+      "section_hint": "Other"
+    }
+  ]
+}

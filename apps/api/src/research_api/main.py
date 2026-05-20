@@ -64,6 +64,7 @@ from .routes.analysis_plans import router as analysis_plans_router
 from .routes.articles import router as articles_router
 from .routes.comments import router as comments_router
 from .routes.compilation import router as compilation_router
+from .routes.checklists import router as checklists_router
 from .routes.cover_letter import router as cover_letter_router
 from .routes.datasets import router as datasets_router
 from .routes.consort import router as consort_router
@@ -222,3 +223,5 @@ app.include_router(stats_depth_router, prefix="/api")
 app.include_router(diagnostics_router, prefix="/api")
 # Phase 18 (MP18) — Health Economics module (QALYs / ICER / CEAC / CHEERS).
 app.include_router(economic_analyses_router, prefix="/api")
+# Phase 20 (MP20) — Interactive reporting checklists (12 catalogues).
+app.include_router(checklists_router, prefix="/api")

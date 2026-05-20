@@ -1,0 +1,189 @@
+{
+  "key": "SAMPL",
+  "name": "SAMPL",
+  "description": "Statistical Analyses and Methods in the Published Literature — basic statistical reporting.",
+  "version": "2013",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Pre-analysis plan",
+      "description": "Describe the study design and indicate whether a pre-specified analysis plan was developed.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "2",
+      "title": "Sample size justification",
+      "description": "Provide a justification for the sample size, including assumptions used (effect size, power, alpha).",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "3",
+      "title": "Description of statistical methods",
+      "description": "Describe the statistical methods used to analyse the primary and secondary outcomes.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "4",
+      "title": "Software used",
+      "description": "Identify the statistical software (name, version, manufacturer) used for the analyses.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Variables and measurement",
+      "description": "Describe how all variables were defined and measured; for continuous variables, indicate the unit and precision.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Assumptions of statistical tests",
+      "description": "Verify and describe how the assumptions of statistical tests (e.g. normality, equal variances) were assessed.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Handling of missing data",
+      "description": "Describe how missing data were handled (e.g. complete case, imputation), with rationale.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Multiple comparisons",
+      "description": "Describe how multiple comparisons were addressed, if applicable.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Subgroup and sensitivity analyses",
+      "description": "Describe any subgroup and sensitivity analyses and whether they were pre-specified or post-hoc.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Outliers and influential observations",
+      "description": "Describe how outliers and influential observations were identified and handled.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Descriptive statistics: means",
+      "description": "Report means with appropriate standard deviations (not standard errors) for normally distributed data.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "12",
+      "title": "Descriptive statistics: medians",
+      "description": "Report medians with interquartile ranges or full ranges for non-normally distributed data.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "13",
+      "title": "Descriptive statistics: counts and percentages",
+      "description": "Report counts and percentages for categorical data, with denominators clearly identified.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "14",
+      "title": "Confidence intervals",
+      "description": "Report confidence intervals (typically 95%) for effect estimates rather than just p-values.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "15",
+      "title": "Exact p-values",
+      "description": "Report exact p-values (e.g. p = 0.034) rather than thresholds (e.g. p < 0.05).",
+      "section_hint": "Results"
+    },
+    {
+      "id": "16",
+      "title": "Effect sizes",
+      "description": "Report effect sizes with appropriate measures of precision for primary and secondary outcomes.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "17",
+      "title": "Regression analyses",
+      "description": "For regression analyses, report the model, included variables, estimates, standard errors, and goodness-of-fit measures.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "18",
+      "title": "Survival analyses",
+      "description": "For survival analyses, report event counts, follow-up time, hazard ratios with confidence intervals, and verify proportional hazards assumption.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "19",
+      "title": "Correlation analyses",
+      "description": "For correlation, report the correlation coefficient, sample size, and confidence interval; clarify the correlation type (Pearson, Spearman).",
+      "section_hint": "Results"
+    },
+    {
+      "id": "20",
+      "title": "Diagnostic accuracy",
+      "description": "For diagnostic studies, report sensitivity, specificity, PPV, NPV, likelihood ratios with confidence intervals.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "21",
+      "title": "Agreement statistics",
+      "description": "For agreement studies, report Cohen's kappa or intraclass correlation coefficient with confidence intervals.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "22",
+      "title": "Tables",
+      "description": "Tables present data clearly with appropriate units, sample sizes, and uncertainty measures.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "23",
+      "title": "Figures",
+      "description": "Figures display data appropriately with clear axis labels, units, and error bars where applicable; specify what error bars represent.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "24",
+      "title": "Numbers and percentages reported",
+      "description": "Numbers are reported with appropriate precision; percentages are accompanied by raw counts.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "25",
+      "title": "Statistical significance vs. clinical relevance",
+      "description": "Distinguish statistical significance from clinical relevance; do not interpret a non-significant result as evidence of no effect.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "26",
+      "title": "Limitations of statistical methods",
+      "description": "Discuss limitations of the statistical methods used, including any deviations from the pre-analysis plan.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "27",
+      "title": "Generalisability",
+      "description": "Discuss the generalisability of the findings to populations beyond the study sample.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "28",
+      "title": "Reproducibility",
+      "description": "Provide sufficient detail (data, code, parameters) to allow reproduction of the analyses.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "29",
+      "title": "Data availability",
+      "description": "State whether the underlying data are available, and where.",
+      "section_hint": "Other"
+    },
+    {
+      "id": "30",
+      "title": "Code availability",
+      "description": "State whether the analysis code is available, and where.",
+      "section_hint": "Other"
+    }
+  ]
+}

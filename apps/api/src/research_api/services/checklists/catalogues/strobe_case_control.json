@@ -1,0 +1,141 @@
+{
+  "key": "STROBE_CASE_CONTROL",
+  "name": "STROBE — Case-control studies",
+  "description": "Strengthening the Reporting of Observational Studies in Epidemiology — case-control design.",
+  "version": "v4",
+  "default_section": "Methodology",
+  "items": [
+    {
+      "id": "1",
+      "title": "Title and abstract",
+      "description": "Indicate the study's design with a commonly used term in the title or abstract; provide an informative and balanced summary in the abstract.",
+      "section_hint": "Title"
+    },
+    {
+      "id": "2",
+      "title": "Background/rationale",
+      "description": "Explain the scientific background and rationale for the investigation being reported.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "3",
+      "title": "Objectives",
+      "description": "State specific objectives, including any prespecified hypotheses.",
+      "section_hint": "Introduction"
+    },
+    {
+      "id": "4",
+      "title": "Study design",
+      "description": "Present key elements of study design early in the paper.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "5",
+      "title": "Setting",
+      "description": "Describe the setting, locations, and relevant dates, including periods of recruitment, exposure, follow-up, and data collection.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "6",
+      "title": "Participants",
+      "description": "Give the eligibility criteria, and the sources and methods of case ascertainment and control selection; give the rationale for the choice of cases and controls; for matched studies, give matching criteria and the number of controls per case.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "7",
+      "title": "Variables",
+      "description": "Clearly define all outcomes, exposures, predictors, potential confounders, and effect modifiers; give diagnostic criteria, if applicable.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "8",
+      "title": "Data sources/measurement",
+      "description": "For each variable of interest, give sources of data and details of methods of assessment (measurement); describe comparability of assessment methods if there is more than one group.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "9",
+      "title": "Bias",
+      "description": "Describe any efforts to address potential sources of bias.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "10",
+      "title": "Study size",
+      "description": "Explain how the study size was arrived at.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "11",
+      "title": "Quantitative variables",
+      "description": "Explain how quantitative variables were handled in the analyses; if applicable, describe which groupings were chosen and why.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "12",
+      "title": "Statistical methods",
+      "description": "Describe all statistical methods, including those used to control for confounding; describe methods to examine subgroups and interactions; how missing data were addressed; if applicable, explain how matching of cases and controls was addressed; and any sensitivity analyses.",
+      "section_hint": "Methodology"
+    },
+    {
+      "id": "13",
+      "title": "Participants",
+      "description": "Report numbers of individuals at each stage of the study (e.g. numbers potentially eligible, examined for eligibility, confirmed eligible, included in the study, completing follow-up, and analysed); give reasons for non-participation at each stage; consider use of a flow diagram.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "14",
+      "title": "Descriptive data",
+      "description": "Give characteristics of study participants (e.g. demographic, clinical, social) and information on exposures and potential confounders; indicate number of participants with missing data for each variable of interest.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "15",
+      "title": "Outcome data",
+      "description": "Report numbers in each exposure category, or summary measures of exposure.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "16",
+      "title": "Main results",
+      "description": "Give unadjusted estimates and, if applicable, confounder-adjusted estimates and their precision (e.g. 95% CI); make clear which confounders were adjusted for and why they were included; report category boundaries when continuous variables were categorised.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "17",
+      "title": "Other analyses",
+      "description": "Report other analyses done — e.g. analyses of subgroups and interactions, and sensitivity analyses.",
+      "section_hint": "Results"
+    },
+    {
+      "id": "18",
+      "title": "Key results",
+      "description": "Summarise key results with reference to study objectives.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "19",
+      "title": "Limitations",
+      "description": "Discuss limitations of the study, taking into account sources of potential bias or imprecision; discuss both direction and magnitude of any potential bias.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "20",
+      "title": "Interpretation",
+      "description": "Give a cautious overall interpretation of results considering objectives, limitations, multiplicity of analyses, results from similar studies, and other relevant evidence.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "21",
+      "title": "Generalisability",
+      "description": "Discuss the generalisability (external validity) of the study results.",
+      "section_hint": "Discussion"
+    },
+    {
+      "id": "22",
+      "title": "Funding",
+      "description": "Give the source of funding and the role of the funders for the present study and, if applicable, for the original study on which the present article is based.",
+      "section_hint": "Other"
+    }
+  ]
+}

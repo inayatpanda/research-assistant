@@ -28,6 +28,7 @@ from ...db.models import (
     ArticleNote,
     Author,
     AuthorAffiliation,
+    ChecklistRun,
     ConsortData,
     Contribution,
     CoverLetter,
@@ -151,6 +152,8 @@ async def _do_import(
         "analysis_populations": 0, "imputation_runs": 0,
         # Phase 18 (MP18) — Health economics.
         "economic_analyses": 0, "economic_results": 0,
+        # Phase 20 (MP20) — Interactive reporting checklists.
+        "checklist_runs": 0,
     }
 
     proj_in = bundle["project"]
@@ -479,6 +482,40 @@ async def _do_import(
         ))
         counts["economic_results"] += 1
     if counts["economic_results"]:
+        await session.flush()
+
+    # Phase 20 (MP20) — Checklist runs. The unique key includes ``title`` so
+    # imports into an existing project can collide; we coerce the title by
+    # appending a numeric suffix until the insert succeeds. The catalogue
+    # JSONs are static, not in the bundle.
+    seen_titles: dict[tuple[str, str], int] = {}
+    for cr in bundle.get("checklist_runs") or []:
+        key = str(cr.get("checklist_key") or "").strip()
+        if not key:
+            continue
+        base_title = str(cr.get("title") or "Imported run")[:255]
+        # Dedupe within the bundle itself by bumping the title — the
+        # database UNIQUE constraint blocks (project, user, key, title)
+        # collisions and we cannot rely on flush-level error reporting
+        # here.
+        dup_key = (key, base_title)
+        n = seen_titles.get(dup_key, 0)
+        title = base_title if n == 0 else f"{base_title} ({n})"
+        seen_titles[dup_key] = n + 1
+        items = cr.get("items")
+        if not isinstance(items, list):
+            items = []
+        session.add(ChecklistRun(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            checklist_key=key[:64],
+            title=title[:255],
+            items=items,
+            overall_compliance_pct=float(cr.get("overall_compliance_pct") or 0.0),
+        ))
+        counts["checklist_runs"] += 1
+    if counts["checklist_runs"]:
         await session.flush()
 
     review_in = bundle.get("review")
