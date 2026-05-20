@@ -3984,3 +3984,200 @@ export const sapApi = {
     return r.data as Blob
   },
 }
+
+// ─── Phase 18 (MP18) — Health Economics ───────────────────────────────────
+
+export type EconomicCurrency = 'GBP' | 'USD' | 'EUR' | 'AUD' | 'CAD' | 'Other'
+export type EconomicPerspective = 'patient' | 'healthcare_system' | 'societal'
+export type UtilityValueSetKey =
+  | 'EQ5D_3L_UK'
+  | 'EQ5D_5L_UK'
+  | 'EQ5D_Y_DUTCH'
+  | 'SF6D'
+  | 'direct'
+export type EconomicCostRole =
+  | 'unit_cost'
+  | 'quantity'
+  | 'cost_total'
+  | 'utility_score'
+  | 'qaly_weight'
+  | 'time_to_event'
+export type EconomicDominance =
+  | 'dominant'
+  | 'dominated'
+  | 'icer_calculated'
+  | 'northeast'
+  | 'southwest'
+
+export const costColumnBindingSchema = z.object({
+  col: z.string().min(1),
+  role: z.enum([
+    'unit_cost',
+    'quantity',
+    'cost_total',
+    'utility_score',
+    'qaly_weight',
+    'time_to_event',
+  ] as const),
+})
+export type CostColumnBinding = z.infer<typeof costColumnBindingSchema>
+
+export const economicResultSchema = z.object({
+  id: z.string(),
+  economic_analysis_id: z.string(),
+  mean_cost_diff: z.number(),
+  mean_qaly_diff: z.number(),
+  icer: z.number().nullable(),
+  dominance_status: z.string(),
+  nmb_at_thresholds: z.record(z.number()),
+  ceac_data: z.array(z.object({ wtp: z.number(), prob_costeffective: z.number() })),
+  plane_bootstrap: z.array(z.object({ dCost: z.number(), dQALY: z.number() })),
+  sensitivity: z.record(z.unknown()).nullable(),
+  plane_png_uri: z.string(),
+  ceac_png_uri: z.string(),
+  created_at: z.string(),
+})
+export type EconomicResult = z.infer<typeof economicResultSchema>
+
+export const economicAnalysisSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  dataset_id: z.string().nullable(),
+  name: z.string(),
+  currency: z.string(),
+  time_horizon_months: z.number(),
+  perspective: z.string(),
+  discount_rate_costs: z.number(),
+  discount_rate_qalys: z.number(),
+  wtp_thresholds: z.array(z.number()),
+  utility_value_set: z.string(),
+  bootstrap_n: z.number(),
+  seed: z.number(),
+  treatment_col: z.string(),
+  comparator_label: z.string(),
+  intervention_label: z.string(),
+  cost_columns: z.array(z.object({ col: z.string(), role: z.string() })),
+  ai_interpretation: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  result: economicResultSchema.nullable().optional(),
+})
+export type EconomicAnalysis = z.infer<typeof economicAnalysisSchema>
+
+export interface EconomicAnalysisCreateBody {
+  name: string
+  dataset_id?: string | null
+  currency?: EconomicCurrency
+  time_horizon_months?: number
+  perspective?: EconomicPerspective
+  discount_rate_costs?: number
+  discount_rate_qalys?: number
+  wtp_thresholds?: number[]
+  utility_value_set?: UtilityValueSetKey
+  bootstrap_n?: number
+  seed?: number
+  treatment_col: string
+  comparator_label: string
+  intervention_label: string
+  cost_columns?: CostColumnBinding[]
+}
+
+export const utilityValueSetSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  dimensions: z.array(z.string()),
+  levels: z.number(),
+  source_citation: z.string(),
+  notes: z.string().nullable().optional(),
+})
+export type UtilityValueSetInfo = z.infer<typeof utilityValueSetSchema>
+
+export const utilityValueSetsApi = {
+  list: async (): Promise<UtilityValueSetInfo[]> => {
+    const r = await api.get('/api/utility-value-sets')
+    return z.array(utilityValueSetSchema).parse(r.data)
+  },
+}
+
+export const economicAnalysesApi = {
+  list: async (projectId: string): Promise<EconomicAnalysis[]> => {
+    const r = await api.get(`/api/projects/${projectId}/economic-analyses`)
+    return z.array(economicAnalysisSchema).parse(r.data)
+  },
+  get: async (projectId: string, id: string): Promise<EconomicAnalysis> => {
+    const r = await api.get(`/api/projects/${projectId}/economic-analyses/${id}`)
+    return economicAnalysisSchema.parse(r.data)
+  },
+  create: async (
+    projectId: string,
+    body: EconomicAnalysisCreateBody,
+  ): Promise<EconomicAnalysis> => {
+    const r = await api.post(`/api/projects/${projectId}/economic-analyses`, body)
+    return economicAnalysisSchema.parse(r.data)
+  },
+  update: async (
+    projectId: string,
+    id: string,
+    body: Partial<EconomicAnalysisCreateBody>,
+  ): Promise<EconomicAnalysis> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/economic-analyses/${id}`,
+      body,
+    )
+    return economicAnalysisSchema.parse(r.data)
+  },
+  delete: async (projectId: string, id: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/economic-analyses/${id}`)
+  },
+  run: async (projectId: string, id: string): Promise<EconomicAnalysis> => {
+    const r = await api.post(`/api/projects/${projectId}/economic-analyses/${id}/run`)
+    return economicAnalysisSchema.parse(r.data)
+  },
+  sensitivity: async (
+    projectId: string,
+    id: string,
+    kind: 'psa' | 'dsa' | 'scenario',
+    body: {
+      parameter_distributions?: Record<string, Record<string, unknown>>
+      parameter_ranges?: Record<string, { low: number; high: number }>
+      scenarios?: Array<{ name: string; overrides: Record<string, number> }>
+      n_psa?: number
+      seed?: number
+    },
+  ): Promise<EconomicAnalysis> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/economic-analyses/${id}/sensitivity`,
+      body,
+      { params: { type: kind } },
+    )
+    return economicAnalysisSchema.parse(r.data)
+  },
+  interpret: async (projectId: string, id: string): Promise<EconomicAnalysis> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/economic-analyses/${id}/interpret`,
+    )
+    return economicAnalysisSchema.parse(r.data)
+  },
+  push: async (
+    projectId: string,
+    id: string,
+    section = 'Results',
+  ): Promise<unknown> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/economic-analyses/${id}/push`,
+      { section },
+    )
+    return r.data
+  },
+  cheersReport: async (
+    projectId: string,
+    id: string,
+    format: 'docx' | 'pdf' = 'docx',
+  ): Promise<Blob> => {
+    const r = await api.get(
+      `/api/projects/${projectId}/economic-analyses/${id}/cheers-report`,
+      { params: { format }, responseType: 'blob' },
+    )
+    return r.data as Blob
+  },
+}

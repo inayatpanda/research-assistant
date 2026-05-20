@@ -1,6 +1,7 @@
 import {
   BarChart3,
   ClipboardList,
+  Coins,
   FileText,
   Layers,
   Library,
@@ -30,6 +31,7 @@ export const navItems: NavItem[] = [
   { slug: 'manuscript', label: 'Manuscript', icon: PenLine },
   { slug: 'review',     label: 'Review',     icon: ClipboardList },
   { slug: 'statistics', label: 'Statistics', icon: BarChart3 },
+  { slug: 'economics',  label: 'Economics',  icon: Coins },
   { slug: 'submission', label: 'Submission', icon: Send },
   { slug: 'settings',   label: 'Settings',   icon: SettingsIcon, global: true },
 ]

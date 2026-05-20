@@ -12,6 +12,7 @@ import { queryClient } from '@/lib/query'
 import CompilePage from '@/routes/CompilePage'
 import ConsortPage from '@/routes/ConsortPage'
 import DashboardPage from '@/routes/DashboardPage'
+import EconomicsPage from '@/routes/EconomicsPage'
 import HealthPage from '@/routes/HealthPage'
 import LibraryPage from '@/routes/LibraryPage'
 import ManuscriptPage from '@/routes/ManuscriptPage'
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="review" element={<SystematicReviewPage />} />
               <Route path="consort" element={<ConsortPage />} />
               <Route path="statistics" element={<StatisticsPage />} />
+              <Route path="economics" element={<EconomicsPage />} />
               <Route path="submission" element={<SubmissionPage />} />
             </Route>
 
