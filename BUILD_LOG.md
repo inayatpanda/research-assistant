@@ -5,6 +5,91 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-20 · Mini-phase 20 — Interactive reporting checklists ✅ COMPLETE
+
+**Scope**
+
+Twelve published reporting-guideline checklists wired to an interactive
+workspace: CONSORT 2010 (25), PRISMA 2020 (27), CHEERS 2022 (28),
+STROBE cohort / case-control / cross-sectional (22 each), TRIPOD-AI (27),
+SPIRIT 2013 (33), SQUIRE 2.0 (18), CARE (13), AGREE II (23), SAMPL (30),
+PRISMA-S (16), PRISMA-ScR (22). Each catalogue ships as a static JSON
+under `apps/api/src/research_api/services/checklists/catalogues/`. The
+`checklist_runs` table (migration `0024_reporting_checklists`) holds the
+user-edited statuses + comments + section mappings — `UNIQUE
+(project_id, user_id, checklist_key, title)` lets a project hold
+multiple submission versions of the same checklist (e.g. "v1 to JBJS",
+"v2 after revisions").
+
+**Auto-check heuristic**
+
+`services/checklists/auto_check.py` is a pure best-effort matcher. For
+each item it extracts keywords from the item's `title` + `description`
+(lowercase alpha tokens ≥4 chars, minus a small explicit stop-word
+set), then scores every paragraph in the manuscript by the number of
+unique keyword hits. Pass 1 restricts the search to the section named
+by `section_hint`; pass 2 falls back to any other section if pass 1
+finds no match. The match is recorded as `mapped_section` plus the
+first 80 chars of the paragraph as `mapped_text_excerpt`. **Status is
+always left at `"unclear"`** — auto-check never sets `"pass"`. User-set
+`pass` / `fail` / `na` decisions survive across re-runs.
+
+**Bug found while writing route tests**
+
+Section-hint mismatch: the catalogues initially used `"Methods"` (the
+published canonical label) for `section_hint`, but the app's
+`ManuscriptSectionName` enum is `"Methodology"`. Pass 1 of the
+auto-check silently failed for every Methods-section item; pass 2 still
+recovered the match but the `mapped_section` came back as whichever
+non-hinted section won by score. Normalised all 14 JSON catalogues to
+use `"Methodology"` (and `default_section: "Methodology"`) so the
+hinted pass actually fires. This is the only naming alignment needed —
+all other section_hint values (`Title`, `Abstract`, `Introduction`,
+`Results`, `Discussion`, `Other`) already match the enum.
+
+**Backend surfaces added**
+
+- `db/models.py::ChecklistRun` (1 new table) + `schemas/checklists.py`
+- `repositories/checklists.py::SqliteChecklistRepository`
+- `services/checklists/{catalogue.py, auto_check.py, export.py}`
+- `routes/checklists.py` mounted at `/api/checklists/...` and
+  `/api/projects/:pid/checklists/...` (catalogue list/get; CRUD on
+  runs; PATCH per item; auto-check; export PDF/DOCX)
+- Bundle export/import round-trip wired in `bundle_export.py` +
+  `bundle_import.py` (import dedupes title collisions with a numeric
+  suffix; catalogue JSONs are NOT in the bundle — they're static)
+- Legacy `CHECKLISTS["cheers_2022"]` alias preserved for the existing
+  CHEERS DOCX exporter
+
+**Frontend surfaces added**
+
+- `lib/api.ts::checklistsApi` (8 endpoints, zod schemas)
+- `hooks/useChecklists.ts` (catalogue, runs, run, create, patch,
+  auto-check, delete)
+- `components/checklists/{ChecklistsList, ChecklistRunsList,
+  ChecklistRunDrawer, ChecklistComplianceBar,
+  ChecklistExportButton}.tsx`
+- `routes/ChecklistsPage.tsx` — 3-pane resizable shell
+  (`autoSaveId="divider-widths-checklists"`)
+- `App.tsx` route at `/projects/:projectId/checklists`
+- Sidebar nav: `CheckSquare` icon between Economics and Submission
+
+**Test counts (final)**
+
+- Backend: 2056 pytest (53 new: 19 catalogue, 9 auto-check, 3 export, 10
+  CRUD, 10 isolation, 2 bundle round-trip; plus the existing
+  `test_bundle_import` expectation extended for the new counts dict
+  key — `checklist_runs: 0`).
+- Frontend: 292 vitest (6 new: 2 ChecklistComplianceBar, 2
+  ChecklistRunDrawer, 2 ChecklistsPage).
+- `tsc -p tsconfig.app.json --noEmit`: zero errors from any new file
+  (only the pre-existing `baseUrl` TS6 deprecation warning remains).
+
+**Tag:** `phase-20`. Commits at logical boundaries (backend → frontend
+→ docs).
+
+---
+
 ## 2026-05-20 · Mini-phase 18 — Health economics module ✅ COMPLETE
 
 **Scope**

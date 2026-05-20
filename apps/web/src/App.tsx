@@ -9,6 +9,7 @@ import {
 } from '@/components/layout/LegacyRedirect'
 import { ProjectLayoutGuard } from '@/components/layout/ProjectLayoutGuard'
 import { queryClient } from '@/lib/query'
+import ChecklistsPage from '@/routes/ChecklistsPage'
 import CompilePage from '@/routes/CompilePage'
 import ConsortPage from '@/routes/ConsortPage'
 import DashboardPage from '@/routes/DashboardPage'
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="consort" element={<ConsortPage />} />
               <Route path="statistics" element={<StatisticsPage />} />
               <Route path="economics" element={<EconomicsPage />} />
+              <Route path="checklists" element={<ChecklistsPage />} />
               <Route path="submission" element={<SubmissionPage />} />
             </Route>
 

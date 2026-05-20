@@ -4181,3 +4181,142 @@ export const economicAnalysesApi = {
     return r.data as Blob
   },
 }
+
+// ── Phase 20 (MP20): Interactive reporting checklists ────────────────────
+
+export const ChecklistItemStatusSchema = z.enum(['pass', 'fail', 'unclear', 'na'])
+export type ChecklistItemStatus = z.infer<typeof ChecklistItemStatusSchema>
+
+export const ChecklistCatalogueItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  section_hint: z.string(),
+})
+export type ChecklistCatalogueItem = z.infer<typeof ChecklistCatalogueItemSchema>
+
+export const ChecklistCatalogueSummarySchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string(),
+  default_section: z.string(),
+  item_count: z.number(),
+})
+export type ChecklistCatalogueSummary = z.infer<typeof ChecklistCatalogueSummarySchema>
+
+export const ChecklistCatalogueReadSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string(),
+  default_section: z.string(),
+  items: z.array(ChecklistCatalogueItemSchema),
+})
+export type ChecklistCatalogueRead = z.infer<typeof ChecklistCatalogueReadSchema>
+
+export const ChecklistRunItemSchema = z.object({
+  item_id: z.string(),
+  item_text: z.string(),
+  status: ChecklistItemStatusSchema,
+  comment: z.string(),
+  mapped_section: z.string().nullable(),
+  mapped_text_excerpt: z.string().nullable(),
+})
+export type ChecklistRunItem = z.infer<typeof ChecklistRunItemSchema>
+
+export const ChecklistRunReadSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  checklist_key: z.string(),
+  title: z.string(),
+  items: z.array(ChecklistRunItemSchema),
+  overall_compliance_pct: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type ChecklistRunRead = z.infer<typeof ChecklistRunReadSchema>
+
+export const ChecklistRunSummarySchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  checklist_key: z.string(),
+  title: z.string(),
+  overall_compliance_pct: z.number(),
+  item_count: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type ChecklistRunSummary = z.infer<typeof ChecklistRunSummarySchema>
+
+export type ChecklistRunItemPatch = {
+  status?: ChecklistItemStatus
+  comment?: string
+  mapped_section?: string | null
+  mapped_text_excerpt?: string | null
+}
+
+export const checklistsApi = {
+  listCatalogue: async (): Promise<ChecklistCatalogueSummary[]> => {
+    const r = await api.get('/api/checklists/catalogue')
+    return z.array(ChecklistCatalogueSummarySchema).parse(r.data)
+  },
+  getCatalogue: async (key: string): Promise<ChecklistCatalogueRead> => {
+    const r = await api.get(`/api/checklists/catalogue/${key}`)
+    return ChecklistCatalogueReadSchema.parse(r.data)
+  },
+  listRuns: async (projectId: string): Promise<ChecklistRunSummary[]> => {
+    const r = await api.get(`/api/projects/${projectId}/checklists`)
+    return z.array(ChecklistRunSummarySchema).parse(r.data)
+  },
+  createRun: async (
+    projectId: string,
+    body: { checklist_key: string; title: string },
+  ): Promise<ChecklistRunRead> => {
+    const r = await api.post(`/api/projects/${projectId}/checklists`, body)
+    return ChecklistRunReadSchema.parse(r.data)
+  },
+  getRun: async (
+    projectId: string,
+    runId: string,
+  ): Promise<ChecklistRunRead> => {
+    const r = await api.get(`/api/projects/${projectId}/checklists/${runId}`)
+    return ChecklistRunReadSchema.parse(r.data)
+  },
+  patchItem: async (
+    projectId: string,
+    runId: string,
+    itemId: string,
+    patch: ChecklistRunItemPatch,
+  ): Promise<ChecklistRunRead> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/checklists/${runId}/items/${itemId}`,
+      patch,
+    )
+    return ChecklistRunReadSchema.parse(r.data)
+  },
+  autoCheck: async (
+    projectId: string,
+    runId: string,
+  ): Promise<ChecklistRunRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/checklists/${runId}/auto-check`,
+    )
+    return ChecklistRunReadSchema.parse(r.data)
+  },
+  exportRun: async (
+    projectId: string,
+    runId: string,
+    format: 'pdf' | 'docx' = 'pdf',
+  ): Promise<Blob> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/checklists/${runId}/export`,
+      undefined,
+      { params: { format }, responseType: 'blob' },
+    )
+    return r.data as Blob
+  },
+  deleteRun: async (projectId: string, runId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/checklists/${runId}`)
+  },
+}

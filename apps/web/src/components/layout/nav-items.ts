@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CheckSquare,
   ClipboardList,
   Coins,
   FileText,
@@ -32,6 +33,7 @@ export const navItems: NavItem[] = [
   { slug: 'review',     label: 'Review',     icon: ClipboardList },
   { slug: 'statistics', label: 'Statistics', icon: BarChart3 },
   { slug: 'economics',  label: 'Economics',  icon: Coins },
+  { slug: 'checklists', label: 'Checklists', icon: CheckSquare },
   { slug: 'submission', label: 'Submission', icon: Send },
   { slug: 'settings',   label: 'Settings',   icon: SettingsIcon, global: true },
 ]
