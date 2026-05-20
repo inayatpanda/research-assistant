@@ -18,11 +18,24 @@ import {
 } from '@/components/ui/select'
 import type { CitationStyle } from '@/lib/api'
 
+/**
+ * Phase 16 (MP16) — extended catalogue.
+ *
+ * Vancouver-family journal variants are grouped at the bottom of the select
+ * so the canonical four stay on top for users who don't need the
+ * journal-specific tweaks.
+ */
 export const STYLE_OPTIONS: Array<{ value: CitationStyle; label: string }> = [
   { value: 'vancouver', label: 'Vancouver' },
   { value: 'apa', label: 'APA 7' },
   { value: 'harvard', label: 'Harvard' },
   { value: 'ieee', label: 'IEEE' },
+  { value: 'lancet', label: 'The Lancet' },
+  { value: 'nejm', label: 'NEJM' },
+  { value: 'jama', label: 'JAMA' },
+  { value: 'bjj', label: 'Bone & Joint Journal' },
+  { value: 'jbjs_am', label: 'JBJS (American)' },
+  { value: 'bjsm', label: 'BJSM' },
 ]
 
 export function BibliographyToolbar({

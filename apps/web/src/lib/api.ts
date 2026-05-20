@@ -64,14 +64,37 @@ api.interceptors.response.use(
 
 // --- Schemas (runtime + types) ---
 
-/** The 3 styles persistable on a project (server enforces).
- * Bibliography fetching additionally accepts `ieee` as a transient override. */
-export const PersistedCitationStyleSchema = z.enum(['vancouver', 'apa', 'harvard'])
+/** Phase 16 (MP16) — all styles persistable on a project (server enforces).
+ *
+ * Vancouver-family journal variants (lancet/nejm/bjj/jbjs_am/bjsm/jama) are
+ * persisted alongside the originals; the bibliography endpoint accepts the
+ * full enum for transient overrides.
+ */
+export const PersistedCitationStyleSchema = z.enum([
+  'vancouver',
+  'apa',
+  'harvard',
+  'ieee',
+  'lancet',
+  'nejm',
+  'bjj',
+  'jbjs_am',
+  'bjsm',
+  'jama',
+])
 export type PersistedCitationStyle = z.infer<typeof PersistedCitationStyleSchema>
 
 /** All styles supported by the bibliography endpoint + client-side formatters. */
-export const CitationStyleSchema = z.enum(['vancouver', 'apa', 'harvard', 'ieee'])
+export const CitationStyleSchema = PersistedCitationStyleSchema
 export type CitationStyle = z.infer<typeof CitationStyleSchema>
+
+/** Phase 16 (MP16) — inline citation rendering mode. */
+export const InlineCitationModeSchema = z.enum([
+  'bracket_numeric',
+  'superscript_numeric',
+  'author_year_parens',
+])
+export type InlineCitationMode = z.infer<typeof InlineCitationModeSchema>
 
 export const ProjectSchema = z.object({
   id: z.string(),
@@ -84,6 +107,7 @@ export const ProjectSchema = z.object({
   prospero_number: z.string().nullable(),
   clinicaltrials_number: z.string().nullable(),
   template_journal: z.string().nullable().optional(),
+  inline_citation_mode: InlineCitationModeSchema.default('bracket_numeric'),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -117,6 +141,7 @@ export const ProjectUpdateSchema = z.object({
   prospero_number: z.string().nullable().optional(),
   clinicaltrials_number: z.string().nullable().optional(),
   template_journal: z.string().nullable().optional(),
+  inline_citation_mode: InlineCitationModeSchema.optional(),
 })
 export type ProjectUpdate = z.infer<typeof ProjectUpdateSchema>
 
@@ -188,6 +213,21 @@ export const ArticleSourceSchema = z.enum([
 ])
 export type ArticleSource = z.infer<typeof ArticleSourceSchema>
 
+/** Phase 16 (MP16) — categorisation of reference types for grey-lit handling. */
+export const ReferenceTypeSchema = z.enum([
+  'journal_article',
+  'book',
+  'book_chapter',
+  'conference_abstract',
+  'thesis',
+  'preprint',
+  'registry_record',
+  'report',
+  'web_resource',
+  'other',
+])
+export type ReferenceType = z.infer<typeof ReferenceTypeSchema>
+
 export const ArticleSchema = z.object({
   id: z.string(),
   user_id: z.string(),
@@ -209,6 +249,8 @@ export const ArticleSchema = z.object({
   exclusion_reason: z.string().nullable(),
   conflict_of_interest: z.string().nullable(),
   source: ArticleSourceSchema.default('upload'),
+  reference_type: ReferenceTypeSchema.default('journal_article'),
+  url: z.string().nullable().optional(),
   created_at: z.string(),
   file_url: z.string().nullable().optional(),
 })
@@ -227,6 +269,8 @@ export const ArticleUpdateSchema = z.object({
   review_status: ReviewStatusSchema.optional(),
   exclusion_reason: z.string().optional().nullable(),
   conflict_of_interest: z.string().optional().nullable(),
+  reference_type: ReferenceTypeSchema.optional(),
+  url: z.string().optional().nullable(),
 })
 export type ArticleUpdate = z.infer<typeof ArticleUpdateSchema>
 
@@ -1901,8 +1945,52 @@ export const figuresApi = {
     )
     return z.array(FigureSchema).parse(r.data)
   },
+  /** Phase 16 (MP16) — auto-number figures by first in-text reference order. */
+  renumber: async (projectId: string): Promise<Figure[]> => {
+    const r = await api.post(`/api/projects/${projectId}/figures/renumber`)
+    return z.array(FigureSchema).parse(r.data)
+  },
   remove: async (figureId: string): Promise<void> => {
     await api.delete(`/api/figures/${figureId}`)
+  },
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 16 (MP16) — Bulk citation-text import
+// ──────────────────────────────────────────────────────────────────────
+
+export const ParsedReferencePreviewSchema = z.object({
+  raw: z.string(),
+  doi: z.string().nullable().optional(),
+  pmid: z.string().nullable().optional(),
+  status: z.enum(['ok', 'unresolved']),
+  parsed_metadata: ArticleMetadataSchema.nullable().optional(),
+  notes: z.array(z.string()).default([]),
+})
+export type ParsedReferencePreview = z.infer<typeof ParsedReferencePreviewSchema>
+
+export const CitationTextImportResponseSchema = z.object({
+  items: z.array(ParsedReferencePreviewSchema),
+})
+export type CitationTextImportResponse = z.infer<
+  typeof CitationTextImportResponseSchema
+>
+
+export const citationImportApi = {
+  importFromText: async (
+    projectId: string,
+    text: string,
+    options?: { fuzzyTitleLookup?: boolean },
+  ): Promise<CitationTextImportResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/articles/import-from-text`,
+      {
+        text,
+        fuzzy_title_lookup: options?.fuzzyTitleLookup ?? true,
+      },
+      { timeout: 60_000 },
+    )
+    return CitationTextImportResponseSchema.parse(r.data)
   },
 }
 
