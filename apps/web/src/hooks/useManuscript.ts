@@ -34,24 +34,42 @@ export function useManuscript(
   })
 
   const [local, setLocal] = useState<string>('')
-  const initialised = useRef(false)
+  // Server-side content currently observed. Used to:
+  //   (a) seed `local` when a fresh section loads,
+  //   (b) suppress no-op autosaves (the loaded HTML equals local),
+  //   (c) avoid the "initialised flag" race that previously caused
+  //       autosave to never fire when the section started empty.
+  const serverContent = useRef<string | null>(null)
   useEffect(() => {
-    if (data && !initialised.current) {
-      setLocal(htmlOrWrapPlain(data.content))
-      initialised.current = true
-    }
+    if (!data) return
+    const next = htmlOrWrapPlain(data.content)
+    if (serverContent.current === next) return
+    serverContent.current = next
+    setLocal(next)
   }, [data])
 
-  // Reset initialised flag when section changes
+  // When the user navigates to a different section, drop the server cache so
+  // the next `data` arrival is treated as a fresh load (not as a remote edit
+  // we would otherwise clobber over local edits).
   useEffect(() => {
-    initialised.current = false
+    serverContent.current = null
   }, [section, projectId])
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (!initialised.current || !projectId) return
+    if (!projectId) return
+    // Don't autosave until we've seen at least one server response — otherwise
+    // a freshly-mounted hook would overwrite the section with the empty
+    // initial-state string before the load completes.
+    if (serverContent.current === null) return
+    // Skip if local equals the last known server value (the load itself sets
+    // local; no need to PUT the same content back).
+    if (local === serverContent.current) return
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => mutation.mutate(local), 1200)
+    timer.current = setTimeout(() => {
+      serverContent.current = local
+      mutation.mutate(local)
+    }, 1200)
     return () => {
       if (timer.current) clearTimeout(timer.current)
     }
