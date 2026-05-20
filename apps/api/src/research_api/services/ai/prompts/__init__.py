@@ -5,6 +5,10 @@ from .cover_letter import (
     COVER_LETTER_USER_PROMPT,
     build_cover_letter_prompt,
 )
+from .economic_interpretation import (
+    ECONOMIC_INTERPRETATION_PROMPT,
+    build_economic_interpretation_prompt,
+)
 from .meta_interpretation import (
     META_INTERPRETATION_PROMPT,
     build_meta_interpretation_prompt,
@@ -35,6 +39,8 @@ __all__ = [
     "META_INTERPRETATION_PROMPT",
     "build_meta_interpretation_prompt",
     "RESULT_INTERPRETATION_PROMPT",
+    "ECONOMIC_INTERPRETATION_PROMPT",
+    "build_economic_interpretation_prompt",
     "SCREENING_SUGGESTION_SYSTEM_PROMPT",
     "SCREENING_SUGGESTION_USER_PROMPT",
     "COVER_LETTER_SYSTEM_PROMPT",

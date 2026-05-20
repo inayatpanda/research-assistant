@@ -42,6 +42,8 @@ from ..db.models import (
     DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
+    EconomicAnalysis,
+    EconomicResult,
     ExtractionRecord,
     Figure,
     GradeAssessment,
@@ -654,6 +656,23 @@ async def _collect_bundle_inputs(
             )
         )).scalars().all())
 
+    # Phase 18 (MP18) — Health economics tables.
+    economic_analyses = list((await session.execute(
+        select(EconomicAnalysis).where(
+            EconomicAnalysis.project_id == project_id,
+            EconomicAnalysis.user_id == user_id,
+        )
+    )).scalars().all())
+    economic_results: list[EconomicResult] = []
+    if economic_analyses:
+        econ_ids = [e.id for e in economic_analyses]
+        economic_results = list((await session.execute(
+            select(EconomicResult).where(
+                EconomicResult.user_id == user_id,
+                EconomicResult.economic_analysis_id.in_(econ_ids),
+            )
+        )).scalars().all())
+
     # Phase 19 — SR depth tables.
     mesh_terms = list((await session.execute(
         select(MeshTerm).where(
@@ -726,6 +745,8 @@ async def _collect_bundle_inputs(
         outcome_instruments=outcome_instruments,
         analysis_populations=analysis_populations,
         imputation_runs=imputation_runs,
+        economic_analyses=economic_analyses,
+        economic_results=economic_results,
     )
 
 

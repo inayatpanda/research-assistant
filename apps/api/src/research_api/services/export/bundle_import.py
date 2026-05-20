@@ -35,6 +35,8 @@ from ...db.models import (
     DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
+    EconomicAnalysis,
+    EconomicResult,
     ExtractionRecord,
     Figure,
     GradeAssessment,
@@ -147,6 +149,8 @@ async def _do_import(
         "narrative_synthesis_entries": 0, "outcome_instruments": 0,
         # Phase 17 (MP17) — Stats depth.
         "analysis_populations": 0, "imputation_runs": 0,
+        # Phase 18 (MP18) — Health economics.
+        "economic_analyses": 0, "economic_results": 0,
     }
 
     proj_in = bundle["project"]
@@ -414,6 +418,67 @@ async def _do_import(
         ))
         counts["imputation_runs"] += 1
     if counts["imputation_runs"]:
+        await session.flush()
+
+    # Phase 18 (MP18) — Economic analyses + results.
+    econ_map: dict[str, str] = {}
+    for ea in bundle.get("economic_analyses") or []:
+        old_id = ea.get("id")
+        new_econ_id = _new_id()
+        new_ds_id: str | None = None
+        if ea.get("dataset_id"):
+            new_ds_id = dataset_map.get(ea.get("dataset_id"))
+            if new_ds_id is None:
+                # Skip economic analyses whose dataset was not imported.
+                continue
+        session.add(EconomicAnalysis(
+            id=new_econ_id,
+            user_id=target_user_id,
+            project_id=new_project_id,
+            dataset_id=new_ds_id,
+            name=(ea.get("name") or "Economic analysis")[:255],
+            currency=ea.get("currency") or "GBP",
+            time_horizon_months=int(ea.get("time_horizon_months") or 12),
+            perspective=ea.get("perspective") or "healthcare_system",
+            discount_rate_costs=float(ea.get("discount_rate_costs") or 0.035),
+            discount_rate_qalys=float(ea.get("discount_rate_qalys") or 0.035),
+            wtp_thresholds=ea.get("wtp_thresholds") or [20000, 30000],
+            utility_value_set=ea.get("utility_value_set") or "EQ5D_5L_UK",
+            bootstrap_n=int(ea.get("bootstrap_n") or 1000),
+            seed=int(ea.get("seed") or 42),
+            treatment_col=(ea.get("treatment_col") or "")[:255],
+            comparator_label=(ea.get("comparator_label") or "")[:255],
+            intervention_label=(ea.get("intervention_label") or "")[:255],
+            cost_columns=ea.get("cost_columns") or [],
+            ai_interpretation=ea.get("ai_interpretation"),
+        ))
+        if old_id is not None:
+            econ_map[old_id] = new_econ_id
+        counts["economic_analyses"] += 1
+    if counts["economic_analyses"]:
+        await session.flush()
+
+    for er in bundle.get("economic_results") or []:
+        new_eid = econ_map.get(er.get("economic_analysis_id"))
+        if new_eid is None:
+            continue
+        session.add(EconomicResult(
+            id=_new_id(),
+            user_id=target_user_id,
+            economic_analysis_id=new_eid,
+            mean_cost_diff=float(er.get("mean_cost_diff") or 0.0),
+            mean_qaly_diff=float(er.get("mean_qaly_diff") or 0.0),
+            icer=er.get("icer"),
+            dominance_status=er.get("dominance_status") or "icer_calculated",
+            nmb_at_thresholds=er.get("nmb_at_thresholds") or {},
+            ceac_data=er.get("ceac_data") or [],
+            plane_bootstrap=er.get("plane_bootstrap") or [],
+            sensitivity=er.get("sensitivity"),
+            plane_png_uri=er.get("plane_png_uri") or "",
+            ceac_png_uri=er.get("ceac_png_uri") or "",
+        ))
+        counts["economic_results"] += 1
+    if counts["economic_results"]:
         await session.flush()
 
     review_in = bundle.get("review")

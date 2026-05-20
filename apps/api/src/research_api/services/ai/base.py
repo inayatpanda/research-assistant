@@ -100,3 +100,27 @@ class AIProvider(Protocol):
         raw_comments: str,
         abstract: str | None,
     ) -> dict[str, Any]: ...
+
+    # Phase 18 (MP18) — Health economics interpretation.
+    async def interpret_economic_result(
+        self,
+        *,
+        name: str,
+        perspective: str,
+        time_horizon_months: int,
+        currency: str,
+        discount_rate_costs: float,
+        discount_rate_qalys: float,
+        intervention_label: str,
+        comparator_label: str,
+        value_set: str,
+        mean_cost_diff: float,
+        mean_qaly_diff: float,
+        icer: float | None,
+        dominance_status: str,
+        nmb_at_thresholds: dict[str, Any] | None,
+        ceac_data: list[dict[str, Any]] | None,
+        wtp_thresholds: list[int] | None,
+        sensitivity: dict[str, Any] | None,
+        cite_token: str,
+    ) -> str: ...

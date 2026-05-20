@@ -283,6 +283,54 @@ class GeminiProvider(AIProvider):
         comments = _parse_reviewer_response_json(raw)
         return {"comments": comments, "model": self.active_model or "unknown"}
 
+    async def interpret_economic_result(
+        self,
+        *,
+        name: str,
+        perspective: str,
+        time_horizon_months: int,
+        currency: str,
+        discount_rate_costs: float,
+        discount_rate_qalys: float,
+        intervention_label: str,
+        comparator_label: str,
+        value_set: str,
+        mean_cost_diff: float,
+        mean_qaly_diff: float,
+        icer: float | None,
+        dominance_status: str,
+        nmb_at_thresholds: dict[str, Any] | None,
+        ceac_data: list[dict[str, Any]] | None,
+        wtp_thresholds: list[int] | None,
+        sensitivity: dict[str, Any] | None,
+        cite_token: str,
+    ) -> str:
+        if not cite_token or not cite_token.strip():
+            raise AISourceInsufficient("missing cite_token", provider="gemini")
+        from .prompts import build_economic_interpretation_prompt
+
+        prompt = build_economic_interpretation_prompt(
+            name=name,
+            perspective=perspective,
+            time_horizon_months=time_horizon_months,
+            currency=currency,
+            discount_rate_costs=discount_rate_costs,
+            discount_rate_qalys=discount_rate_qalys,
+            intervention_label=intervention_label,
+            comparator_label=comparator_label,
+            value_set=value_set,
+            mean_cost_diff=mean_cost_diff,
+            mean_qaly_diff=mean_qaly_diff,
+            icer=icer,
+            dominance_status=dominance_status,
+            nmb_at_thresholds=nmb_at_thresholds,
+            ceac_data=ceac_data,
+            wtp_thresholds=wtp_thresholds,
+            sensitivity=sensitivity,
+            cite_token=cite_token,
+        )
+        return (await self._generate_with_resilience(prompt)).strip()
+
 
 def _strip_md_fences(raw: str) -> str:
     """Strip ```...``` fences if the model wrapped its output."""

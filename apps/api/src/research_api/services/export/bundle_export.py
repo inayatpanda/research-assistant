@@ -36,6 +36,8 @@ from ...db.models import (
     DatasetPlot,
     DatasetTransformation,
     DatasetVariable,
+    EconomicAnalysis,
+    EconomicResult,
     ExtractionRecord,
     Figure,
     GradeAssessment,
@@ -123,6 +125,9 @@ class BundleInputs:
     # Phase 17 (MP17) — Stats depth: populations + imputation runs.
     analysis_populations: list[AnalysisPopulation] = field(default_factory=list)
     imputation_runs: list[ImputationRun] = field(default_factory=list)
+    # Phase 18 (MP18) — Health economics: analyses + results.
+    economic_analyses: list[EconomicAnalysis] = field(default_factory=list)
+    economic_results: list[EconomicResult] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -245,4 +250,11 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
             _row_to_dict(p) for p in inputs.analysis_populations
         ],
         "imputation_runs": [_row_to_dict(r) for r in inputs.imputation_runs],
+        # Phase 18 (MP18) — Health economics additions.
+        "economic_analyses": [
+            _row_to_dict(e) for e in inputs.economic_analyses
+        ],
+        "economic_results": [
+            _row_to_dict(r) for r in inputs.economic_results
+        ],
     }

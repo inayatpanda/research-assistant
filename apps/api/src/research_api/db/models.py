@@ -1486,3 +1486,100 @@ class ImputationRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class EconomicAnalysis(Base):
+    """Phase 18 (MP18) — Health economics configuration for one CEA.
+
+    One row per cost-effectiveness analysis on a project. Holds the
+    perspective, time horizon, currency, discount rates, WTP thresholds,
+    utility value-set choice, bootstrap n + seed, treatment column,
+    comparator/intervention labels, and the cost-column bindings (which
+    columns play which economic role — unit_cost / quantity / cost_total /
+    utility_score / qaly_weight / time_to_event).
+
+    The optional ``ai_interpretation`` text mirrors AnalysisResult — it is
+    populated by the /interpret endpoint and pushed to the manuscript.
+    """
+
+    __tablename__ = "economic_analyses"
+    __table_args__ = (
+        Index("ix_economic_analyses_project_user", "project_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    dataset_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="GBP")
+    time_horizon_months: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=12
+    )
+    perspective: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="healthcare_system"
+    )
+    discount_rate_costs: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.035
+    )
+    discount_rate_qalys: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.035
+    )
+    wtp_thresholds: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    utility_value_set: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="EQ5D_5L_UK"
+    )
+    bootstrap_n: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    treatment_col: Mapped[str] = mapped_column(String(255), nullable=False)
+    comparator_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    intervention_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    cost_columns: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    ai_interpretation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class EconomicResult(Base):
+    """Phase 18 (MP18) — One result row per ``EconomicAnalysis``.
+
+    UNIQUE constraint on ``economic_analysis_id`` means re-running an
+    analysis updates this row in-place.
+    """
+
+    __tablename__ = "economic_results"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    economic_analysis_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey("economic_analyses.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    mean_cost_diff: Mapped[float] = mapped_column(Float, nullable=False)
+    mean_qaly_diff: Mapped[float] = mapped_column(Float, nullable=False)
+    icer: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dominance_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    nmb_at_thresholds: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    ceac_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    plane_bootstrap: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    sensitivity: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    plane_png_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    ceac_png_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
