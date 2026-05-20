@@ -71,3 +71,22 @@ export function useDeleteAnalysis(projectId: string, datasetId: string) {
     },
   })
 }
+
+/** DEMO-FIX-C — Edit per-chart x/y/title overrides + re-render. */
+export function useUpdateChartLabels(projectId: string, datasetId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: {
+      analysisId: string
+      x_label_override?: string | null
+      y_label_override?: string | null
+      title_override?: string | null
+    }) => {
+      const { analysisId, ...body } = args
+      return analysesApi.updateChartLabels(projectId, analysisId, body)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['analyses', projectId, datasetId] })
+    },
+  })
+}

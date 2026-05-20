@@ -573,8 +573,19 @@ export const DatasetVariableSchema = z.object({
   n_missing: z.number().int(),
   sample_values: z.array(z.string()),
   instrument_key: z.string().nullable().optional(),
+  // DEMO-FIX-C — Free-text label used for chart axes, AI prose and exports.
+  // Falls back to the canonical ``name`` when unset.
+  display_label: z.string().nullable().optional(),
 })
 export type DatasetVariable = z.infer<typeof DatasetVariableSchema>
+
+export const HeaderSanitisationEntrySchema = z.object({
+  original: z.string(),
+  sanitised: z.string(),
+})
+export type HeaderSanitisationEntry = z.infer<
+  typeof HeaderSanitisationEntrySchema
+>
 
 export const DatasetSchema = z.object({
   id: z.string(),
@@ -591,6 +602,12 @@ export const DatasetSchema = z.object({
     .record(z.string(), z.unknown())
     .nullable()
     .optional(),
+  // DEMO-FIX-C — Non-empty on the upload response when at least one raw
+  // header was sanitised. Each entry: { original, sanitised }.
+  header_sanitisation_report: z
+    .array(HeaderSanitisationEntrySchema)
+    .optional()
+    .default([]),
 })
 export type Dataset = z.infer<typeof DatasetSchema>
 
@@ -626,6 +643,19 @@ export const datasetsApi = {
     const r = await api.patch(
       `/api/projects/${projectId}/datasets/${datasetId}/variables/${variableId}`,
       { user_type: userType },
+    )
+    return DatasetVariableSchema.parse(r.data)
+  },
+  /** DEMO-FIX-C — Update the free-text display label on a variable. */
+  updateVariableDisplayLabel: async (
+    projectId: string,
+    datasetId: string,
+    variableId: string,
+    displayLabel: string,
+  ): Promise<DatasetVariable> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/datasets/${datasetId}/variables/${variableId}/display-label`,
+      { display_label: displayLabel },
     )
     return DatasetVariableSchema.parse(r.data)
   },
@@ -835,6 +865,23 @@ export const analysesApi = {
   },
   delete: async (projectId: string, analysisId: string): Promise<void> => {
     await api.delete(`/api/projects/${projectId}/analyses/${analysisId}`)
+  },
+  /** DEMO-FIX-C — Set per-chart x/y/title label overrides and re-render. */
+  updateChartLabels: async (
+    projectId: string,
+    analysisId: string,
+    body: {
+      x_label_override?: string | null
+      y_label_override?: string | null
+      title_override?: string | null
+    },
+  ): Promise<Analysis> => {
+    const r = await api.patch(
+      `/api/projects/${projectId}/analyses/${analysisId}/chart-labels`,
+      body,
+      { timeout: 60_000 },
+    )
+    return AnalysisSchema.parse(r.data)
   },
 }
 

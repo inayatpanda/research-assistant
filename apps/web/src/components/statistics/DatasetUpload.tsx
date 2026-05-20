@@ -39,6 +39,18 @@ export function DatasetUpload({
         } else {
           toast.success(`Uploaded ${dataset.filename} · ${dataset.n_rows} rows`)
         }
+        // DEMO-FIX-C — Inform the user when column headers were sanitised so
+        // they know to review the new "Display label" column. The dataset
+        // detail page also surfaces a banner with the full mapping.
+        const report = dataset.header_sanitisation_report ?? []
+        if (report.length > 0) {
+          toast.info(
+            `Renamed ${report.length} column header${
+              report.length === 1 ? '' : 's'
+            } to identifier-safe names. Original labels preserved as display labels.`,
+            { duration: 6000 },
+          )
+        }
         onUploaded?.(dataset)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Upload failed'

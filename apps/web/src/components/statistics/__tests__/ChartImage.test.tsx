@@ -55,4 +55,35 @@ describe('ChartImage', () => {
     expect(link.getAttribute('href')).toBe(PNG_DATA_URI)
     expect(link.getAttribute('download')).toBe('my-plot.png')
   })
+
+  // DEMO-FIX-C — Edit labels affordance only renders when the caller passes
+  // onEditLabels. Avoids cluttering the modal in screens where per-chart
+  // overrides don't apply (e.g. PlotWorkspace cards).
+  it('does not render the Edit labels button when onEditLabels is omitted', () => {
+    const { getByLabelText, queryByTestId } = render(
+      <ChartImage
+        chart={{ format: 'png', data_uri: PNG_DATA_URI, byte_size: 70 }}
+        alt="Plot"
+      />,
+    )
+    fireEvent.click(getByLabelText('View Plot full size'))
+    expect(queryByTestId('open-edit-chart-labels')).toBeNull()
+  })
+
+  it('renders Edit labels button when onEditLabels is provided and fires the callback', () => {
+    let clicked = 0
+    const { getByLabelText, getByTestId } = render(
+      <ChartImage
+        chart={{ format: 'png', data_uri: PNG_DATA_URI, byte_size: 70 }}
+        alt="Plot"
+        onEditLabels={() => {
+          clicked += 1
+        }}
+      />,
+    )
+    fireEvent.click(getByLabelText('View Plot full size'))
+    const btn = getByTestId('open-edit-chart-labels')
+    fireEvent.click(btn)
+    expect(clicked).toBe(1)
+  })
 })

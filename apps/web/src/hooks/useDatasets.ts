@@ -53,6 +53,28 @@ export function useUpdateVariableType(projectId: string, datasetId: string) {
   })
 }
 
+/** DEMO-FIX-C — Set the free-text display label on a dataset variable. */
+export function useUpdateVariableDisplayLabel(
+  projectId: string,
+  datasetId: string,
+) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { variableId: string; displayLabel: string }) =>
+      datasetsApi.updateVariableDisplayLabel(
+        projectId,
+        datasetId,
+        vars.variableId,
+        vars.displayLabel,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dataset', projectId, datasetId] })
+      qc.invalidateQueries({ queryKey: ['datasets', projectId] })
+      qc.invalidateQueries({ queryKey: ['analyses', projectId, datasetId] })
+    },
+  })
+}
+
 export function useDatasetPreview(
   projectId: string | undefined,
   datasetId: string | undefined,

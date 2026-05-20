@@ -8,6 +8,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -27,7 +28,20 @@ import { useCreateAnalysisPlan } from '@/hooks/useAnalysisPlans'
 
 import { AssumptionPills } from './AssumptionPills'
 import { ChartImage } from './ChartImage'
+import { EditChartLabelsDialog } from './EditChartLabelsDialog'
 import { OLSDiagnosticsPanel } from './OLSDiagnosticsPanel'
+
+/**
+ * DEMO-FIX-C — Build a {canonical → display_label} map from a dataset's
+ * variables. Falls back to canonical when no display_label is set.
+ */
+function buildDisplayLabels(dataset: Dataset): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const v of dataset.variables) {
+    out[v.name] = v.display_label ?? v.name
+  }
+  return out
+}
 
 export function AnalysisResultCard({
   projectId,
@@ -43,6 +57,7 @@ export function AnalysisResultCard({
   const push = usePushToManuscript(projectId)
   const del = useDeleteAnalysis(projectId, dataset.id)
   const savePlan = useCreateAnalysisPlan(projectId)
+  const [editLabelsOpen, setEditLabelsOpen] = useState(false)
 
   const result = analysis.result
   const summary = (result?.summary ?? {}) as Record<string, unknown>
@@ -50,6 +65,19 @@ export function AnalysisResultCard({
 
   const hasResult = !!result
   const failed = analysis.status === 'failed'
+
+  // DEMO-FIX-C — Resolve {canonical → display_label} once per render so the
+  // header subtitle and citation-prose chip both see the same map.
+  const displayLabels = useMemo(() => buildDisplayLabels(dataset), [dataset])
+  const chart = (result?.chart ?? {}) as Record<string, unknown>
+  const chartOverrides = {
+    x_label_override:
+      typeof chart.x_label_override === 'string' ? chart.x_label_override : '',
+    y_label_override:
+      typeof chart.y_label_override === 'string' ? chart.y_label_override : '',
+    title_override:
+      typeof chart.title_override === 'string' ? chart.title_override : '',
+  }
 
   return (
     <motion.div
@@ -63,7 +91,7 @@ export function AnalysisResultCard({
             {TEST_LABELS[analysis.chosen_test]}
           </div>
           <div className="mt-0.5 text-[13px] text-muted-foreground truncate">
-            {variableSummary(analysis.variables)}
+            {variableSummary(analysis.variables, displayLabels)}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -138,8 +166,18 @@ export function AnalysisResultCard({
               chart={result!.chart as { format: 'png'; data_uri: string; byte_size: number }}
               alt={`${TEST_LABELS[analysis.chosen_test]} chart`}
               downloadName={`analysis-${analysis.id}-chart`}
+              onEditLabels={() => setEditLabelsOpen(true)}
             />
           )}
+
+          <EditChartLabelsDialog
+            open={editLabelsOpen}
+            onOpenChange={setEditLabelsOpen}
+            projectId={projectId}
+            datasetId={dataset.id}
+            analysisId={analysis.id}
+            initial={chartOverrides}
+          />
 
           {(analysis.chosen_test === 'linear_regression' ||
             analysis.chosen_test === 'multiple_linear') && (
@@ -328,11 +366,21 @@ function DatasetChip({ dataset }: { dataset: Dataset }) {
   )
 }
 
-function variableSummary(vars: Record<string, unknown>): string {
+function variableSummary(
+  vars: Record<string, unknown>,
+  labels: Record<string, string> = {},
+): string {
+  // DEMO-FIX-C — Resolve canonical column names via the display-label map so
+  // the card subtitle reads "outcome: VAS Pain at 6 months (post-op)" instead
+  // of "outcome: vas_pain_6m_postop".
+  const resolve = (s: string): string => labels[s] ?? s
   return Object.entries(vars)
     .map(([k, v]) => {
-      if (Array.isArray(v)) return `${k}: ${v.join(', ')}`
-      if (typeof v === 'string') return `${k}: ${v}`
+      if (Array.isArray(v)) {
+        const items = v.map((x) => (typeof x === 'string' ? resolve(x) : String(x)))
+        return `${k}: ${items.join(', ')}`
+      }
+      if (typeof v === 'string') return `${k}: ${resolve(v)}`
       return null
     })
     .filter(Boolean)

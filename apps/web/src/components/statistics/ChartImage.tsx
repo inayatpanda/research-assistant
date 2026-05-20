@@ -1,6 +1,7 @@
-import { Download } from 'lucide-react'
+import { Download, Pencil } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -13,9 +14,20 @@ export type ChartImageProps = {
   chart: { format: 'png'; data_uri: string; byte_size: number } | null
   alt: string
   downloadName?: string
+  /**
+   * DEMO-FIX-C — Optional callback wired from the zoom-modal "Edit labels"
+   * button. Caller renders the actual EditChartLabelsDialog so this
+   * component remains decoupled from analysis state.
+   */
+  onEditLabels?: () => void
 }
 
-export function ChartImage({ chart, alt, downloadName }: ChartImageProps) {
+export function ChartImage({
+  chart,
+  alt,
+  downloadName,
+  onEditLabels,
+}: ChartImageProps) {
   const [open, setOpen] = useState(false)
   if (!chart) return null
   const fileName = `${downloadName ?? 'chart'}.png`
@@ -41,7 +53,20 @@ export function ChartImage({ chart, alt, downloadName }: ChartImageProps) {
             <DialogTitle>{alt}</DialogTitle>
           </DialogHeader>
           <img src={chart.data_uri} alt={alt} className="w-full h-auto" />
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            {onEditLabels && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setOpen(false)
+                  onEditLabels()
+                }}
+                data-testid="open-edit-chart-labels"
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit labels
+              </Button>
+            )}
             <a
               href={chart.data_uri}
               download={fileName}

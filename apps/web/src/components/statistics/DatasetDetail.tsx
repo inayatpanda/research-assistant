@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -25,7 +26,11 @@ import {
   type DatasetVariable,
   type VariableType,
 } from '@/lib/api'
-import { useDataset, useUpdateVariableType } from '@/hooks/useDatasets'
+import {
+  useDataset,
+  useUpdateVariableDisplayLabel,
+  useUpdateVariableType,
+} from '@/hooks/useDatasets'
 import { useAnalysesForDataset } from '@/hooks/useAnalyses'
 import { useTransformations } from '@/hooks/useTransformations'
 
@@ -277,33 +282,62 @@ function VariablesTable({
   dataset: Dataset
 }) {
   const update = useUpdateVariableType(projectId, dataset.id)
+  const updateLabel = useUpdateVariableDisplayLabel(projectId, dataset.id)
+
+  const report = dataset.header_sanitisation_report ?? []
 
   return (
-    <div className="rounded-lg border border-border bg-white overflow-hidden">
-      <div className="grid grid-cols-12 gap-3 px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border bg-muted/30">
-        <div className="col-span-4">Column</div>
-        <div className="col-span-2">Inferred</div>
-        <div className="col-span-3">Override</div>
-        <div className="col-span-2">Sample</div>
-        <div className="col-span-1 text-right">Missing</div>
+    <div className="space-y-3">
+      {report.length > 0 && (
+        <div
+          className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] text-amber-900"
+          data-testid="header-sanitisation-banner"
+        >
+          <div className="font-medium">
+            {report.length} column header{report.length === 1 ? ' was' : 's were'} sanitised
+          </div>
+          <div className="text-amber-800/90 mt-0.5">
+            The original spellings are preserved as display labels (used by
+            chart axes, AI prose and exports). Edit any label below if needed.
+          </div>
+        </div>
+      )}
+      <div className="rounded-lg border border-border bg-white overflow-hidden">
+        <div className="grid grid-cols-12 gap-3 px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium border-b border-border bg-muted/30">
+          <div className="col-span-2">Column</div>
+          <div className="col-span-3">Display label</div>
+          <div className="col-span-2">Inferred</div>
+          <div className="col-span-2">Override</div>
+          <div className="col-span-2">Sample</div>
+          <div className="col-span-1 text-right">Missing</div>
+        </div>
+        <ul className="divide-y divide-border">
+          {dataset.variables.map((v) => (
+            <VariableRow
+              key={v.id}
+              variable={v}
+              onChange={(userType) => {
+                update.mutate(
+                  { variableId: v.id, userType },
+                  {
+                    onSuccess: () => toast.success(`Updated ${v.name}`),
+                    onError: (e: Error) => toast.error(e.message),
+                  },
+                )
+              }}
+              onChangeLabel={(label) => {
+                updateLabel.mutate(
+                  { variableId: v.id, displayLabel: label },
+                  {
+                    onSuccess: () => toast.success(`Renamed ${v.name}`),
+                    onError: (e: Error) => toast.error(e.message),
+                  },
+                )
+              }}
+            />
+          ))}
+        </ul>
       </div>
-      <ul className="divide-y divide-border">
-        {dataset.variables.map((v) => (
-          <VariableRow
-            key={v.id}
-            variable={v}
-            onChange={(userType) => {
-              update.mutate(
-                { variableId: v.id, userType },
-                {
-                  onSuccess: () => toast.success(`Updated ${v.name}`),
-                  onError: (e: Error) => toast.error(e.message),
-                },
-              )
-            }}
-          />
-        ))}
-      </ul>
     </div>
   )
 }
@@ -311,16 +345,64 @@ function VariablesTable({
 function VariableRow({
   variable,
   onChange,
+  onChangeLabel,
 }: {
   variable: DatasetVariable
   onChange: (userType: VariableType | null) => void
+  onChangeLabel: (label: string) => void
 }) {
   const inferred = variable.inferred_type
   const current = variable.user_type ?? inferred
+  const initialLabel = variable.display_label ?? variable.name
+  const [label, setLabel] = useState(initialLabel)
+  const [editing, setEditing] = useState(false)
 
   return (
-    <li className="grid grid-cols-12 gap-3 items-center px-4 py-2.5 text-[13px]">
-      <div className="col-span-4 font-medium truncate">{variable.name}</div>
+    <li
+      className="grid grid-cols-12 gap-3 items-center px-4 py-2.5 text-[13px]"
+      data-testid={`variable-row-${variable.id}`}
+    >
+      <div className="col-span-2 font-mono text-[12px] text-muted-foreground truncate">
+        {variable.name}
+      </div>
+      <div className="col-span-3">
+        {editing ? (
+          <Input
+            value={label}
+            autoFocus
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={() => {
+              setEditing(false)
+              const next = label.trim() || variable.name
+              if (next !== initialLabel) {
+                onChangeLabel(next)
+              } else {
+                setLabel(initialLabel)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              } else if (e.key === 'Escape') {
+                setLabel(initialLabel)
+                setEditing(false)
+              }
+            }}
+            className="h-7 text-[12px]"
+            data-testid={`variable-label-input-${variable.id}`}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="w-full text-left truncate font-medium hover:text-accent focus:outline-none focus:text-accent"
+            title="Click to edit display label"
+            data-testid={`variable-label-${variable.id}`}
+          >
+            {label}
+          </button>
+        )}
+      </div>
       <div className="col-span-2">
         <Badge
           variant="outline"
@@ -329,7 +411,7 @@ function VariableRow({
           {TYPE_LABELS[inferred]}
         </Badge>
       </div>
-      <div className="col-span-3">
+      <div className="col-span-2">
         <Select
           value={current}
           onValueChange={(v) => {

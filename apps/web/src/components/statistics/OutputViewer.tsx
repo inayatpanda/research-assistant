@@ -288,7 +288,11 @@ function SortableRow({
         </button>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-medium truncate">
-            {TEST_LABELS[analysis.chosen_test]}
+            {/* DEMO-FIX-C — Compose card title from the test label PLUS the
+                variable display labels so the user sees
+                "Independent t-test · VAS Pain at 6 months × BMI group"
+                rather than the canonical snake_case names. */}
+            {composeCardTitle(analysis, dataset)}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {new Date(analysis.created_at).toLocaleString()}
@@ -328,4 +332,39 @@ function SortableRow({
       )}
     </li>
   )
+}
+
+/**
+ * DEMO-FIX-C — Build a human-readable card title:
+ *   "Independent t-test · VAS Pain at 6 months × BMI group"
+ *
+ * Falls back to just the test label when no variables resolve. Per-chart
+ * title overrides (when set) win unconditionally.
+ */
+function composeCardTitle(analysis: Analysis, dataset: Dataset): string {
+  const base = TEST_LABELS[analysis.chosen_test]
+  const chart = (analysis.result?.chart ?? null) as Record<string, unknown> | null
+  if (chart && typeof chart.title_override === 'string' && chart.title_override.trim()) {
+    return `${base} · ${chart.title_override.trim()}`
+  }
+  const labelOf = (canonical: string): string => {
+    const v = dataset.variables.find((x) => x.name === canonical)
+    return v?.display_label || v?.name || canonical
+  }
+  const vars = analysis.variables ?? {}
+  const outcome = vars['outcome'] ?? vars['y']
+  const groups = vars['groups'] ?? vars['x'] ?? vars['predictor']
+  let predictors = vars['predictors']
+  if (typeof predictors === 'string') predictors = [predictors]
+  const subtitleParts: string[] = []
+  if (typeof outcome === 'string') subtitleParts.push(labelOf(outcome))
+  if (typeof groups === 'string') subtitleParts.push(labelOf(groups))
+  if (Array.isArray(predictors) && predictors.length > 0) {
+    const ps = predictors
+      .filter((p): p is string => typeof p === 'string')
+      .map(labelOf)
+    if (ps.length) subtitleParts.push(ps.join(', '))
+  }
+  if (subtitleParts.length === 0) return base
+  return `${base} · ${subtitleParts.join(' × ')}`
 }

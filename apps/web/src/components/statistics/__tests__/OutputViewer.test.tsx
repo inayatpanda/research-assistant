@@ -18,6 +18,8 @@ vi.mock('@/hooks/useAnalyses', () => ({
   useDeleteAnalysis: () => ({ mutate: vi.fn(), isPending: false }),
   useInterpretAnalysis: () => ({ mutate: vi.fn(), isPending: false }),
   usePushToManuscript: () => ({ mutate: vi.fn(), isPending: false }),
+  // DEMO-FIX-C — Mock the chart-labels hook used by AnalysisResultCard.
+  useUpdateChartLabels: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/hooks/useAnalysisPlans', () => ({
