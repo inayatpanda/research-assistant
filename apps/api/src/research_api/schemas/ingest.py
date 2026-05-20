@@ -82,6 +82,31 @@ class PubMedSearchRequest(BaseModel):
     filters: PubMedSearchFilters | None = None
 
 
+# ─── MP16: Bulk citation text import ─────────────────────────────────────────
+
+
+class CitationTextImportRequest(BaseModel):
+    """Multiline paste of citation text — newline-separated references."""
+
+    text: str = Field(min_length=1, max_length=200_000)
+    fuzzy_title_lookup: bool = True
+
+
+class ParsedReferencePreview(BaseModel):
+    """One parsed-and-resolved reference returned to the frontend."""
+
+    raw: str
+    doi: str | None = None
+    pmid: str | None = None
+    status: Literal["ok", "unresolved"]
+    parsed_metadata: ArticleMetadata | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class CitationTextImportResponse(BaseModel):
+    items: list[ParsedReferencePreview]
+
+
 __all__ = [
     "ArticleSource",
     "DuplicateReason",
@@ -93,4 +118,7 @@ __all__ = [
     "DoiLookupRequest",
     "PubMedSearchRequest",
     "PubMedSearchFilters",
+    "CitationTextImportRequest",
+    "CitationTextImportResponse",
+    "ParsedReferencePreview",
 ]

@@ -1,17 +1,24 @@
-"""Phase 8.7 — Figures routes: upload, list, get-binary, patch, reorder, delete."""
+"""Phase 8.7 — Figures routes: upload, list, get-binary, patch, reorder, delete.
+
+Phase 16 (MP16) adds ``POST /projects/{pid}/figures/renumber`` — re-runs
+first-mention-order numbering against the project's manuscript sections and
+persists the result via the same two-step reorder pass.
+"""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..container import Container, get_container
-from ..db.models import Figure
+from ..db.models import Figure, ManuscriptSection
 from ..repositories.figures import SqliteFigureRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.figure import FigureRead, FigureReorderRequest, FigureUpdate
+from ..services.figures.numbering import assign_figure_numbers
 from ..services.figures.validation import (
     FIGURE_SIZE_CAP_MB,
     FigureValidationError,
@@ -164,6 +171,54 @@ async def reorder_figures(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    return [await _hydrate(r, container) for r in rows]
+
+
+@router.post(
+    "/projects/{project_id}/figures/renumber",
+    response_model=list[FigureRead],
+)
+async def renumber_figures(
+    project_id: str,
+    container: Container = Depends(get_container),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> list[FigureRead]:
+    """MP16 — re-number figures by first in-text reference order.
+
+    Pure-function ``assign_figure_numbers`` returns a deterministic ordering
+    given the current manuscript sections + figures; the result is persisted
+    via the existing two-step reorder pass (which preserves the UNIQUE
+    constraint).
+    """
+    proj_repo = SqliteProjectRepository(session)
+    proj = await proj_repo.get(project_id, user_id)
+    if proj is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    repo = SqliteFigureRepository(session)
+    figs = await repo.list(project_id=project_id, user_id=user_id)
+    if not figs:
+        return []
+
+    sections_rows = list(
+        (
+            await session.execute(
+                select(ManuscriptSection).where(
+                    ManuscriptSection.project_id == project_id,
+                    ManuscriptSection.user_id == user_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    result = assign_figure_numbers(figs, sections_rows)
+    rows = await repo.reorder(
+        project_id=project_id,
+        user_id=user_id,
+        ordered_ids=result.ordered_ids,
+    )
     return [await _hydrate(r, container) for r in rows]
 
 

@@ -28,14 +28,18 @@ from ..repositories.projects import SqliteProjectRepository
 from ..schemas.article import ArticleRead
 from ..schemas.ingest import (
     ArticleMetadata,
+    CitationTextImportRequest,
+    CitationTextImportResponse,
     DoiLookupRequest,
     DuplicateGroup,
     ImportFromMetadataRequest,
     ImportFromMetadataResponse,
     MergeRequest,
+    ParsedReferencePreview,
     PubMedSearchRequest,
 )
 from ..services.ingest.bibtex import parse_bibtex
+from ..services.ingest.citation_text_parser import parse_citation_text
 from ..services.ingest.crossref import lookup_doi_metadata
 from ..services.ingest.dedup import DuplicateCandidate, find_duplicates
 from ..services.ingest.pubmed import PubMedFilters, search_pubmed
@@ -386,3 +390,44 @@ async def merge_duplicates_route(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return await _hydrated(kept, container)
+
+
+# ─── MP16: Bulk citation-text import (preview) ──────────────────────────────
+
+
+@router.post(
+    "/projects/{project_id}/articles/import-from-text",
+    response_model=CitationTextImportResponse,
+)
+async def import_from_text_route(
+    project_id: str,
+    body: CitationTextImportRequest,
+    container: Container = Depends(get_container),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> CitationTextImportResponse:
+    """Parse pasted reference text → preview list (no DB writes).
+
+    The frontend confirms which entries to materialise via the existing
+    ``import-from-metadata`` endpoint — this route ONLY produces previews so
+    the user retains the final say.
+    """
+    await _resolve_project(session, project_id, user_id)
+    parsed = await parse_citation_text(
+        body.text,
+        fuzzy_title_lookup=body.fuzzy_title_lookup,
+        email=container.settings.entrez_email,
+        api_key=container.settings.ncbi_api_key,
+    )
+    items = [
+        ParsedReferencePreview(
+            raw=r.raw,
+            doi=r.doi,
+            pmid=r.pmid,
+            status=r.status,  # type: ignore[arg-type]
+            parsed_metadata=r.parsed_metadata,
+            notes=list(r.notes),
+        )
+        for r in parsed
+    ]
+    return CitationTextImportResponse(items=items)
