@@ -363,7 +363,13 @@ def format_entry(article: _ArticleLike, *, style: CitationStyle = "vancouver") -
     Returns plain text. For HTML output use `format_entry_html`.
     Vancouver supports a `number` prefix via `bibliography_entry`; this
     function returns the unnumbered form for APA / Harvard / IEEE.
+
+    Synthetic dataset entries (article.type == "dataset") dispatch to
+    `_dataset_entry` so the dataset-specific shape is preserved across both
+    numbered (Vancouver/IEEE) and author-year (APA/Harvard) call paths.
     """
+    if getattr(article, "type", "article") == "dataset":
+        return _dataset_entry(article, number=None, style=style)
     if style not in _BIB_FORMATTERS:
         raise ValueError(f"Unknown citation style: {style!r}")
     return _BIB_FORMATTERS[style](article)
@@ -390,6 +396,44 @@ def format_entry_html(
     return f'<span class="bib-entry">{inner}</span>'
 
 
+def _dataset_entry(
+    article: _ArticleLike, *, number: int | None, style: CitationStyle
+) -> str:
+    """Reference-list entry for synthetic dataset citations.
+
+    Bypasses the article-style author parsing (which would split
+    "Project investigators" on whitespace) and emits a clean, dataset-shaped
+    citation per style. Author/title/year are surfaced verbatim — the
+    `journal` slot is hijacked to hold the "[Internal research dataset]"
+    qualifier so the bibliography service only has to set one field.
+
+    Output shape per style:
+      Vancouver: `1. Project investigators. <filename>. 2026. [Internal research dataset].`
+      IEEE:      `[1] Project investigators, "<filename>", 2026. [Internal research dataset].`
+      APA:       `Project investigators. (2026). <filename> [Internal research dataset].`
+      Harvard:   `Project investigators (2026) '<filename>'. [Internal research dataset].`
+    """
+    authors_list = list(article.authors or []) or ["Anonymous"]
+    # Render verbatim: dataset authors are pre-formatted (e.g. "Project
+    # investigators") so splitting them through `_author_list_*` corrupts them.
+    authors = ", ".join(a for a in authors_list if a) or "Anonymous"
+    title = (article.title or "Dataset").rstrip(".")
+    year = str(article.year) if article.year else "n.d."
+    qualifier = article.journal or "[Internal research dataset]"
+
+    if style == "vancouver":
+        prefix = f"{number}. " if number is not None else ""
+        return f"{prefix}{authors}. {title}. {year}. {qualifier}."
+    if style == "ieee":
+        prefix = f"[{number}] " if number is not None else ""
+        return f'{prefix}{authors}, "{title}", {year}. {qualifier}.'
+    if style == "apa":
+        return f"{authors}. ({year}). {title} {qualifier}."
+    if style == "harvard":
+        return f"{authors} ({year}) '{title}'. {qualifier}."
+    raise ValueError(f"Unknown citation style: {style!r}")
+
+
 def bibliography_entry(
     article: _ArticleLike, *, number: int | None = None, style: CitationStyle = "vancouver"
 ) -> str:
@@ -398,7 +442,14 @@ def bibliography_entry(
     Vancouver retains its `1. ...` numbered form. APA / Harvard return the
     plain entry (numbering for those styles is handled by the bibliography
     service). IEEE returns `[N] ...` when `number` is given.
+
+    When the article carries `type == "dataset"` (set by the bibliography
+    service for synthetic dataset entries) we dispatch to `_dataset_entry`
+    instead — those entries do NOT go through author-list parsing because
+    "Project investigators" must be rendered verbatim, not split.
     """
+    if getattr(article, "type", "article") == "dataset":
+        return _dataset_entry(article, number=number, style=style)
     if style == "vancouver":
         return vancouver_entry(article, number=number)
     if style == "ieee":

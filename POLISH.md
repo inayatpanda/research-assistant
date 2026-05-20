@@ -40,3 +40,5 @@ Severity meaning:
 - [stats-refine] [low] PlotWorkspace renders a single live preview; no side-by-side facet preview. Saved plots accumulate below the form. · `apps/web/src/components/statistics/PlotWorkspace.tsx`
 - [stats-refine] [low] Push to Manuscript Results is one-shot — no "undo push" affordance. Researchers can manually delete the appended paragraph in the editor. · `apps/web/src/components/statistics/AnalysisResultCard.tsx`
 - [stats-refine] [low] shadcn `Select` is hard to drive from `fireEvent.change` in vitest; the PowerCalculator's per-family input panels are covered by family-label test rather than full integration. Look into `@testing-library/user-event` keyboard navigation. · `apps/web/src/components/statistics/__tests__/PowerCalculator.test.tsx`
+- [demo] [resolved] Bibliography panel includes cited datasets as a "Dataset" reference type with project-investigator authorship and upload-year. Fixed 2026-05-20.
+- [demo] [resolved] AI result-interpretation prompt no longer emits (Dataset, YYYY) wrapper text — citation engine handles inline marker formatting per style. Fixed 2026-05-20.

@@ -4,11 +4,16 @@ Walks manuscript sections in canonical order, extracts every cited article
 id (from both plain-text `[CITE_xxx]` tokens AND inline `<sup data-citation
 data-article-id="...">` markers), deduplicates preserving first-occurrence
 order, and renders each in the requested citation style.
+
+Article ids prefixed with `dataset_` resolve against the project's datasets
+list (passed via the optional `datasets=` kwarg) and render as a synthetic
+"Internal research dataset" entry rather than being treated as orphans.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Iterable, Mapping, Protocol
 
 from ..citation_format import CitationStyle, bibliography_entry
@@ -17,6 +22,21 @@ from ..citation_format import CitationStyle, bibliography_entry
 # surname (case-insensitive). Numbered styles (Vancouver, IEEE) keep their
 # existing first-citation-of-appearance policy.
 _ALPHABETICAL_STYLES: frozenset[CitationStyle] = frozenset({"apa", "harvard"})
+
+# Prefix used on `data-article-id` (and `[CITE_…]`) attributes when the cited
+# entity is a project dataset rather than a library article. Centralised so a
+# rename only touches one constant.
+DATASET_CITATION_PREFIX = "dataset_"
+
+# Default authorship rendered on synthetic dataset bibliography entries.
+# Plural noun matches the SAP convention ("project investigators conducted…").
+DEFAULT_DATASET_AUTHORS: tuple[str, ...] = ("Project investigators",)
+
+# Bibliography "journal" slot for synthetic dataset entries. The square
+# brackets are intentional — they make the entry visually distinct in the
+# reference list and mirror common citation-style guidance for non-traditional
+# sources (e.g. APA's `[Data set]` qualifier).
+DATASET_JOURNAL_LABEL = "[Internal research dataset]"
 
 CANONICAL_SECTION_ORDER: tuple[str, ...] = (
     "Abstract",
@@ -40,6 +60,10 @@ class BibliographyEntry:
     article_id: str
     number: int
     formatted: str
+    # "article" (library reference) or "dataset" (synthetic dataset entry).
+    # Defaulted to "article" so all pre-existing call sites keep the prior
+    # serialisation shape.
+    type: str = "article"
 
 
 class _SectionLike(Protocol):
@@ -53,6 +77,53 @@ class _ArticleLike(Protocol):
     year: int | None
     journal: str | None
     doi: str | None
+
+
+class DatasetLike(Protocol):
+    """Subset of the Dataset ORM we depend on for synthetic entries.
+
+    Kept as a Protocol so tests (and any future non-ORM source) can pass a
+    simple dataclass instead of constructing a full SQLAlchemy row.
+    """
+    id: str
+    filename: str
+    created_at: datetime
+    project_id: str
+    user_id: str
+
+
+@dataclass(frozen=True)
+class _SyntheticDatasetArticle:
+    """Article-shaped adapter rendered by the standard citation_format
+    bibliography_entry function — the formatters branch on `type` only when
+    they need dataset-specific rendering.
+    """
+    title: str | None
+    authors: list[str] = field(default_factory=list)
+    year: int | None = None
+    journal: str | None = None
+    doi: str | None = None
+    volume: str | None = None
+    issue: str | None = None
+    pages: str | None = None
+    type: str = "dataset"
+
+
+def _dataset_to_article(ds: DatasetLike, *, authors: list[str] | None = None) -> _SyntheticDatasetArticle:
+    """Render a Dataset row as an article-shaped object for the formatter."""
+    year_val: int | None = None
+    created = getattr(ds, "created_at", None)
+    if created is not None:
+        try:
+            year_val = created.year
+        except AttributeError:  # pragma: no cover — created_at always datetime-like
+            year_val = None
+    return _SyntheticDatasetArticle(
+        title=ds.filename or "Dataset",
+        authors=list(authors or DEFAULT_DATASET_AUTHORS),
+        year=year_val,
+        journal=DATASET_JOURNAL_LABEL,
+    )
 
 
 def _ordered_sections(sections: Iterable[_SectionLike]) -> list[_SectionLike]:
@@ -119,6 +190,7 @@ def build_bibliography(
     articles_by_id: Mapping[str, _ArticleLike],
     sections: Iterable[_SectionLike],
     style: CitationStyle,
+    datasets: Iterable[DatasetLike] | None = None,
 ) -> list[BibliographyEntry]:
     """Compose `collect_used_article_ids_in_order` + per-style entry rendering.
 
@@ -129,30 +201,50 @@ def build_bibliography(
       this re-order does not require renumbering inline citations.
 
     Article ids referenced by manuscript content but absent from
-    `articles_by_id` are dropped silently — the integrity panel is the
-    user-visible surface for orphan tokens.
+    `articles_by_id` AND `datasets` are dropped silently — the integrity
+    panel is the user-visible surface for orphan tokens.
+
+    When a cited id begins with `dataset_` the suffix is matched against
+    `datasets[*].id`; matches render a synthetic "Internal research dataset"
+    entry with the dataset filename as title, "Project investigators" as
+    author, and the upload year. Unknown dataset ids are also dropped.
     """
     ids = collect_used_article_ids_in_order(sections)
+    datasets_by_id: dict[str, DatasetLike] = {d.id: d for d in (datasets or [])}
+
+    def _resolve(aid: str) -> tuple[_ArticleLike, str] | None:
+        """Return (article-shaped record, "article"|"dataset") or None."""
+        if aid.startswith(DATASET_CITATION_PREFIX):
+            ds = datasets_by_id.get(aid[len(DATASET_CITATION_PREFIX):])
+            if ds is None:
+                return None
+            return _dataset_to_article(ds), "dataset"
+        art = articles_by_id.get(aid)
+        if art is None:
+            return None
+        return art, "article"
 
     if style in _ALPHABETICAL_STYLES:
-        # Sort by (surname, year, title) but only across articles we have
-        # metadata for. Missing-metadata ids are still dropped.
-        resolvable: list[tuple[str, _ArticleLike, int]] = []
+        # Sort by (surname, year, title) but only across ids we can resolve.
+        resolvable: list[tuple[str, _ArticleLike, str, int]] = []
         for pos, aid in enumerate(ids):
-            article = articles_by_id.get(aid)
-            if article is None:
+            resolved = _resolve(aid)
+            if resolved is None:
                 continue
-            resolvable.append((aid, article, pos))
+            article, kind = resolved
+            resolvable.append((aid, article, kind, pos))
         resolvable.sort(
-            key=lambda triple: _alphabetical_sort_key(
-                triple[1], fallback_position=triple[2],
+            key=lambda quad: _alphabetical_sort_key(
+                quad[1], fallback_position=quad[3],
             )
         )
         out: list[BibliographyEntry] = []
         next_number = 1
-        for aid, article, _pos in resolvable:
+        for aid, article, kind, _pos in resolvable:
             formatted = bibliography_entry(article, number=next_number, style=style)
-            out.append(BibliographyEntry(article_id=aid, number=next_number, formatted=formatted))
+            out.append(BibliographyEntry(
+                article_id=aid, number=next_number, formatted=formatted, type=kind,
+            ))
             next_number += 1
         return out
 
@@ -160,10 +252,13 @@ def build_bibliography(
     out_v: list[BibliographyEntry] = []
     next_number = 1
     for aid in ids:
-        article = articles_by_id.get(aid)
-        if article is None:
+        resolved = _resolve(aid)
+        if resolved is None:
             continue
+        article, kind = resolved
         formatted = bibliography_entry(article, number=next_number, style=style)
-        out_v.append(BibliographyEntry(article_id=aid, number=next_number, formatted=formatted))
+        out_v.append(BibliographyEntry(
+            article_id=aid, number=next_number, formatted=formatted, type=kind,
+        ))
         next_number += 1
     return out_v

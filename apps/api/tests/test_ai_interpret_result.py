@@ -52,6 +52,36 @@ def test_prompt_includes_rounding_rules():
     assert "scientific notation" in text
 
 
+def test_prompt_forbids_dataset_author_year_wrapper():
+    """The model must NOT emit `(Dataset, YYYY)` (or any author-year wrapper)
+    around the citation token — the downstream citation engine formats the
+    visible marker per the active style. See Fix 2 in the demo polish task."""
+    text = RESULT_INTERPRETATION_PROMPT
+    # The literal anti-pattern is called out by name.
+    assert "(Dataset, 2026)" in text
+    assert "(Dataset, YYYY)" in text
+    # And the rule explicitly forbids "Dataset" appearing as an author label.
+    assert 'The word "Dataset" must not appear as an author label' in text
+
+
+def test_prompt_does_not_instruct_model_to_emit_dataset_author_year_form():
+    """Regression: an earlier version of the prompt encouraged the model to
+    use an author-year inline like `(Dataset, 2026)`. The current prompt
+    must not contain any such bare directive — the only references to
+    "Dataset, YYYY" are NEGATIVE examples ("do NOT wrap …")."""
+    text = RESULT_INTERPRETATION_PROMPT
+    # The phrase must only appear inside a negative instruction (line starts
+    # with "Emit ONLY" or "Do NOT" / contains "NOT" within the same sentence).
+    # We check that EVERY occurrence of "Dataset," is preceded by a negation
+    # keyword somewhere on its line.
+    for line in text.splitlines():
+        if "Dataset," in line:
+            lower = line.lower()
+            assert ("not" in lower) or ("forbid" in lower) or ("only" in lower), (
+                f"Unexpected positive use of 'Dataset,' author-year form: {line!r}"
+            )
+
+
 def test_builder_interpolates_all_key_numbers():
     prompt = build_result_interpretation_prompt(
         test_label="Independent samples t-test",

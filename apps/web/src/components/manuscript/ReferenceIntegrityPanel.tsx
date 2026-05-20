@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useMemo } from 'react'
 
-import { articlesApi, manuscriptApi, type ManuscriptSectionName } from '@/lib/api'
+import { articlesApi, datasetsApi, manuscriptApi, type ManuscriptSectionName } from '@/lib/api'
 import { numberCitationsAcross } from '@/lib/tiptap/citationEngine'
 
 const SECTIONS: ManuscriptSectionName[] = [
@@ -14,10 +14,20 @@ const SECTIONS: ManuscriptSectionName[] = [
   'Conclusion',
 ]
 
+/** Citation ids prefixed `dataset_<uuid>` resolve against project datasets,
+ * not the article library. Kept as a module-level constant so the prefix
+ * lives in one place across FE + BE. */
+const DATASET_CITATION_PREFIX = 'dataset_'
+
 export function ReferenceIntegrityPanel({ projectId }: { projectId: string }) {
   const { data: articles = [] } = useQuery({
     queryKey: ['articles', projectId],
     queryFn: () => articlesApi.list(projectId),
+  })
+
+  const { data: datasets = [] } = useQuery({
+    queryKey: ['datasets', projectId],
+    queryFn: () => datasetsApi.list(projectId),
   })
 
   const sectionQueries = SECTIONS.map((s) =>
@@ -32,11 +42,20 @@ export function ReferenceIntegrityPanel({ projectId }: { projectId: string }) {
     const numbers = numberCitationsAcross(htmls)
     const citedIds = new Set(numbers.keys())
     const libraryIds = new Set(articles.map((a) => a.id))
-    const orphanInline = [...citedIds].filter((id) => !libraryIds.has(id))
+    const datasetIds = new Set(datasets.map((d) => d.id))
+    const orphanInline = [...citedIds].filter((id) => {
+      // Dataset citations resolve against the project's datasets list, not
+      // the article library — only flag them as orphan when the dataset id
+      // itself is unknown.
+      if (id.startsWith(DATASET_CITATION_PREFIX)) {
+        return !datasetIds.has(id.slice(DATASET_CITATION_PREFIX.length))
+      }
+      return !libraryIds.has(id)
+    })
     const uncitedLibrary = articles.filter((a) => !citedIds.has(a.id))
     return { orphanInline, uncitedLibrary, totalCited: citedIds.size }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [articles, sectionQueries.map((q) => q.data?.content).join('|')])
+  }, [articles, datasets, sectionQueries.map((q) => q.data?.content).join('|')])
 
   const allClean = issues.orphanInline.length === 0 && issues.uncitedLibrary.length === 0
 

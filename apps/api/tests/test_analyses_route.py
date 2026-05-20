@@ -288,9 +288,12 @@ async def _interpret_and_push(client, project_id: str, ds_id: str):
 
 @pytest.mark.asyncio
 async def test_push_resolves_dataset_cite_token_vancouver(client):
-    """Vancouver style: token replaced with `(<dataset label>, <year>)`.
+    """Vancouver style: token replaced with `<sup data-citation …>(…)</sup>`.
 
-    The raw `[CITE_dataset_xxx]` token must NOT survive to the manuscript.
+    The raw `[CITE_dataset_xxx]` token must NOT survive to the manuscript,
+    and the resolved sup must NOT contain the literal word "Dataset" as an
+    author label — that was the bug we fixed; the synthetic dataset article
+    now uses "Project investigators" to match the bibliography service.
     """
     project_id = await _make_project(client)
     ds = await _upload_dataset(client, project_id)
@@ -298,9 +301,13 @@ async def test_push_resolves_dataset_cite_token_vancouver(client):
     content = body["content"]
     # Token must be replaced, not preserved raw.
     assert f"[CITE_dataset_{ds['id']}]" not in content
-    # Vancouver inline uses author/year format. The dataset's synthetic
-    # author is "Dataset" so the rendered citation contains "Dataset".
-    assert "Dataset" in content
+    # Replaced with the canonical `<sup data-citation>` marker pointing at
+    # the dataset id — the visible inner text varies by formatter (handled
+    # in `test_push_dataset_token_carries_data_article_id`).
+    assert f'data-article-id="dataset_{ds["id"]}"' in content
+    # Regression: "Dataset" must NOT appear as an inline author label.
+    assert "(Dataset," not in content
+    assert "Dataset, 20" not in content
 
 
 @pytest.mark.asyncio
@@ -320,7 +327,11 @@ async def test_push_resolves_dataset_cite_token_apa(client):
     body = await _interpret_and_push(client, project_id, ds["id"])
     content = body["content"]
     assert f"[CITE_dataset_{ds['id']}]" not in content
-    assert "Dataset" in content
+    # Same regression check for APA.
+    assert "(Dataset," not in content
+    assert "Dataset, 20" not in content
+    # Resolved citation points at the dataset id.
+    assert f'data-article-id="dataset_{ds["id"]}"' in content
 
 
 @pytest.mark.asyncio

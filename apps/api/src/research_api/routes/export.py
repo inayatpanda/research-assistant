@@ -67,6 +67,7 @@ from ..db.models import (
     SearchStrategy,
 )
 from ..repositories.articles import SqliteArticleRepository
+from ..repositories.datasets import SqliteDatasetRepository
 from ..repositories.manuscript_sections import SqliteManuscriptSectionRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.article import ArticleFilters
@@ -77,9 +78,7 @@ from ..schemas.export import (
 )
 from ..services.citation_format import (
     CitationStyle,
-    bibliography_entry,
     consolidate_inline_clusters,
-    format_entry,
 )
 from ..services.export.bibliography import (
     CANONICAL_SECTION_ORDER,
@@ -165,11 +164,26 @@ async def _load_sections(session: AsyncSession, project_id: str, user_id: str) -
     )
 
 
+async def _load_datasets(
+    session: AsyncSession, project_id: str, user_id: str
+) -> list[Dataset]:
+    return await SqliteDatasetRepository(session).list_for_project(project_id, user_id)
+
+
 async def _build_bib_entries(
-    sections: list[ManuscriptSection], articles: list[Article], style: CitationStyle
+    sections: list[ManuscriptSection],
+    articles: list[Article],
+    style: CitationStyle,
+    *,
+    datasets: list[Dataset] | None = None,
 ):
     by_id = {a.id: a for a in articles}
-    return build_bibliography(articles_by_id=by_id, sections=sections, style=style)
+    return build_bibliography(
+        articles_by_id=by_id,
+        sections=sections,
+        style=style,
+        datasets=datasets or [],
+    )
 
 
 async def _load_frontmatter_payload(
@@ -318,8 +332,9 @@ async def export_docx(
 
     sections = await _load_sections(session, project_id, user_id)
     articles = await _load_articles(session, project_id, user_id)
+    datasets = await _load_datasets(session, project_id, user_id)
     style = _coerce_style(None, project.citation_style)
-    entries = await _build_bib_entries(sections, articles, style)
+    entries = await _build_bib_entries(sections, articles, style, datasets=datasets)
     consolidated = _consolidate_sections(sections, style)
     frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
     data = render_docx(
@@ -350,8 +365,9 @@ async def export_pdf(
 
     sections = await _load_sections(session, project_id, user_id)
     articles = await _load_articles(session, project_id, user_id)
+    datasets = await _load_datasets(session, project_id, user_id)
     style = _coerce_style(None, project.citation_style)
-    entries = await _build_bib_entries(sections, articles, style)
+    entries = await _build_bib_entries(sections, articles, style, datasets=datasets)
     consolidated = _consolidate_sections(sections, style)
     frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
     data = render_pdf(
@@ -908,8 +924,9 @@ async def export_submission_package(
         sections = await _load_sections(session, project_id, user_id)
 
     articles = await _load_articles(session, project_id, user_id)
+    datasets = await _load_datasets(session, project_id, user_id)
     style = _coerce_style(None, project.citation_style)
-    entries = await _build_bib_entries(sections, articles, style)
+    entries = await _build_bib_entries(sections, articles, style, datasets=datasets)
     frontmatter = await _load_frontmatter_payload(session, project_id, user_id)
 
     figures = list((await session.execute(
@@ -1129,25 +1146,22 @@ async def get_bibliography(
     coerced_style = _coerce_style(style, project.citation_style)
     sections = await _load_sections(session, project_id, user_id)
     articles = await _load_articles(session, project_id, user_id)
-    by_id = {a.id: a for a in articles}
-    entries = build_bibliography(
-        articles_by_id=by_id, sections=sections, style=coerced_style
+    datasets = await _load_datasets(session, project_id, user_id)
+    entries = await _build_bib_entries(
+        sections, articles, coerced_style, datasets=datasets,
     )
     first_section_map = _first_section_by_article(sections)
 
+    # The entries already carry the per-style `formatted` text (numbered for
+    # Vancouver/IEEE, plain for APA/Harvard). Trusting the service output
+    # means dataset entries reach the wire with the right shape without
+    # re-resolving them here.
     out: list[BibliographyEntryRead] = []
     for e in entries:
-        article = by_id.get(e.article_id)
-        if article is None:
-            continue
-        if coerced_style in ("vancouver", "ieee"):
-            formatted = bibliography_entry(article, number=e.number, style=coerced_style)
-        else:
-            formatted = format_entry(article, style=coerced_style)
         out.append(BibliographyEntryRead(
             number=e.number,
             article_id=e.article_id,
-            formatted_entry=formatted,
+            formatted_entry=e.formatted,
             first_section=first_section_map.get(e.article_id, ""),
         ))
 

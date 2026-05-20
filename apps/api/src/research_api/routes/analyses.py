@@ -531,15 +531,24 @@ async def interpret_analysis(
 class _DatasetSyntheticArticle:
     """Article-like adapter so a Dataset can be cited via the standard
     `[CITE_dataset_<id>]` pipeline.  The bibliography panel resolves
-    `data-article-id="dataset_<id>"` against this same shape via the
-    project's articles repository when the dataset id is registered.
+    `data-article-id="dataset_<id>"` against the project's datasets list
+    via `build_bibliography(datasets=…)` and renders a synthetic
+    "[Internal research dataset]" entry, so the author label we emit here
+    only affects the inline sup placeholder text — the visible marker is
+    re-rendered by the TipTap NodeView (numeric styles) or by the inline
+    formatter (author-year styles).
+
+    Author label matches the bibliography service's `DEFAULT_DATASET_AUTHORS`
+    so a reader who falls back to the raw HTML never sees the literal word
+    "Dataset" — that was the bug we just fixed.
     """
 
     def __init__(self, dataset) -> None:  # type: ignore[no-untyped-def]
         self.title = dataset.filename or "Dataset"
-        # Synthetic single-author so author/year inline formatters render
-        # `Dataset, <year>` rather than `Unknown source`.
-        self.authors = ["Dataset"]
+        # "Project investigators" mirrors the bibliography entry, so the
+        # inline sup placeholder and the reference-list entry agree on
+        # authorship instead of disagreeing on the label "Dataset".
+        self.authors = ["Project investigators"]
         # `created_at` is timezone-aware; fall back to None if unset.
         year_val: int | None = None
         if getattr(dataset, "created_at", None) is not None:
