@@ -5,6 +5,118 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-20 · Mini-phase 18 — Health economics module ✅ COMPLETE
+
+**Scope**
+
+Full QALY / ICER / CEAC pipeline plus PSA-DSA-scenario sensitivity plus
+CHEERS-style report export. Migration `0023_health_economics` adds two
+tables (`economic_analyses`, `economic_results`). The compute layer lives
+under `services/economics/` (qaly / cost_qaly_regression / icer / ceac /
+charts / utility_value_sets / sensitivity) and is route-mounted at
+`/api/projects/:pid/economic-analyses` plus `/api/utility-value-sets`.
+AI interpretation follows the DEMO-FIX-C contract (no `(Dataset, 2026)`
+wrapper) and push-to-manuscript registers an `economic-analysis` class
+hook so re-pushes replace the previous block idempotently.
+
+**Frontend (`apps/web/src/components/economics/`)**
+
+- `EconomicAnalysisSetup.tsx` — multi-field form (name / currency /
+  horizon / perspective / discount rates / WTP thresholds /
+  utility value set / bootstrap_n+seed / treatment + labels).
+- `CostColumnBinder.tsx` — column→role list editor (`cost_total`,
+  `unit_cost`, `quantity`, `utility_score`, `qaly_weight`,
+  `time_to_event`).
+- `UtilityValueSetSelector.tsx` — radio over the public catalogue
+  (EQ-5D-3L UK, EQ-5D-5L England, EQ-5D-Y Dutch, SF-6D, direct).
+- `EconomicResultsCard.tsx` — ICER + NMB at each WTP + mean diffs +
+  dominance badge + CE plane PNG + CEAC PNG via the shared
+  `ChartImage` component.
+- `EconomicSensitivityPanel.tsx` — tabbed PSA / DSA / scenario, tornado
+  PNG for DSA.
+- `EconomicAnalysisWizard.tsx` — orchestrator (setup → bind → run →
+  results) wired to TanStack Query.
+- `routes/EconomicsPage.tsx` — list-left / wizard-right shell using
+  `ResizablePanelGroup` with `autoSaveId="divider-widths-economics"`.
+- Sidebar nav: added the `Coins` icon between Statistics and Submission
+  (icon was already imported).
+
+**EQ-5D-3L UK algorithm interpretation**
+
+Implementation in `utility_value_sets.py` matches Dolan 1997 line-for-line:
+
+```
+if all dims at level 1 → 1.0
+else: u = 1.0 − 0.081 (constant)
+       − Σ per-dim decrement (mobility .069/.314, self_care .104/.214,
+                              usual_activities .036/.094, pain .123/.386,
+                              anxiety .071/.236)
+       − 0.269 (N3 cell) iff any dim == 3
+```
+
+So `(3,3,3,3,3) = 1 − 0.081 − 1.244 − 0.269 = −0.594` exactly — the
+canonical "worst state" value. The N3 cell is implemented as a single
+flat decrement triggered by any level-3 dimension, not as the
+dimension-wise "n3 dummies × coefficients" alternative — both forms are
+algebraically equivalent given Dolan's published coefficients.
+
+**Service-level fix during test writing**
+
+`EconomicAnalysisWizard.handlePush` was calling `pushMutation.mutateAsync()`
+with no argument, but the hook's mutationFn signature requires a section
+string (defaulted to `'Results'`). TypeScript surfaced it as
+`Expected 1-2 arguments, but got 0`. Patched to pass `'Results'`
+explicitly so the dispatch is grammatical at the call site (the default
+value still applies, but the call now type-checks). Also `Object.entries`
+on Zod's `z.record(z.number())` infers value as `unknown` in TS strict
+mode → cast `nmb` to `Number(nmb)` before `_formatCurrency`.
+
+**Worked QALY verification**
+
+3 timepoints {0, 6, 12 months} with utility {0.5, 0.7, 0.8}:
+
+```
+panel 0-6:  (0.5 + 0.7) / 2 * 6 = 3.6   utility-months
+panel 6-12: (0.7 + 0.8) / 2 * 6 = 4.5   utility-months
+total       = 8.1                       utility-months
+QALY = 8.1 / 12 = 0.675
+```
+
+Confirmed by direct invocation of `compute_qaly(..., baseline_adjust=False)`
+→ `0.6749999999999999`. Baseline-adjusted variant subtracts the t=0
+utility from every timepoint → `0.175`, also as expected.
+
+**Test counts (final)**
+
+- Backend: 2003 pytest (78 economics: 6 qaly, 7 icer, 4 ceac, 10
+  utility_value_sets, 3 cost_qaly_regression, 4 sensitivity_psa, 17
+  economic_analyses_route, 21 security_isolation, 2 bundle_round_trip,
+  plus a handful of extras the in-repo test files added).
+- Frontend: 286 vitest (10 economics: 2 setup, 4 results card, 3
+  column binder, 1 page smoke).
+- `tsc -p tsconfig.app.json --noEmit --ignoreDeprecations 6.0`: zero
+  errors in any `apps/web/src/components/economics/**` or
+  `apps/web/src/routes/EconomicsPage*` file. Remaining 43 pre-existing
+  errors are unchanged from HEAD's 41 (+2 came from `lib/api.ts`
+  modifications already on disk before this session).
+
+**Hard rules upheld**
+
+- No new pip / npm dependencies.
+- All routes scoped via `EconomicsRepository` (`user_id + project_id`
+  filters on every read/write).
+- AI interpretation prompt produces inline `(CITE:...)` tokens, not
+  `(Dataset, 2026)` literals.
+- Push to manuscript registers `economic-analysis` class hook for
+  idempotent re-push.
+- Bundle export/import round-trips `economic_analyses` and
+  `economic_results` rows verbatim (verified by
+  `test_bundle_economic_round_trip.py`).
+
+Tagged `phase-18`.
+
+---
+
 ## 2026-05-19 · Mini-phase 15 — Living systematic review ✅ COMPLETE
 
 **Scope**
