@@ -262,6 +262,10 @@ class DatasetVariable(Base):
     # Phase 17 (MP17) — Optional binding to the curated instrument catalogue.
     # Pure metadata — never affects how analyses run; used only by reports + UI.
     instrument_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # DEMO-FIX-C (mig 0022) — Free-text display label used by charts,
+    # AI prose and exports. Defaults to the canonical ``name`` so legacy
+    # datasets render identically until edited.
+    display_label: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Analysis(Base):

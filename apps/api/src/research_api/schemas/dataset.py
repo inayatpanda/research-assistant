@@ -28,10 +28,26 @@ class DatasetVariableRead(BaseModel):
     sample_values: list[str]
     # Phase 17 (MP17) — Optional binding to the instrument catalogue.
     instrument_key: str | None = None
+    # DEMO-FIX-C — Free-text display label used by charts/AI/exports.
+    # Defaults to the canonical name when no override has been set.
+    display_label: str | None = None
 
 
 class DatasetVariableUpdate(BaseModel):
     user_type: VariableType | None
+
+
+class DatasetVariableDisplayLabelUpdate(BaseModel):
+    """DEMO-FIX-C — Body for PATCH .../variables/{vid}/display-label."""
+
+    display_label: str
+
+
+class HeaderSanitisationEntry(BaseModel):
+    """DEMO-FIX-C — One row of the upload sanitisation report."""
+
+    original: str
+    sanitised: str
 
 
 class DatasetRead(BaseModel):
@@ -51,3 +67,7 @@ class DatasetRead(BaseModel):
     dataset_metadata: dict[str, Any] | None = None
     # Phase 13 (MP13) — Cross-dataset ops can derive from 2+ sources.
     derived_from_dataset_ids: list[str] | None = None
+    # DEMO-FIX-C — When upload had to rename any non-conforming headers,
+    # the report lists every (original, sanitised) pair. Empty/omitted
+    # when no renames were needed.
+    header_sanitisation_report: list[HeaderSanitisationEntry] = []

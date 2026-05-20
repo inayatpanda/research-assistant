@@ -20,8 +20,10 @@ from ..repositories.datasets import SqliteDatasetRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.dataset import (
     DatasetRead,
+    DatasetVariableDisplayLabelUpdate,
     DatasetVariableRead,
     DatasetVariableUpdate,
+    HeaderSanitisationEntry,
 )
 from ..services.stats.ingest import (
     XLSX_MIME,
@@ -46,11 +48,19 @@ def _user_id(container: Container = Depends(get_container)) -> str:
 
 
 async def _hydrate(
-    dataset, repo: SqliteDatasetRepository, user_id: str
+    dataset,
+    repo: SqliteDatasetRepository,
+    user_id: str,
+    *,
+    header_sanitisation_report: list[dict[str, str]] | None = None,
 ) -> DatasetRead:
     variables = await repo.list_variables(dataset.id, user_id)
     read = DatasetRead.model_validate(dataset)
     read.variables = [DatasetVariableRead.model_validate(v) for v in variables]
+    if header_sanitisation_report:
+        read.header_sanitisation_report = [
+            HeaderSanitisationEntry(**e) for e in header_sanitisation_report
+        ]
     return read
 
 
@@ -112,6 +122,7 @@ async def upload_dataset(
         # first parseable sheet wins as the "primary" response — the FE
         # then fetches the list and renders all sheets.
         primary: object = None
+        primary_report: list[dict[str, str]] = []
         for sheet_name in sheets:
             try:
                 result = ingest(data, mime, sheet_name=sheet_name)
@@ -138,12 +149,18 @@ async def upload_dataset(
             )
             if primary is None:
                 primary = dataset
+                primary_report = list(result.header_sanitisation_report or [])
         if primary is None:
             raise HTTPException(
                 status_code=422,
                 detail="No parseable sheets found in workbook.",
             )
-        return await _hydrate(primary, repo, user_id)
+        return await _hydrate(
+            primary,
+            repo,
+            user_id,
+            header_sanitisation_report=primary_report,
+        )
 
     # Single sheet (or CSV) — legacy path.
     try:
@@ -169,7 +186,12 @@ async def upload_dataset(
         user_id=user_id,
         dataset_metadata=single_metadata,
     )
-    return await _hydrate(dataset, repo, user_id)
+    return await _hydrate(
+        dataset,
+        repo,
+        user_id,
+        header_sanitisation_report=list(result.header_sanitisation_report or []),
+    )
 
 
 @router.get(
@@ -235,6 +257,47 @@ async def update_variable(
 
     updated = await repo.update_variable_type(
         variable_id=variable_id, user_type=body.user_type, user_id=user_id
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Variable not found")
+    return DatasetVariableRead.model_validate(updated)
+
+
+@router.patch(
+    "/projects/{project_id}/datasets/{dataset_id}/variables/{variable_id}/display-label",
+    response_model=DatasetVariableRead,
+)
+async def update_variable_display_label(
+    project_id: str,
+    dataset_id: str,
+    variable_id: str,
+    body: DatasetVariableDisplayLabelUpdate,
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> DatasetVariableRead:
+    """DEMO-FIX-C — Set a free-text display label on a dataset variable.
+
+    The runner still operates on the canonical ``name`` column; this is
+    metadata used by chart axes, AI prose and exports. Whitespace-only
+    bodies are coerced back to the canonical name so a stray empty save
+    can never blank the label.
+    """
+    project = await SqliteProjectRepository(session).get(project_id, user_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    repo = SqliteDatasetRepository(session)
+    dataset = await repo.get(dataset_id, user_id)
+    if dataset is None or dataset.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    variables = await repo.list_variables(dataset_id, user_id)
+    target = next((v for v in variables if v.id == variable_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Variable not found")
+
+    label = (body.display_label or "").strip() or target.name
+    updated = await repo.update_variable_display_label(
+        variable_id=variable_id, display_label=label, user_id=user_id
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Variable not found")

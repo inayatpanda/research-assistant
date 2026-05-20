@@ -78,6 +78,11 @@ class SqliteDatasetRepository:
                 user_type=None,
                 n_missing=col.n_missing,
                 sample_values=list(col.sample_values),
+                # DEMO-FIX-C — Default to canonical name when no
+                # raw header was supplied (e.g. PSM-derived datasets).
+                display_label=(
+                    getattr(col, "display_label", None) or col.name
+                ),
             )
             self.session.add(row)
 
@@ -129,6 +134,22 @@ class SqliteDatasetRepository:
         await self.session.refresh(existing)
         return existing
 
+    async def update_variable_display_label(
+        self, *, variable_id: str, display_label: str, user_id: str
+    ) -> DatasetVariable | None:
+        """DEMO-FIX-C — Set the free-text display label for one variable."""
+        stmt = select(DatasetVariable).where(
+            DatasetVariable.id == variable_id,
+            DatasetVariable.user_id == user_id,
+        )
+        existing = (await self.session.execute(stmt)).scalar_one_or_none()
+        if existing is None:
+            return None
+        existing.display_label = display_label
+        await self.session.commit()
+        await self.session.refresh(existing)
+        return existing
+
     async def create_derived(
         self,
         *,
@@ -171,6 +192,11 @@ class SqliteDatasetRepository:
                 user_type=None,
                 n_missing=col.n_missing,
                 sample_values=list(col.sample_values),
+                # DEMO-FIX-C — Default to canonical name when no
+                # raw header was supplied (e.g. PSM-derived datasets).
+                display_label=(
+                    getattr(col, "display_label", None) or col.name
+                ),
             )
             self.session.add(row)
         await self.session.commit()

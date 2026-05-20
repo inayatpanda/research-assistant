@@ -11,6 +11,69 @@ from openpyxl import load_workbook
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CSV_MIME = "text/csv"
 
+# DEMO-FIX-C — Anything not [A-Za-z0-9_] is collapsed to a single underscore.
+_HEADER_NON_IDENT_RE = re.compile(r"[^A-Za-z0-9_]+")
+_HEADER_MULTI_UNDER_RE = re.compile(r"_{2,}")
+
+
+def sanitize_header(raw: str, *, index: int | None = None) -> str:
+    """Map an arbitrary spreadsheet header to a Python-identifier-safe name.
+
+    Rules (DEMO-FIX-C):
+      * Lowercase.
+      * Replace whitespace, hyphens, parentheses, brackets, dots, slashes,
+        any non-[A-Za-z0-9_] character with ``_``.
+      * Collapse runs of ``_`` and trim leading/trailing ``_``.
+      * If the result starts with a digit, prefix ``c_``.
+      * Empty after stripping → ``col_<index>`` (``col_0`` when no index).
+
+    The function is idempotent: ``sanitize_header(sanitize_header(x)) ==
+    sanitize_header(x)`` for all ``x``.
+    """
+    if raw is None:
+        s = ""
+    else:
+        s = str(raw)
+    s = s.strip().lower()
+    s = _HEADER_NON_IDENT_RE.sub("_", s)
+    s = _HEADER_MULTI_UNDER_RE.sub("_", s)
+    s = s.strip("_")
+    if not s:
+        return f"col_{index if index is not None else 0}"
+    if s[0].isdigit():
+        s = f"c_{s}"
+    return s
+
+
+def sanitize_headers(
+    headers: list[str],
+) -> tuple[list[str], list[tuple[str, str]]]:
+    """Return (sanitised, report).
+
+    ``report`` is a list of (original, sanitised) tuples for every column
+    where ``sanitised != original``. Collisions are resolved by appending
+    ``_2``, ``_3``, … to later occurrences so the resulting list has
+    unique elements.
+    """
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    report: list[tuple[str, str]] = []
+    for idx, raw in enumerate(headers):
+        base = sanitize_header(raw, index=idx)
+        name = base
+        if name in seen:
+            seen[base] += 1
+            name = f"{base}_{seen[base]}"
+            # If the resolved name *also* collides (rare), keep bumping.
+            while name in seen:
+                seen[base] += 1
+                name = f"{base}_{seen[base]}"
+        seen[name] = 1
+        out.append(name)
+        if str(raw) != name:
+            report.append((str(raw), name))
+    return out, report
+
 _TIME_NAME_RE = re.compile(r"^(date|time|dt|admit|discharge|surgery|fu_|followup)", re.I)
 
 _ORDINAL_TOKENS = {
@@ -41,6 +104,9 @@ class InferredColumn:
     inferred_type: str
     n_missing: int
     sample_values: list[str]
+    # DEMO-FIX-C — Free-text display label preserved from the raw header.
+    # Defaults to ``name`` when the raw header was already identifier-safe.
+    display_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -49,6 +115,13 @@ class IngestResult:
     n_columns: int
     columns: list[InferredColumn]
     long_format_hint: dict | None = None
+    # DEMO-FIX-C — Non-empty only when at least one raw header needed
+    # renaming. Each entry: {"original": ..., "sanitised": ...}.
+    header_sanitisation_report: list[dict[str, str]] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:  # default-factory shim for frozen dc
+        if self.header_sanitisation_report is None:
+            object.__setattr__(self, "header_sanitisation_report", [])
 
 
 def detect_table_mime(data: bytes) -> str:
@@ -113,14 +186,27 @@ def read_table(data: bytes, mime: str, sheet_name: str | None = None) -> pd.Data
 
 def read_dataset(data: bytes, dataset) -> pd.DataFrame:
     """Convenience: read a dataset's bytes honouring its ``sheet_name``
-    metadata (for multi-sheet XLSX). Falls back to the active sheet."""
+    metadata (for multi-sheet XLSX). Falls back to the active sheet.
+
+    DEMO-FIX-C — Re-applies the header sanitiser so the DataFrame's
+    column names always match the canonical names stored on
+    ``DatasetVariable``. This is necessary because some XLSX files have
+    headers with whitespace/parentheses, and the saved bytes still carry
+    the raw headers; without re-sanitising, ``df[col]`` lookups by the
+    canonical name would KeyError.
+    """
     meta = getattr(dataset, "dataset_metadata", None) or {}
     sheet = None
     if isinstance(meta, dict):
         sheet = meta.get("sheet_name")
         if not isinstance(sheet, str):
             sheet = None
-    return read_table(data, dataset.file_type, sheet_name=sheet)
+    df = read_table(data, dataset.file_type, sheet_name=sheet)
+    raw_headers = [str(c) for c in df.columns]
+    sanitised, _ = sanitize_headers(raw_headers)
+    if sanitised != raw_headers:
+        df = df.rename(columns=dict(zip(raw_headers, sanitised)))
+    return df
 
 
 def list_xlsx_sheets(data: bytes) -> list[str]:
@@ -248,7 +334,18 @@ def _distinct_non_null(series: pd.Series) -> list[object]:
     return seen
 
 
-def infer_columns(df: pd.DataFrame) -> list[InferredColumn]:
+def infer_columns(
+    df: pd.DataFrame,
+    *,
+    display_labels: list[str] | None = None,
+) -> list[InferredColumn]:
+    """Infer column metadata.
+
+    ``display_labels``, when provided, must be the same length as
+    ``df.columns`` and carries the original raw headers as the
+    human-readable label for each column. When ``None`` the display label
+    defaults to the canonical name (so legacy callers keep working).
+    """
     out: list[InferredColumn] = []
     for pos, col in enumerate(df.columns):
         series = df[col]
@@ -256,6 +353,11 @@ def infer_columns(df: pd.DataFrame) -> list[InferredColumn]:
         distinct = _distinct_non_null(series)
         sample = [_stringify(v) for v in distinct[:5]]
         inferred = _infer_one(col, series, distinct)
+        label = (
+            display_labels[pos]
+            if display_labels is not None and pos < len(display_labels)
+            else str(col)
+        )
         out.append(
             InferredColumn(
                 name=str(col),
@@ -263,6 +365,7 @@ def infer_columns(df: pd.DataFrame) -> list[InferredColumn]:
                 inferred_type=inferred,
                 n_missing=n_missing,
                 sample_values=sample,
+                display_label=label,
             )
         )
     return out
@@ -310,10 +413,20 @@ def _parseable_datetime(s: str) -> bool:
 
 def ingest(data: bytes, mime: str, sheet_name: str | None = None) -> IngestResult:
     df = read_table(data, mime, sheet_name=sheet_name)
-    columns = infer_columns(df)
+    # DEMO-FIX-C — Apply the header sanitiser before any inference so the
+    # canonical names already satisfy the runner whitelist
+    # (^[A-Za-z_]\w*$). The display labels keep the original spelling.
+    raw_headers = [str(c) for c in df.columns]
+    sanitised, report = sanitize_headers(raw_headers)
+    if sanitised != raw_headers:
+        df = df.rename(columns=dict(zip(raw_headers, sanitised)))
+    columns = infer_columns(df, display_labels=raw_headers)
     return IngestResult(
         n_rows=int(df.shape[0]),
         n_columns=int(df.shape[1]),
         columns=columns,
         long_format_hint=detect_long_format(df),
+        header_sanitisation_report=[
+            {"original": o, "sanitised": s} for (o, s) in report
+        ],
     )
