@@ -221,6 +221,12 @@ def _merge_metadata(
 # ─── List + CRUD ────────────────────────────────────────────────────────────
 
 
+# Sort keys the backend understands (the ArticleFilters Literal). Anything
+# else is coerced to ``created_desc`` so a bogus query string can't 500 the
+# whole list endpoint (#L-sort-500).
+_ALLOWED_SORT_KEYS = {"year_desc", "year_asc", "title", "created_desc"}
+
+
 @router.get("/projects/{project_id}/articles", response_model=list[ArticleRead])
 async def list_articles(
     project_id: str,
@@ -233,11 +239,12 @@ async def list_articles(
     user_id: str = Depends(_user_id),
 ) -> list[ArticleRead]:
     repo = SqliteArticleRepository(session)
+    safe_sort = sort if sort in _ALLOWED_SORT_KEYS else "created_desc"
     filters = ArticleFilters(
         q=q,
         review_status=review_status,
         study_design=study_design,
-        sort=sort,  # type: ignore[arg-type]
+        sort=safe_sort,  # type: ignore[arg-type]
     )
     rows = await repo.list_for_project(project_id, user_id, filters)
     return [await _hydrated(a, container) for a in rows]

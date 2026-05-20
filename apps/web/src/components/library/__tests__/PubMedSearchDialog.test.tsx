@@ -109,6 +109,45 @@ describe('PubMedSearchDialog (MP12.6 v2)', () => {
     )
   })
 
+  it('shows empty-state and clears stale results when a follow-up search returns zero hits (#L-PM-empty)', async () => {
+    // First search returns 1 result, second returns []
+    searchMock.mockResolvedValueOnce([SAMPLE_RESULT])
+    searchMock.mockResolvedValueOnce([])
+    wrap(<PubMedSearchDialog projectId="p1" />)
+    fireEvent.click(screen.getByRole('button', { name: /Search PubMed/i }))
+
+    const input = await screen.findByLabelText('Query')
+    fireEvent.change(input, { target: { value: 'hip arthroplasty' } })
+    const searchBtns = screen.getAllByRole('button', { name: 'Search' })
+    fireEvent.click(searchBtns[searchBtns.length - 1])
+
+    await waitFor(() => screen.getByTestId('pubmed-results-pane'))
+    expect(screen.getByText('Anterior approach in THA')).toBeTruthy()
+    // Import button visible when results present
+    expect(
+      screen.queryByRole('button', { name: /Import \d+ articles?/ }),
+    ).toBeTruthy()
+
+    // Second query → zero results
+    fireEvent.change(input, { target: { value: 'xyzzyqwerty' } })
+    const btns2 = screen.getAllByRole('button', { name: 'Search' })
+    fireEvent.click(btns2[btns2.length - 1])
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('pubmed-results-pane')).toBeNull(),
+    )
+    // Empty-state pane is visible, with the helper copy
+    expect(screen.getByTestId('pubmed-empty-state').textContent).toMatch(
+      /No PubMed results/i,
+    )
+    // Import button gone — stale "Import N articles" must not linger
+    expect(
+      screen.queryByRole('button', { name: /Import \d+ articles?/ }),
+    ).toBeNull()
+    // Stale row from previous query gone
+    expect(screen.queryByText('Anterior approach in THA')).toBeNull()
+  })
+
   it('placeholder is shown when no result has been previewed', async () => {
     searchMock.mockResolvedValueOnce([SAMPLE_RESULT])
     wrap(<PubMedSearchDialog projectId="p1" />)

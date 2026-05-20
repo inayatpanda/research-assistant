@@ -136,3 +136,19 @@ async def test_delete_article(client):
     assert r.status_code == 204
     r2 = await client.get(f"/api/articles/{aid}")
     assert r2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_articles_invalid_sort_falls_back_to_created_desc(client):
+    """Bogus ?sort=... should NOT 500 — it must be coerced (#L-sort-500)."""
+    project_id = await _make_project(client)
+    pdf = (FIXTURES / "sample.pdf").read_bytes()
+    files = {"file": ("paper.pdf", pdf, "application/pdf")}
+    await client.post(f"/api/projects/{project_id}/articles/upload", files=files)
+
+    for bogus in ("title_asc", "title_desc", "authors_asc", "foobar"):
+        r = await client.get(
+            f"/api/projects/{project_id}/articles", params={"sort": bogus}
+        )
+        assert r.status_code == 200, (bogus, r.status_code, r.text)
+        assert isinstance(r.json(), list)

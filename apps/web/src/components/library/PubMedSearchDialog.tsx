@@ -73,13 +73,16 @@ export function PubMedSearchDialog({ projectId }: { projectId: string }) {
         sort,
         filters: buildFilters(),
       })
-      if (items.length === 0) {
-        toast.info('No PubMed results for that query')
-        return
-      }
+      // Always reset previewIdx + picked so stale selection from a
+      // prior query never leaks. Setting `results` to [] when empty
+      // makes the empty-state render — leaving the prior list visible
+      // would falsely suggest the new search succeeded (#L-PM-empty).
       setResults(items)
       setPreviewIdx(null)
       setPicked(new Set(items.map((_, i) => i)))
+      if (items.length === 0) {
+        toast.info('No PubMed results for that query')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'PubMed search failed')
     }
@@ -277,7 +280,7 @@ export function PubMedSearchDialog({ projectId }: { projectId: string }) {
           >
             {search.isPending ? 'Searching…' : 'Search'}
           </Button>
-          {results !== null && (
+          {results !== null && results.length > 0 && (
             <Button
               onClick={() => void onImport()}
               disabled={importer.isPending || picked.size === 0}
@@ -289,8 +292,21 @@ export function PubMedSearchDialog({ projectId }: { projectId: string }) {
           )}
         </div>
 
+        {/* Empty-state for zero-result searches (#L-PM-empty) */}
+        {results !== null && results.length === 0 && (
+          <div
+            className="rounded-md border border-dashed border-border bg-white/40 p-8 text-center text-[12px] text-muted-foreground"
+            data-testid="pubmed-empty-state"
+          >
+            No PubMed results for that query.
+            <div className="mt-1 text-[11px]">
+              Try widening the date range or removing article-type filters.
+            </div>
+          </div>
+        )}
+
         {/* Split results / preview */}
-        {results !== null && (
+        {results !== null && results.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="pubmed-results-pane">
             <ScrollArea className="max-h-[420px] pr-2 rounded-md border border-border bg-white">
               <ul className="p-2 space-y-1">

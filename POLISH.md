@@ -42,3 +42,25 @@ Severity meaning:
 - [stats-refine] [low] shadcn `Select` is hard to drive from `fireEvent.change` in vitest; the PowerCalculator's per-family input panels are covered by family-label test rather than full integration. Look into `@testing-library/user-event` keyboard navigation. · `apps/web/src/components/statistics/__tests__/PowerCalculator.test.tsx`
 - [demo] [resolved] Bibliography panel includes cited datasets as a "Dataset" reference type with project-investigator authorship and upload-year. Fixed 2026-05-20.
 - [demo] [resolved] AI result-interpretation prompt no longer emits (Dataset, YYYY) wrapper text — citation engine handles inline marker formatting per style. Fixed 2026-05-20.
+
+### Meta-sweep residual (2026-05-20)
+
+Surfaced by the 8-study anterior-vs-posterior THA meta-analysis E2E sweep.
+8 BLOCKER/HIGH bugs were fixed in the same session (commit `fix(meta-sweep): ...`).
+The items below are MEDIUM/LOW deferrals:
+
+- [meta-sweep] [med] **M1 PRISMA no auto-dedupe** — PRISMA flow stages do not auto-dedupe across imported sources. Implement record-level dedup pass before populating "Records after duplicates removed" stage. · `apps/api/src/research_api/routes/reviews.py` (prisma fields)
+- [meta-sweep] [low] **M2 Publication-bias test catalogue clarification** — Egger + Begg is intentional for MD/SMD outcomes (Harbord is OR-specific, Peters is event-specific). Document why the other tests are gated on metric type so reviewers don't think they're missing. · `apps/api/src/research_api/services/meta/publication_bias.py`
+- [meta-sweep] [med] **M3 Meta-regression needs raw values** — current schema requires pre-computed effect sizes; for direct meta-regression we need raw arm-level inputs surfaced as covariates. Plumb the `MetaInput.subgroup` column + extraction-table fields into the meta-regression service.
+- [meta-sweep] [low] **M4 I²=0% sanity** — input data issue, not code. When all studies have identical effect sizes I²=0 is correct, just visually surprising. Add a tooltip explaining the interpretation in the forest plot panel. · `apps/web/src/components/review/meta/MetaAnalysisRunner.tsx`
+- [meta-sweep] [med] **M5 PROSPERO field coverage** — 13/22 fields populated by autofill; the rest need ICMJE author lookups + manual fill. Surface a "fields missing for submission" banner. · `apps/api/src/research_api/services/review/prospero.py`
+- [meta-sweep] [low] **M6 Checklist key case-sensitive** — checklist item lookups are case-sensitive; CONSORT/PRISMA bundle import that capitalises a key silently drops items. Normalise to `lower_snake_case` on read.
+- [meta-sweep] [low] **M7 Orphan citation panel** — the OrphanCitationPanel doesn't refresh after deleting a referenced article; stale "orphans" sit in the panel until the user navigates away. Invalidate the orphans query on article-delete. · `apps/web/src/components/manuscript/OrphanCitationPanel.tsx`
+- [meta-sweep] [low] **L1-L3** — assorted minor lint/typography nits captured during the meta-sweep; not material to the build.
+
+## Library sweep (2026-05-20) MEDIUM / LOW deferrals
+
+- [lib-sweep] [med] **L-DLG-authors** — `ImportPreviewDialog` renders the full author list for Crossref records inline. Lancet CRAFFT trial drops a ~10kB author string (215 authors) into the dialog as a single line. Trim to first-3 + `+N more` with a hover tooltip for the rest. · `apps/web/src/components/library/ImportPreviewDialog.tsx`
+- [lib-sweep] [low] **L-DOI-toast-ttl** — `toast.error` from a DOI lookup auto-dismisses within ~3s; users who tab away come back to no feedback. Bump the duration or keep the error inline in the AddByDoiInline card. · `apps/web/src/components/library/AddByDoiInline.tsx`
+- [lib-sweep] [low] **L-PM-all-selected** — PubMed v2 results dialog defaults to "all 50 checked → Import 50 articles". Easy to fat-finger and import the entire result set. Consider defaulting to no selection or capping at 10. · `apps/web/src/components/library/PubMedSearchDialog.tsx`
+- [lib-sweep] [low] **L-Cross-404-copy** — DOI 404 toast just says "DOI not found in Crossref". Some 404s are NEJM/BJJ blocking Crossref-public retrieval — the DOI is real but the publisher gates the metadata. Phrase the error to suggest "verify on doi.org or try PubMed search" rather than implying the DOI is invalid. · `apps/api/src/research_api/services/ingest/crossref.py`
