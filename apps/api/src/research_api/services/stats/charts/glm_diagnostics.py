@@ -22,7 +22,10 @@ def render_glm_deviance_residuals(
     outcome: str,
     predictors: list[str],
     family: str,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """DEMO-FIX-C — ``display_labels`` is accepted but only used in the
+    title (axes are generic "Fitted values" / "Deviance residuals")."""
     if family not in _FAMILY_MAP:
         raise ValueError(f"unknown GLM family {family!r}")
     df = df.dropna(subset=[outcome, *predictors])
@@ -35,7 +38,11 @@ def render_glm_deviance_residuals(
         ax = fig.gca()
         ax.scatter(fitted, resid, alpha=0.55, color="#4263eb", s=18)
         ax.axhline(0, color="#868e96", linestyle="--", linewidth=1)
+        dl = display_labels or {}
+        outcome_label = dl.get(outcome, outcome)
         ax.set_xlabel("Fitted values")
         ax.set_ylabel("Deviance residuals")
-        ax.set_title(f"{family} GLM — deviance residuals vs fitted")
+        ax.set_title(
+            f"{family} GLM ({outcome_label}) — deviance residuals vs fitted"
+        )
         return fig_to_data_uri(fig)

@@ -14,6 +14,7 @@ def render_km_curve(
     duration: str,
     event: str,
     groups: str | None = None,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Kaplan-Meier survival curves with optional grouping."""
     from lifelines import KaplanMeierFitter
@@ -52,7 +53,8 @@ def render_km_curve(
                 kmf.plot_survival_function(ax=ax, ci_show=True)
                 fitters.append(kmf)
 
-        ax.set_xlabel(duration)
+        dl = display_labels or {}
+        ax.set_xlabel(dl.get(duration, duration))
         ax.set_ylabel("Survival probability")
         ax.set_ylim(-0.02, 1.05)
         ax.set_title("Kaplan-Meier survival")

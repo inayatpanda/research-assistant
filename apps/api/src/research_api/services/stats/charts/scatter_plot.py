@@ -17,8 +17,13 @@ def render_scatter_plot(
     y: str,
     fit: str = "linear",  # 'linear' | 'lowess' | 'none'
     ci: int | None = 95,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Seaborn scatter + (optional) fit line + bootstrap CI band."""
+    """Seaborn scatter + (optional) fit line + bootstrap CI band.
+
+    ``display_labels`` (DEMO-FIX-C) overrides the axis text — typically a
+    ``{x_col: human, y_col: human}`` mapping.
+    """
     if x not in df.columns or y not in df.columns:
         raise ValueError(f"scatter plot requires {x!r} and {y!r} columns")
     sub = df[[x, y]].copy()
@@ -33,6 +38,10 @@ def render_scatter_plot(
     constant_x = bool(np.isclose(np.var(sub[x].to_numpy(dtype=float)), 0.0))
     if constant_x:
         fit = "none"
+
+    dl = display_labels or {}
+    x_label = dl.get(x, x)
+    y_label = dl.get(y, y)
 
     with fig_context() as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -59,6 +68,6 @@ def render_scatter_plot(
             )
         else:
             sns.scatterplot(data=sub, x=x, y=y, ax=ax, alpha=0.55, s=22)
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
         return fig_to_data_uri(fig)

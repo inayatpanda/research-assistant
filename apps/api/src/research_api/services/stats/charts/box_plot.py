@@ -16,9 +16,14 @@ def render_box_plot(
     outcome: str,
     groups: str,
     title: str | None = None,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Seaborn box+strip plot. One box per group on the categorical axis,
     outcome on the numeric axis.
+
+    ``display_labels`` (DEMO-FIX-C) overrides the axis text — typical usage
+    is ``{outcome_col: "VAS Pain at 6 months", groups_col: "BMI band"}``.
+    Falls back to the canonical column name when not provided.
     """
     if outcome not in df.columns or groups not in df.columns:
         raise ValueError(
@@ -35,6 +40,9 @@ def render_box_plot(
         )
 
     safe_title = html.escape(title) if title else None
+    dl = display_labels or {}
+    x_label = dl.get(groups, groups)
+    y_label = dl.get(outcome, outcome)
 
     with fig_context() as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -58,8 +66,8 @@ def render_box_plot(
             size=3,
             jitter=True,
         )
-        ax.set_xlabel(groups)
-        ax.set_ylabel(outcome)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
         if safe_title:
             ax.set_title(safe_title)
         return fig_to_data_uri(fig)

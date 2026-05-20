@@ -227,7 +227,14 @@ async def run_plan_route(
         )
         return AnalysisPlanRunRead.model_validate(run_row)
 
-    outcome = run_plan(steps=list(plan.steps or []), df=df)
+    # DEMO-FIX-C — Pass display labels to chart renderers.
+    variables = await ds_repo.list_variables(dataset.id, user_id)
+    display_labels = {v.name: (v.display_label or v.name) for v in variables}
+    outcome = run_plan(
+        steps=list(plan.steps or []),
+        df=df,
+        display_labels=display_labels,
+    )
     run_row = await repo.create_run(
         plan_id=plan_id,
         dataset_id=dataset.id,

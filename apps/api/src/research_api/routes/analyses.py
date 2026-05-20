@@ -19,6 +19,7 @@ from ..schemas.analysis import (
     AnalysisCreate,
     AnalysisRead,
     AnalysisResultRead,
+    ChartLabelOverrides,
     InterpretResponse,
     PushToManuscriptRequest,
     RecommendRequest,
@@ -413,6 +414,102 @@ async def delete_analysis(
     return None
 
 
+@router.patch(
+    "/projects/{project_id}/analyses/{analysis_id}/chart-labels",
+    response_model=AnalysisRead,
+)
+async def update_chart_labels(
+    project_id: str,
+    analysis_id: str,
+    body: ChartLabelOverrides,
+    container: Container = Depends(get_container),
+    session: AsyncSession = Depends(_session),
+    user_id: str = Depends(_user_id),
+) -> AnalysisRead:
+    """DEMO-FIX-C — Update per-chart label overrides + re-render the chart.
+
+    Stores the overrides on ``AnalysisResult.chart`` so subsequent reads
+    (and exports) see the updated labels. Persists immediately even when
+    the re-render fails (so the override is not lost).
+    """
+    repo = SqliteAnalysisRepository(session)
+    pair = await repo.get_with_dataset(analysis_id, user_id)
+    if pair is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis, dataset = pair
+    if analysis.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    result = await repo.get_result(analysis_id, user_id)
+    if result is None:
+        raise HTTPException(
+            status_code=422, detail="Analysis has no result; run it first"
+        )
+
+    # Merge the new overrides into the existing chart blob.
+    chart_blob = dict(result.chart or {})
+    if body.x_label_override is not None:
+        chart_blob["x_label_override"] = body.x_label_override
+    if body.y_label_override is not None:
+        chart_blob["y_label_override"] = body.y_label_override
+    if body.title_override is not None:
+        chart_blob["title_override"] = body.title_override
+    if body.legend_label_overrides is not None:
+        chart_blob["legend_label_overrides"] = body.legend_label_overrides
+
+    # Best-effort re-render with the new effective labels.
+    try:
+        from ..services.stats.charts import select_and_render
+        from ..services.stats.runner import merge_chart_overrides
+
+        ds_repo = SqliteDatasetRepository(session)
+        variables = await ds_repo.list_variables(dataset.id, user_id)
+        base_labels = {
+            v.name: (v.display_label or v.name) for v in variables
+        }
+        effective = merge_chart_overrides(
+            display_labels=base_labels,
+            chart_blob=chart_blob,
+            variables=dict(analysis.variables),
+        )
+        df = await _load_dataframe_with_transformations(
+            container, dataset, session, user_id
+        )
+        new_chart = select_and_render(
+            test_key=analysis.chosen_test,
+            df=df,
+            variables=dict(analysis.variables),
+            display_labels=effective,
+        )
+        if new_chart:
+            # Preserve overrides on top of the freshly-rendered chart.
+            chart_blob = {
+                **new_chart,
+                "x_label_override": chart_blob.get("x_label_override"),
+                "y_label_override": chart_blob.get("y_label_override"),
+                "title_override": chart_blob.get("title_override"),
+                "legend_label_overrides": chart_blob.get(
+                    "legend_label_overrides"
+                ),
+            }
+            # Apply title_override to the rendered chart shape (informational).
+            if chart_blob.get("title_override"):
+                chart_blob["title"] = chart_blob["title_override"]
+    except Exception as exc:  # noqa: BLE001
+        log.warning("chart re-render failed during label update: %s", exc)
+
+    await repo.update_result(
+        analysis_id=analysis_id,
+        summary=result.summary,
+        assumptions=result.assumptions,
+        chart=chart_blob,
+        user_id=user_id,
+    )
+    fresh = await repo.get(analysis_id, user_id)
+    new_result = await repo.get_result(analysis_id, user_id)
+    return _hydrate_analysis(fresh, new_result)  # type: ignore[arg-type]
+
+
 @router.post(
     "/projects/{project_id}/analyses/{analysis_id}/run",
     response_model=AnalysisRead,
@@ -444,10 +541,30 @@ async def run_analysis(
         log.warning("Failed to load dataset bytes: %s", exc)
         raise HTTPException(status_code=422, detail="Could not load dataset") from None
 
+    # DEMO-FIX-C — Build {canonical → display_label} mapping the runner can
+    # forward to chart renderers / AI prompts. Falls back to the canonical
+    # name when no override was set by the user. If the prior chart blob
+    # already carried per-chart overrides, layer them on top.
+    base_labels = {
+        v.name: (v.display_label or v.name) for v in variables
+    }
+    prior_result = await repo.get_result(analysis_id, user_id)
+    prior_chart = (prior_result.chart or {}) if prior_result else {}
+    from ..services.stats.runner import merge_chart_overrides
+
+    display_labels = merge_chart_overrides(
+        display_labels=base_labels,
+        chart_blob=prior_chart,
+        variables=dict(analysis.variables),
+    )
+
     try:
         await repo.update_status(analysis_id, "running", user_id)
         result_obj = runner_run(
-            test_key=analysis.chosen_test, df=df, variables=dict(analysis.variables)
+            test_key=analysis.chosen_test,
+            df=df,
+            variables=dict(analysis.variables),
+            display_labels=display_labels,
         )
     except ValueError as exc:
         await repo.update_status(analysis_id, "failed", user_id)
@@ -470,11 +587,24 @@ async def run_analysis(
         "extras": result_obj.extras,
     }
     assumptions = _compute_assumptions(df, dict(analysis.variables), analysis.chosen_test)
+    # DEMO-FIX-C — Preserve per-chart label overrides across re-runs.
+    chart_blob = dict(result_obj.chart or {}) if result_obj.chart else None
+    if chart_blob is not None and prior_chart:
+        for k in (
+            "x_label_override",
+            "y_label_override",
+            "title_override",
+            "legend_label_overrides",
+        ):
+            if k in prior_chart and prior_chart[k] is not None:
+                chart_blob[k] = prior_chart[k]
+        if chart_blob.get("title_override"):
+            chart_blob["title"] = chart_blob["title_override"]
     await repo.update_result(
         analysis_id=analysis_id,
         summary=summary,
         assumptions=assumptions,
-        chart=result_obj.chart,
+        chart=chart_blob,
         user_id=user_id,
     )
     await repo.update_status(analysis_id, "completed", user_id)
@@ -507,6 +637,14 @@ async def interpret_analysis(
     spec = CATALOGUE.get(analysis.chosen_test)
     test_label = spec.label if spec else analysis.chosen_test
     cite_token = f"[CITE_dataset_{analysis.dataset_id}]"
+    # DEMO-FIX-C — Build {canonical → display_label} so the AI prompt
+    # refers to "VAS Pain at 6 months (post-op)" instead of
+    # "vas_pain_6m_postop".
+    ds_repo = SqliteDatasetRepository(session)
+    ds_variables = await ds_repo.list_variables(analysis.dataset_id, user_id)
+    interp_display_labels = {
+        v.name: (v.display_label or v.name) for v in ds_variables
+    }
     try:
         prose = await container.ai.interpret_result(
             test_label=test_label,
@@ -514,6 +652,8 @@ async def interpret_analysis(
             summary=dict(result.summary),
             assumptions=dict(result.assumptions) if result.assumptions else None,
             cite_token=cite_token,
+            variables=dict(analysis.variables),
+            display_labels=interp_display_labels,
         )
     except (AIProviderUnavailable, AIRateLimited, AISourceInsufficient, AIError) as exc:
         raise _map_ai_error(exc) from None

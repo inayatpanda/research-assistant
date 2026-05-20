@@ -31,7 +31,12 @@ class PlanRunOutcome:
     error: str | None
 
 
-def run_plan(*, steps: list[dict[str, Any]], df: pd.DataFrame) -> PlanRunOutcome:
+def run_plan(
+    *,
+    steps: list[dict[str, Any]],
+    df: pd.DataFrame,
+    display_labels: dict[str, str] | None = None,
+) -> PlanRunOutcome:
     """Execute each step against ``df`` (or an evolving copy for transforms).
 
     Returns a PlanRunOutcome describing the whole run. Pure & sync — the
@@ -94,7 +99,10 @@ def run_plan(*, steps: list[dict[str, Any]], df: pd.DataFrame) -> PlanRunOutcome
                 if not isinstance(test_key, str):
                     raise ValueError("test step missing test_key")
                 result = runner_run(
-                    test_key=test_key, df=live, variables=dict(variables)
+                    test_key=test_key,
+                    df=live,
+                    variables=dict(variables),
+                    display_labels=display_labels,
                 )
                 out_steps.append({
                     "step_index": idx,

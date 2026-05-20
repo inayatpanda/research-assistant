@@ -15,6 +15,7 @@ def render_bootstrap_distribution(
     ci_low: float,
     ci_high: float,
     title: str = "Bootstrap distribution",
+    display_labels: dict[str, str] | None = None,  # accepted for signature parity
 ) -> dict[str, Any]:
     arr = np.asarray(list(distribution), dtype=float)
     with fig_context() as fig:

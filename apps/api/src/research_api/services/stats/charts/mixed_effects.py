@@ -21,6 +21,7 @@ def render_mixed_effects_caterpillar(
     outcome: str,
     predictors: list[str],
     cluster: str,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     formula = f"{outcome} ~ " + " + ".join(predictors)
     df = df.dropna(subset=[outcome, cluster, *predictors])
@@ -44,6 +45,8 @@ def render_mixed_effects_caterpillar(
         ax.axvline(0.0, color="#868e96", linestyle="--", linewidth=1)
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=8)
+        dl = display_labels or {}
+        cluster_label = dl.get(cluster, cluster)
         ax.set_xlabel("Random intercept (centered)")
-        ax.set_title(f"Caterpillar plot of {cluster}-level random effects")
+        ax.set_title(f"Caterpillar plot of {cluster_label}-level random effects")
         return fig_to_data_uri(fig)

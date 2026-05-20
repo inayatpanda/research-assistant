@@ -107,3 +107,17 @@ class InterpretResponse(BaseModel):
 
 class PushToManuscriptRequest(BaseModel):
     pass
+
+
+class ChartLabelOverrides(BaseModel):
+    """DEMO-FIX-C — Per-chart label overrides stored on AnalysisResult.chart.
+
+    Every field is optional; an empty/missing value means "use the dataset
+    display labels". When provided, these win over dataset display labels
+    AND canonical column names.
+    """
+
+    x_label_override: str | None = None
+    y_label_override: str | None = None
+    title_override: str | None = None
+    legend_label_overrides: dict[str, str] | None = None

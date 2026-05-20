@@ -52,12 +52,69 @@ def _two_groups(df: pd.DataFrame, outcome: str, groups: str) -> tuple[np.ndarray
     return a, b, [str(levels[0]), str(levels[1])]
 
 
+def merge_chart_overrides(
+    *,
+    display_labels: dict[str, str] | None,
+    chart_blob: dict[str, Any] | None,
+    variables: dict[str, Any] | None,
+) -> dict[str, str] | None:
+    """DEMO-FIX-C — Combine dataset display labels with any per-chart label
+    overrides stored on ``AnalysisResult.chart``.
+
+    Returns the effective ``display_labels`` mapping to pass to chart
+    renderers. Per-chart overrides win over dataset display labels. The
+    keys ``x_label_override`` and ``y_label_override`` are applied to the
+    canonical column names looked up from ``variables`` (``x`` /
+    ``y`` / ``outcome`` / ``groups`` / first predictor).
+    """
+    out: dict[str, str] = dict(display_labels or {})
+    if not chart_blob:
+        return out or None
+    vars_ = variables or {}
+
+    def _first_str(*keys: str) -> str | None:
+        for k in keys:
+            v = vars_.get(k)
+            if isinstance(v, str):
+                return v
+            if isinstance(v, list) and v and isinstance(v[0], str):
+                return v[0]
+        return None
+
+    x_override = chart_blob.get("x_label_override")
+    if isinstance(x_override, str) and x_override.strip():
+        # Most charts: x-axis is the categorical/groups column or the
+        # x-variable in scatter/regression; survival is the duration column.
+        x_col = _first_str("groups", "x", "within", "time")
+        if x_col:
+            out[x_col] = x_override
+    y_override = chart_blob.get("y_label_override")
+    if isinstance(y_override, str) and y_override.strip():
+        y_col = _first_str("outcome", "y")
+        if y_col:
+            out[y_col] = y_override
+    legend = chart_blob.get("legend_label_overrides")
+    if isinstance(legend, dict):
+        for k, v in legend.items():
+            if isinstance(k, str) and isinstance(v, str) and v.strip():
+                out[k] = v
+    return out or None
+
+
 def run(
     *,
     test_key: str,
     df: pd.DataFrame,
     variables: dict[str, Any],
+    display_labels: dict[str, str] | None = None,
 ) -> TestResult:
+    """Execute a stats test and render its chart.
+
+    DEMO-FIX-C — ``display_labels`` is forwarded to the chart renderer so
+    axes / titles / legends use human-readable labels rather than the
+    canonical snake_case column names. The runner still operates on the
+    canonical names; this is purely visual metadata.
+    """
     if test_key not in CATALOGUE:
         raise ValueError(f"unknown test_key: {test_key}")
     if not isinstance(variables, dict):
@@ -68,7 +125,12 @@ def run(
 
     handler = _DISPATCH[test_key]
     result = handler(df, variables)
-    chart = select_and_render(test_key=test_key, df=df, variables=variables)
+    chart = select_and_render(
+        test_key=test_key,
+        df=df,
+        variables=variables,
+        display_labels=display_labels,
+    )
     # Phase 13 — OLS diagnostic panels merged into chart for OLS-family tests.
     if test_key in {"linear_regression", "multiple_linear"}:
         panels = _ols_diagnostic_panels(df, variables)
@@ -77,7 +139,7 @@ def run(
             chart = {**chart, "panels": panels}
     # Phase 13 (MP13) — Charts that need the result's extras dict.
     if chart is None:
-        chart = _post_result_chart(test_key, df, variables, result)
+        chart = _post_result_chart(test_key, df, variables, result, display_labels)
     if chart is not None:
         result = replace(result, chart=chart)
     return result
@@ -88,6 +150,7 @@ def _post_result_chart(
     df: pd.DataFrame,
     variables: dict[str, Any],
     result: "TestResult",
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     """Build a chart that depends on `result.extras` (bootstrap, permutation,
     TOST, mixed-effects, GLM, GEE). Returns None on any failure."""
@@ -150,6 +213,7 @@ def _post_result_chart(
                 outcome=outcome,
                 predictors=list(predictors),
                 cluster=cluster,
+                display_labels=display_labels,
             )
         if test_key in {"glm_poisson", "glm_binomial", "glm_gamma", "gee"}:
             from research_api.services.stats.charts.glm_diagnostics import (
@@ -171,6 +235,7 @@ def _post_result_chart(
                 outcome=outcome,
                 predictors=list(predictors),
                 family=family_map[test_key],
+                display_labels=display_labels,
             )
     except Exception as exc:  # noqa: BLE001
         log.warning("post-result chart failed for %s: %s", test_key, exc)

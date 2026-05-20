@@ -15,6 +15,7 @@ def render_qq_plot(
     df: pd.DataFrame,
     column: str,
     title_suffix: str | None = None,
+    display_labels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Probability plot (Q-Q against normal). Theoretical quantiles vs sample."""
     if column not in df.columns:
@@ -34,8 +35,10 @@ def render_qq_plot(
             lines[0].set_markerfacecolor("#3b82f6")
             lines[0].set_markeredgecolor("#3b82f6")
             lines[1].set_color("#ef4444")
+        dl = display_labels or {}
+        col_label = dl.get(column, column)
         ax.set_xlabel("Theoretical quantiles")
-        ax.set_ylabel(f"Sample quantiles ({column})")
+        ax.set_ylabel(f"Sample quantiles ({col_label})")
         title = "Normal Q-Q plot"
         if safe_suffix:
             title = f"{title} — {safe_suffix}"

@@ -13,6 +13,7 @@ def render_permutation_distribution(
     null_distribution: Sequence[float],
     observed: float,
     title: str = "Permutation null distribution",
+    display_labels: dict[str, str] | None = None,  # accepted for signature parity
 ) -> dict[str, Any]:
     arr = np.asarray(list(null_distribution), dtype=float)
     with fig_context() as fig:

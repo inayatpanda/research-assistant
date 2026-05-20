@@ -17,6 +17,7 @@ def render_tost_bounds(
     n_a: int,
     n_b: int,
     title: str = "TOST equivalence bounds",
+    display_labels: dict[str, str] | None = None,  # accepted for signature parity
 ) -> dict[str, Any]:
     """Render the equivalence-bounds plot.
 
