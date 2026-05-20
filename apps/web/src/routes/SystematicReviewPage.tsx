@@ -115,7 +115,7 @@ function ReviewInner({ projectId }: { projectId: string }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-7xl mx-auto px-8 py-10 space-y-6"
+      className="max-w-screen-2xl mx-auto px-8 py-10 space-y-6"
     >
       <header>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">

@@ -133,4 +133,15 @@ describe('OutputViewer', () => {
     // pinned 'a-old' should now appear first
     expect(rows[0].getAttribute('data-testid')).toBe('output-row-a-old')
   })
+
+  it('renders the analysis list as a responsive grid (2-col at 2xl)', () => {
+    // Big-screen layout fix — the accumulator switches from a single column
+    // to a 2-column grid on ultra-wide displays.
+    const a = [makeAnalysis('a-1', '2026-05-18T00:00:00Z')]
+    wrap(<OutputViewer projectId="p-1" dataset={DATASET} analyses={a} />)
+    const list = screen.getByTestId('output-viewer-list')
+    expect(list.className).toContain('grid')
+    expect(list.className).toContain('grid-cols-1')
+    expect(list.className).toContain('2xl:grid-cols-2')
+  })
 })

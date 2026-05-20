@@ -70,8 +70,11 @@ export function ManuscriptEditor({
       },
       editorProps: {
         attributes: {
+          // Keep the prose column capped at ~3xl (768px) for legibility even
+          // when the surrounding pane fills a 27" display. The pane chrome
+          // (toolbar, word count) still spans full width.
           class:
-            'prose prose-zinc max-w-none focus:outline-none px-10 py-12 font-serif text-[16px] leading-[28px] min-h-[480px]',
+            'prose prose-zinc max-w-3xl mx-auto focus:outline-none px-10 py-12 font-serif text-[16px] leading-[28px] min-h-[480px]',
           spellcheck: 'true',
         },
       },

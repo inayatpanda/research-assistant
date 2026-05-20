@@ -92,7 +92,7 @@ function StatisticsInner({ projectId }: { projectId: string }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-7xl mx-auto px-8 py-10 space-y-6"
+      className="max-w-screen-2xl mx-auto px-8 py-10 space-y-6"
     >
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">

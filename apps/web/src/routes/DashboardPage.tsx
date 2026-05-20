@@ -20,7 +20,7 @@ export default function DashboardPage() {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-6xl mx-auto px-8 py-10"
+      className="max-w-screen-2xl mx-auto px-8 py-10"
     >
       <div className="flex items-center justify-between">
         <div>
@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
       <div className="mt-8">
         {isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4xl:grid-cols-4 gap-4">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-[112px] rounded-lg" />
             ))}
@@ -53,7 +53,7 @@ export default function DashboardPage() {
           </div>
         )}
         {data && data.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 4xl:grid-cols-4 gap-4">
             {data.map((p, i) => (
               <ProjectCard key={p.id} project={p} index={i} />
             ))}

@@ -15,7 +15,7 @@ export default function SubmissionPage() {
   const projectId = useProjectId()
 
   return (
-    <div className="space-y-6 p-6 max-w-5xl">
+    <div className="space-y-6 p-6 max-w-screen-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Submission</h1>

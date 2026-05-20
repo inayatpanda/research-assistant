@@ -84,7 +84,7 @@ function ConsortInner({ projectId }: { projectId: string }) {
   const fields = useMemo(() => NUM_FIELDS, [])
 
   return (
-    <div className="px-6 py-6 max-w-[1200px] mx-auto">
+    <div className="px-6 py-6 max-w-screen-2xl mx-auto">
       <header className="flex items-center justify-between mb-4">
         <div>
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">

@@ -159,7 +159,7 @@ export default function ProjectHomePage() {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-6xl mx-auto px-8 py-10 space-y-8"
+      className="max-w-screen-2xl mx-auto px-8 py-10 space-y-8"
     >
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -195,7 +195,7 @@ export default function ProjectHomePage() {
       </header>
 
       <section>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 3xl:grid-cols-6 gap-3">
           {MODULES.map((m) => (
             <Link
               key={m.to}

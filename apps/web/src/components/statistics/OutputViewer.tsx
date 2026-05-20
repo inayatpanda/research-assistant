@@ -22,9 +22,9 @@ import {
 } from '@dnd-kit/core'
 import {
   SortableContext,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
@@ -206,11 +206,17 @@ export function OutputViewer({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={orderedIds}
-          strategy={verticalListSortingStrategy}
-        >
-          <ul className="space-y-3" data-testid="output-viewer-list">
+        <SortableContext items={orderedIds} strategy={rectSortingStrategy}>
+          {/*
+            On standard displays the cards stay in a single column for full
+            readability of the analysis results. From `2xl` (1536px) onwards
+            we use a 2-column grid so the right half of the workspace isn't
+            wasted whitespace on big monitors.
+          */}
+          <ul
+            className="grid gap-3 grid-cols-1 2xl:grid-cols-2 auto-rows-min"
+            data-testid="output-viewer-list"
+          >
             {ordered.map((a) => (
               <SortableRow
                 key={a.id}

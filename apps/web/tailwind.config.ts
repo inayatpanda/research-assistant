@@ -9,6 +9,20 @@ export default {
       padding: '2rem',
       screens: { '2xl': '1400px' },
     },
+    // Custom breakpoints for ultra-wide displays. Tailwind's defaults stop
+    // at `2xl` (1536px). On 27" iMacs and bigger we want to opt into extra
+    // grid columns and a wider rail on the manuscript page.
+    //   3xl — 1700px: manuscript right-rail goes 2-col
+    //   4xl — 1920px: dashboards / library / checklists go 3-col grids
+    screens: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+      '3xl': '1700px',
+      '4xl': '1920px',
+    },
     extend: {
       colors: {
         border: 'hsl(var(--border))',

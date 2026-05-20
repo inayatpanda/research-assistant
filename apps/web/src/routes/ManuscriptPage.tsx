@@ -274,22 +274,33 @@ function ManuscriptInner({
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={30} minSize={20} className="hidden xl:block">
-          <aside className="flex h-full flex-col border-l border-border bg-zinc-50 p-4 space-y-3 overflow-y-auto">
-            <FiguresPanel projectId={projectId} editor={editor} />
-            <BibliographyPanel projectId={projectId} />
-            <ReferenceIntegrityPanel projectId={projectId} />
-            <AbbreviationsPanel projectId={projectId} />
-            <VersionPanel projectId={projectId} />
-            <SubmissionPackageDialog projectId={projectId} />
-            {!isFinal && !isFrontMatter ? (
-              <CommentsRail
-                projectId={projectId}
-                activeSection={tab as CommentSection}
-                editor={editor}
-              />
-            ) : (
-              <CommentsRail projectId={projectId} />
-            )}
+          <aside
+            className="flex h-full flex-col border-l border-border bg-zinc-50 p-4 overflow-y-auto"
+            data-testid="manuscript-right-rail"
+          >
+            {/*
+              Rail panels stack in a single column on standard laptop widths
+              (1280–1700px). On `3xl` (≥1700px) the rail is wide enough to
+              comfortably split into a 2-column grid so the user can see
+              Figures, Bibliography, Versions and Comments without scrolling.
+            */}
+            <div className="grid grid-cols-1 3xl:grid-cols-2 gap-3 auto-rows-min">
+              <FiguresPanel projectId={projectId} editor={editor} />
+              <BibliographyPanel projectId={projectId} />
+              <ReferenceIntegrityPanel projectId={projectId} />
+              <AbbreviationsPanel projectId={projectId} />
+              <VersionPanel projectId={projectId} />
+              <SubmissionPackageDialog projectId={projectId} />
+              {!isFinal && !isFrontMatter ? (
+                <CommentsRail
+                  projectId={projectId}
+                  activeSection={tab as CommentSection}
+                  editor={editor}
+                />
+              ) : (
+                <CommentsRail projectId={projectId} />
+              )}
+            </div>
           </aside>
         </ResizablePanel>
       </ResizablePanelGroup>

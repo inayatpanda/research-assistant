@@ -79,7 +79,7 @@ export default function LibraryPage() {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-6xl mx-auto px-8 py-10 space-y-8"
+      className="max-w-screen-2xl mx-auto px-8 py-10 space-y-8"
     >
       <header className="flex items-center justify-between gap-4">
         <div>
@@ -138,7 +138,10 @@ export default function LibraryPage() {
         )}
 
         {!isLoading && articles.length > 0 && (
-          <div className="space-y-2">
+          <div
+            className="grid gap-2 grid-cols-1 2xl:grid-cols-2 4xl:grid-cols-3"
+            data-testid="library-article-grid"
+          >
             {articles.map((a, i) => (
               <ArticleListItem
                 key={a.id}
