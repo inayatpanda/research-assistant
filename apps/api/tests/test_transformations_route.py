@@ -208,3 +208,45 @@ async def test_transformations_applied_on_analysis_run(client):
     # n should reflect the filtered row count.
     summary = r.json()["result"]["summary"]
     assert summary["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_filter_expr_shape_round_trip_through_analysis_run(client):
+    """DEMO-FIX-D HIGH-2 — UI persists ``{expr: "g == 'a'"}``; runner must
+    apply it (not 422 with "invalid column name None") end-to-end."""
+    pid, did = await _project_dataset(client)
+    ds_full = (
+        await client.get(f"/api/projects/{pid}/datasets/{did}")
+    ).json()
+    by_name = {v["name"]: v["id"] for v in ds_full["variables"]}
+    await client.patch(
+        f"/api/projects/{pid}/datasets/{did}/variables/{by_name['y']}",
+        json={"user_type": "numeric"},
+    )
+    await client.patch(
+        f"/api/projects/{pid}/datasets/{did}/variables/{by_name['x']}",
+        json={"user_type": "numeric"},
+    )
+
+    # Persist the new shape: a single ``expr`` field, no column/op/value.
+    r = await client.post(
+        f"/api/projects/{pid}/datasets/{did}/transformations",
+        json={"op_type": "filter", "op_args": {"expr": "g == 'a'"}},
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.post(
+        f"/api/projects/{pid}/datasets/{did}/analyses",
+        json={
+            "question_type": "association",
+            "chosen_test": "pearson",
+            "variables": {"x": "x", "y": "y"},
+        },
+    )
+    assert r.status_code == 201, r.text
+    aid = r.json()["id"]
+    r = await client.post(f"/api/projects/{pid}/analyses/{aid}/run")
+    assert r.status_code == 200, r.text
+    summary = r.json()["result"]["summary"]
+    # Filter kept 3 rows where g == 'a'.
+    assert summary["n"] == 3

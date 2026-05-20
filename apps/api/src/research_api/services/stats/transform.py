@@ -66,6 +66,16 @@ def _require_columns(df: pd.DataFrame, names: list[str]) -> None:
 
 
 def _filter(df: pd.DataFrame, args: dict[str, Any]) -> pd.DataFrame:
+    # DEMO-FIX-D HIGH-2 — accept two shapes:
+    #   (a) legacy structured form: {column, op, value}
+    #   (b) new expression form:    {expr: "<column> <op> <literal>"}
+    # The expression form is what the live "Filter rows" dialog persists.
+    # Before this fix, _filter blew up with "invalid column name None" any
+    # time a filter persisted only an ``expr`` field.
+    expr = args.get("expr") if isinstance(args, dict) else None
+    if isinstance(expr, str) and expr.strip():
+        return _filter_by_expression(df, expr.strip())
+
     col = _check_column(args.get("column"))
     op_name = args.get("op")
     value = args.get("value")
@@ -98,6 +108,66 @@ def _filter(df: pd.DataFrame, args: dict[str, Any]) -> pd.DataFrame:
     else:
         raise TransformError(f"unknown filter op: {op_name!r}")
     return df.loc[mask].reset_index(drop=True)
+
+
+_QUERY_KEYWORDS = {
+    "and",
+    "or",
+    "not",
+    "in",
+    "True",
+    "False",
+    "None",
+}
+
+
+def _filter_by_expression(df: pd.DataFrame, expr: str) -> pd.DataFrame:
+    """Evaluate a pandas-query filter expression safely.
+
+    The expression form lets the live UI persist a single string like
+    ``"bmi_group == 'high_bmi'"`` or ``"a > 3 and g == 'x'"``. We forward to
+    ``df.query`` (which uses numexpr/python eval under the hood) but FIRST
+    whitelist every identifier in the expression against the dataframe's
+    columns + a tiny set of pandas-query keywords. That blocks identifier-
+    based exfiltration (``__builtins__``, attribute access, function calls)
+    BEFORE the string ever reaches the evaluator.
+
+    Same whitelist pattern as the analysis runner uses for formula columns.
+    """
+    import tokenize
+    from io import BytesIO
+
+    if not expr:
+        raise TransformError("filter 'expr' must be a non-empty string")
+
+    # Forbid attribute access / call-like syntax outright — query expressions
+    # never need them and they widen the attack surface.
+    forbidden = {".", "(", ")", "[", "]", ";", ":"}
+    for ch in forbidden:
+        if ch in expr:
+            raise TransformError(
+                f"filter expression contains forbidden character {ch!r}"
+            )
+
+    allowed = set(df.columns) | _QUERY_KEYWORDS
+    try:
+        tokens = list(tokenize.tokenize(BytesIO(expr.encode("utf-8")).readline))
+    except tokenize.TokenizeError as exc:
+        raise TransformError(f"invalid filter expression: {exc!s}") from None
+    for tok in tokens:
+        if tok.type == tokenize.NAME and tok.string not in allowed:
+            raise TransformError(
+                f"filter expression references unknown identifier "
+                f"{tok.string!r}; whitelisted columns: {sorted(df.columns)}"
+            )
+
+    try:
+        result = df.query(expr, engine="python")
+    except Exception as exc:
+        raise TransformError(
+            f"could not evaluate filter expression {expr!r}: {exc!s}"
+        ) from None
+    return result.reset_index(drop=True)
 
 
 def _mutate(df: pd.DataFrame, args: dict[str, Any]) -> pd.DataFrame:

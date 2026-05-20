@@ -73,7 +73,49 @@ def test_filter_does_not_mutate_input():
     assert df.shape[0] == 5
 
 
-# ── mutate ─────────────────────────────────────────────────────────────
+# ── filter (expression shape, DEMO-FIX-D HIGH-2) ───────────────────────
+
+
+def test_filter_expr_string_equality():
+    """The new UI persists ``{expr: "g == 'x'"}`` — _filter must accept it."""
+    out = apply_op(_df(), "filter", {"expr": "g == 'x'"})
+    assert list(out["a"]) == [1.0, 2.0]
+
+
+def test_filter_expr_numeric_comparison():
+    out = apply_op(_df(), "filter", {"expr": "a > 3"})
+    assert list(out["a"]) == [4.0, 5.0]
+
+
+def test_filter_expr_compound_boolean():
+    out = apply_op(_df(), "filter", {"expr": "a > 1 and g == 'x'"})
+    assert list(out["a"]) == [2.0]
+
+
+def test_filter_expr_unknown_column_rejected():
+    with pytest.raises(TransformError):
+        apply_op(_df(), "filter", {"expr": "no_such_col == 1"})
+
+
+def test_filter_expr_forbids_attribute_access():
+    """Whitelisting must reject ``.`` to block ``__builtins__`` style access."""
+    with pytest.raises(TransformError):
+        apply_op(_df(), "filter", {"expr": "a.__class__ == 'int'"})
+
+
+def test_filter_expr_forbids_parentheses_call_syntax():
+    """No call-like syntax — closes another exfiltration vector."""
+    with pytest.raises(TransformError):
+        apply_op(_df(), "filter", {"expr": "len(a) > 0"})
+
+
+def test_filter_expr_list_literal_rejected():
+    """List literals require ``[`` / ``]`` which we forbid — caller should
+    fall back to the structured ``{column, op: in, value: [...]}`` shape.
+    """
+    with pytest.raises(TransformError):
+        apply_op(_df(), "filter", {"expr": "g in ['y', 'z']"})
+
 
 
 def test_mutate_simple_column_copy():
