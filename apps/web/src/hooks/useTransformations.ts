@@ -21,6 +21,14 @@ export function useTransformations(
     queryKey: ['transformations', projectId, datasetId],
     queryFn: () => transformationsApi.list(projectId!, datasetId!),
     enabled: !!projectId && !!datasetId,
+    // DEMO-FIX-D MEDIUM-1 — the transformation stack can be mutated from
+    // multiple surfaces (DataView quick-actions, op-stack panel, runner
+    // applies-and-saves). Refetch aggressively so the panel never shows a
+    // stale stack: poll every 30s while mounted, and always re-pull when
+    // the window regains focus (even if the cached data is still "fresh"
+    // from react-query's POV).
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 30000,
   })
 }
 
