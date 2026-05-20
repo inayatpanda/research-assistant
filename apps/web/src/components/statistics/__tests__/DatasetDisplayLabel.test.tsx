@@ -16,7 +16,7 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Dataset } from '@/lib/api'
 
@@ -123,11 +123,7 @@ afterEach(() => {
 describe('DatasetDetail — display labels (DEMO-FIX-C)', () => {
   it('shows the sanitisation banner when header_sanitisation_report is non-empty', () => {
     const { getByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-1"
-        onNewAnalysis={() => {}}
-      />,
+      <DatasetDetail projectId="p-1" datasetId="ds-1" />,
     )
     const banner = getByTestId('header-sanitisation-banner')
     expect(banner.textContent ?? '').toMatch(/2 column headers/i)
@@ -135,11 +131,7 @@ describe('DatasetDetail — display labels (DEMO-FIX-C)', () => {
 
   it('renders the canonical name + display label side-by-side', () => {
     const { getByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-1"
-        onNewAnalysis={() => {}}
-      />,
+      <DatasetDetail projectId="p-1" datasetId="ds-1" />,
     )
     // Canonical name appears verbatim.
     const row1 = getByTestId('variable-row-v-1')
@@ -150,11 +142,7 @@ describe('DatasetDetail — display labels (DEMO-FIX-C)', () => {
 
   it('click-to-edit a label and blur fires the PATCH mutation', async () => {
     const { getByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-1"
-        onNewAnalysis={() => {}}
-      />,
+      <DatasetDetail projectId="p-1" datasetId="ds-1" />,
     )
     fireEvent.click(getByTestId('variable-label-v-2'))
     const input = getByTestId('variable-label-input-v-2') as HTMLInputElement

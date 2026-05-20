@@ -13,15 +13,11 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from '@/components/ui/resizable'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -34,11 +30,12 @@ import { AnalysisPlanBuilder } from '@/components/statistics/AnalysisPlanBuilder
 import { AnalysisPlanRunner } from '@/components/statistics/AnalysisPlanRunner'
 import { CrossDatasetDialog } from '@/components/statistics/CrossDatasetDialog'
 import { DatasetDetail } from '@/components/statistics/DatasetDetail'
-import { DatasetList } from '@/components/statistics/DatasetList'
+import { DatasetToolbar } from '@/components/statistics/DatasetToolbar'
 import { DatasetUpload } from '@/components/statistics/DatasetUpload'
 import { NewAnalysisWizard } from '@/components/statistics/NewAnalysisWizard'
 import { OutputViewer } from '@/components/statistics/OutputViewer'
 import { PowerCalculatorDialog } from '@/components/statistics/PowerCalculator'
+import { PSMWizard } from '@/components/statistics/PSMWizard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type Dataset, projectsApi, statsReportApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -59,6 +56,8 @@ function StatisticsInner({ projectId }: { projectId: string }) {
   const [powerOpen, setPowerOpen] = useState(false)
   const [crossOpen, setCrossOpen] = useState(false)
   const [plansOpen, setPlansOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [psmOpen, setPsmOpen] = useState(false)
   const [reportPending, setReportPending] = useState(false)
 
   const { data: project } = useQuery({
@@ -78,6 +77,8 @@ function StatisticsInner({ projectId }: { projectId: string }) {
   }, [datasets, datasetParam, params, setParams])
 
   const activeDatasetId = datasetParam ?? datasets[0]?.id ?? null
+  const activeDataset =
+    datasets.find((d) => d.id === activeDatasetId) ?? null
 
   function selectDataset(id: string) {
     const next = new URLSearchParams(params)
@@ -91,7 +92,7 @@ function StatisticsInner({ projectId }: { projectId: string }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-7xl mx-auto px-8 py-10 space-y-8"
+      className="max-w-7xl mx-auto px-8 py-10 space-y-6"
     >
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -144,78 +145,38 @@ function StatisticsInner({ projectId }: { projectId: string }) {
       </header>
 
       <div
-        className="hidden lg:block min-h-[60vh]"
-        data-testid="statistics-resizable-shell"
+        className="space-y-6 min-h-[60vh]"
+        data-testid="statistics-page-shell"
       >
-        <ResizablePanelGroup
-          direction="horizontal"
-          autoSaveId="divider-widths-statistics"
-        >
-          <ResizablePanel defaultSize={28} minSize={18} maxSize={45}>
-            <aside className="pr-4 space-y-4 h-full overflow-y-auto">
-              <DatasetUpload projectId={projectId} compact />
-              {isLoading ? (
-                <div className="space-y-2">
-                  {[0, 1].map((i) => (
-                    <Skeleton key={i} className="h-[68px] rounded-lg" />
-                  ))}
-                </div>
-              ) : (
-                <DatasetList
-                  projectId={projectId}
-                  activeId={activeDatasetId}
-                  onSelect={selectDataset}
-                />
-              )}
-            </aside>
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={72} minSize={55}>
-            <section className="pl-4 space-y-6 h-full overflow-y-auto">
-              {activeDatasetId ? (
-                <ActiveDatasetPanel
-                  projectId={projectId}
-                  datasetId={activeDatasetId}
-                  onNewAnalysis={(d) => {
-                    setWizardDataset(d)
-                    setWizardOpen(true)
-                  }}
-                />
-              ) : (
-                <EmptyHero />
-              )}
-            </section>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-[68px] rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <DatasetToolbar
+            datasets={datasets}
+            activeDatasetId={activeDatasetId}
+            onSelect={selectDataset}
+            onUpload={() => setUploadOpen(true)}
+            onNewAnalysis={() => {
+              if (!activeDataset) return
+              setWizardDataset(activeDataset)
+              setWizardOpen(true)
+            }}
+            onPsm={() => {
+              if (!activeDataset) return
+              setPsmOpen(true)
+            }}
+          />
+        )}
 
-      {/* Below-lg fallback: stack vertically (no resizing on small screens) */}
-      <div className="lg:hidden space-y-6">
-        <aside className="space-y-4">
-          <DatasetUpload projectId={projectId} compact />
-          {isLoading ? (
-            <div className="space-y-2">
-              {[0, 1].map((i) => (
-                <Skeleton key={i} className="h-[68px] rounded-lg" />
-              ))}
-            </div>
-          ) : (
-            <DatasetList
-              projectId={projectId}
-              activeId={activeDatasetId}
-              onSelect={selectDataset}
-            />
-          )}
-        </aside>
         <section className="space-y-6">
           {activeDatasetId ? (
             <ActiveDatasetPanel
               projectId={projectId}
               datasetId={activeDatasetId}
-              onNewAnalysis={(d) => {
-                setWizardDataset(d)
-                setWizardOpen(true)
-              }}
             />
           ) : (
             <EmptyHero />
@@ -229,6 +190,30 @@ function StatisticsInner({ projectId }: { projectId: string }) {
         projectId={projectId}
         dataset={wizardDataset}
       />
+
+      {activeDataset && (
+        <PSMWizard
+          open={psmOpen}
+          onOpenChange={setPsmOpen}
+          projectId={projectId}
+          dataset={activeDataset}
+        />
+      )}
+
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="max-w-xl" data-testid="upload-dataset-dialog">
+          <DialogHeader>
+            <DialogTitle>Upload masterchart</DialogTitle>
+            <DialogDescription>
+              CSV or XLSX. Multi-sheet workbooks become one dataset per sheet.
+            </DialogDescription>
+          </DialogHeader>
+          <DatasetUpload
+            projectId={projectId}
+            onUploaded={() => setUploadOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <PowerCalculatorDialog open={powerOpen} onOpenChange={setPowerOpen} />
       <CrossDatasetDialog
@@ -256,22 +241,16 @@ function StatisticsInner({ projectId }: { projectId: string }) {
 function ActiveDatasetPanel({
   projectId,
   datasetId,
-  onNewAnalysis,
 }: {
   projectId: string
   datasetId: string
-  onNewAnalysis: (dataset: Dataset) => void
 }) {
   const { data: dataset } = useDataset(projectId, datasetId)
   const { data: analyses = [] } = useAnalysesForDataset(projectId, datasetId)
 
   return (
     <div className="space-y-6">
-      <DatasetDetail
-        projectId={projectId}
-        datasetId={datasetId}
-        onNewAnalysis={onNewAnalysis}
-      />
+      <DatasetDetail projectId={projectId} datasetId={datasetId} />
 
       {dataset && (
         <OutputViewer

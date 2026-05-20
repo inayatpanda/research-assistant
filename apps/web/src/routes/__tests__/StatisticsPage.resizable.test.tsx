@@ -1,13 +1,13 @@
 /**
- * DEMO-FIX-B — Vitest for the Statistics page resizable shell.
+ * Statistics layout refactor — Vitest for the StatisticsPage shell after the
+ * left/right rails were collapsed into a full-width dataset view with a
+ * horizontal data toolbar.
  *
- * Mounts the StatisticsPage with a fully mocked API surface and verifies:
- *   1. The `ResizablePanelGroup` renders on lg+ viewports with the correct
- *      `autoSaveId`, so the library will persist widths to localStorage.
- *   2. A visible `withHandle` drag handle is present (the GripVertical SVG
- *      lives inside the handle wrapper).
- *   3. The full-width toolbar renders with all four tool buttons when the
- *      viewport is wide enough.
+ * Verifies:
+ *   1. The page shell wrapper renders (without a ResizablePanelGroup).
+ *   2. The new horizontal DatasetToolbar mounts with Upload / PSM / New analysis.
+ *   3. The page-level toolbar still surfaces all four project-scoped tools.
+ *   4. The full-width tab strip from DatasetDetail is reachable.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render } from '@testing-library/react'
@@ -99,14 +99,15 @@ vi.mock('@/hooks/useTransformations', async (importOriginal) => {
   }
 })
 
-// react-resizable-panels uses ResizeObserver, which jsdom doesn't ship.
+// jsdom doesn't ship ResizeObserver; some libs (recharts, radix popovers used
+// by Select) probe for it during render.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
   disconnect() {}
 }
-;(globalThis as { ResizeObserver?: typeof ResizeObserverStub }).ResizeObserver =
-  ResizeObserverStub
+;(globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub })
+  .ResizeObserver = ResizeObserverStub
 
 import StatisticsPage from '../StatisticsPage'
 
@@ -132,40 +133,35 @@ function wrap() {
 
 afterEach(cleanup)
 
-describe('StatisticsPage — resizable shell (DEMO-FIX-B)', () => {
-  it('mounts the page wrapper with the resizable shell', () => {
+describe('StatisticsPage — full-width layout', () => {
+  it('mounts the page shell without a ResizablePanelGroup', () => {
+    const { getByTestId, container } = wrap()
+    expect(getByTestId('statistics-page-shell')).toBeDefined()
+    // The old left/right rail group should no longer be present.
+    expect(container.querySelector('[data-panel-group-id]')).toBeNull()
+    expect(
+      container.querySelector('[data-panel-resize-handle-id]'),
+    ).toBeNull()
+  })
+
+  it('renders the horizontal dataset toolbar with Upload, PSM and New analysis', () => {
     const { getByTestId } = wrap()
-    const shell = getByTestId('statistics-resizable-shell')
-    // Just confirm the shell mounted; react-resizable-panels' internals
-    // create elements lazily and the data-panel-group attr may live deeper.
-    expect(shell).toBeDefined()
+    expect(getByTestId('dataset-toolbar')).toBeDefined()
+    expect(getByTestId('dataset-toolbar-upload')).toBeDefined()
+    expect(getByTestId('dataset-toolbar-psm')).toBeDefined()
+    expect(getByTestId('dataset-toolbar-new-analysis')).toBeDefined()
   })
 
-  it('renders panel handles inside the shell', () => {
-    const { container } = wrap()
-    const handles = container.querySelectorAll('[data-panel-resize-handle-id]')
-    expect(handles.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('uses the statistics-specific autoSaveId for divider widths', () => {
-    const { container } = wrap()
-    const group = container.querySelector(
-      '[data-panel-group-id]',
-    ) as HTMLElement | null
-    expect(group).not.toBeNull()
-    // The library exposes the autoSaveId via the data-panel-group-id attribute
-    // OR keeps it internal. We accept either: search the HTML for the key.
-    const html = container.innerHTML
-    expect(html.includes('divider-widths-statistics') || group !== null).toBe(
-      true,
-    )
-  })
-
-  it('shows all four tool buttons in the full-width toolbar', () => {
+  it('shows all four project-scoped tool buttons in the page toolbar', () => {
     const { getByTestId } = wrap()
     expect(getByTestId('open-cross-dataset')).toBeDefined()
     expect(getByTestId('open-power-calculator')).toBeDefined()
     expect(getByTestId('open-analysis-plans')).toBeDefined()
     expect(getByTestId('export-stats-report')).toBeDefined()
+  })
+
+  it('mounts the full-width DatasetDetail tab strip below the toolbar', () => {
+    const { getByTestId } = wrap()
+    expect(getByTestId('dataset-detail-tabs')).toBeDefined()
   })
 })

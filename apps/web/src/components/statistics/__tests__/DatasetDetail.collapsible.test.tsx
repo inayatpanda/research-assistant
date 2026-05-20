@@ -1,11 +1,14 @@
 /**
- * DEMO-FIX-B — Vitest for the collapsible right-rail blocks (Transformations,
- * Show syntax) on DatasetDetail. Verifies:
- *   1. Both blocks render expanded by default.
- *   2. Clicking the chevron toggle hides the body.
- *   3. Collapsed state is persisted under
- *      `dataset-<id>-blocks-collapsed` in localStorage.
- *   4. State is per-dataset (different datasetId → independent storage).
+ * Statistics layout refactor — Vitest for the new tab-based DatasetDetail.
+ *
+ * The previous demo-fix-B placed Transformations and Syntax in a collapsible
+ * right rail. After the layout refactor those blocks live as dedicated tabs
+ * alongside Variables / Data view / Plots / Diagnostics. The right rail and
+ * its localStorage-backed collapse state are gone. These tests verify:
+ *   1. All six tabs render in the tab strip.
+ *   2. Variables tab is active on initial render (content visible by default).
+ *   3. Clicking the Transformations tab switches the active panel.
+ *   4. Clicking the Syntax tab mounts the syntax renderer.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render } from '@testing-library/react'
@@ -15,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Dataset } from '@/lib/api'
 
 // vitest 4 + jsdom 29 don't ship a working localStorage by default. Provide a
-// minimal in-memory shim so the persistence assertions below run.
+// minimal in-memory shim so anything reading localStorage doesn't throw.
 function installLocalStorageShim() {
   const store = new Map<string, string>()
   const shim: Storage = {
@@ -37,7 +40,6 @@ function installLocalStorageShim() {
     configurable: true,
     writable: true,
   })
-  // Also expose on globalThis so bare `localStorage` references resolve.
   Object.defineProperty(globalThis, 'localStorage', {
     value: shim,
     configurable: true,
@@ -122,57 +124,54 @@ beforeEach(() => {
   try {
     window.localStorage.clear()
   } catch {
-    /* jsdom localStorage is always available */
+    /* shim cleared above; ignore */
   }
 })
 afterEach(cleanup)
 
-describe('DatasetDetail — collapsible blocks (DEMO-FIX-B)', () => {
-  it('renders both collapsible sections expanded by default', () => {
+describe('DatasetDetail — tabbed layout', () => {
+  it('renders the six tabs in the dataset tab strip', () => {
+    const { getByTestId, getByRole } = wrap(
+      <DatasetDetail projectId="p-1" datasetId="ds-A" />,
+    )
+    const tabs = getByTestId('dataset-detail-tabs')
+    expect(tabs).toBeDefined()
+    // All six tabs are reachable by accessible name.
+    for (const label of [
+      'Variables',
+      'Data view',
+      'Plots',
+      'Diagnostics',
+      'Transformations',
+      'Syntax',
+    ]) {
+      expect(getByRole('tab', { name: new RegExp(label, 'i') })).toBeDefined()
+    }
+  })
+
+  it('defaults to the Variables tab on initial mount', () => {
     const { getByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-A"
-        onNewAnalysis={() => {}}
-      />,
+      <DatasetDetail projectId="p-1" datasetId="ds-A" />,
     )
-    expect(getByTestId('collapsible-transformations')).toBeDefined()
-    expect(getByTestId('collapsible-syntax')).toBeDefined()
-    // Bodies render while expanded.
-    expect(getByTestId('collapsible-body-transformations')).toBeDefined()
-    expect(getByTestId('collapsible-body-syntax')).toBeDefined()
+    // Variables panel is mounted by default.
+    expect(getByTestId('dataset-detail-panel-variables')).toBeDefined()
   })
 
-  it('clicking the Transformations toggle hides the body and persists state', () => {
+  it('switches to the Transformations tab when clicked', () => {
     const { getByTestId, queryByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-A"
-        onNewAnalysis={() => {}}
-      />,
+      <DatasetDetail projectId="p-1" datasetId="ds-A" />,
     )
-    const toggle = getByTestId('collapsible-toggle-transformations')
-    fireEvent.click(toggle)
-    expect(queryByTestId('collapsible-body-transformations')).toBeNull()
-    // localStorage now reflects the collapsed flag.
-    const raw = window.localStorage.getItem('dataset-ds-A-blocks-collapsed')
-    expect(raw).not.toBeNull()
-    expect(JSON.parse(raw!)).toMatchObject({ transformations: true })
+    fireEvent.click(getByTestId('tab-transformations'))
+    expect(getByTestId('dataset-detail-panel-transformations')).toBeDefined()
+    // Variables panel is no longer mounted.
+    expect(queryByTestId('dataset-detail-panel-variables')).toBeNull()
   })
 
-  it('restores collapsed state from localStorage on mount', () => {
-    window.localStorage.setItem(
-      'dataset-ds-A-blocks-collapsed',
-      JSON.stringify({ transformations: true, syntax: true }),
+  it('switches to the Syntax tab when clicked', () => {
+    const { getByTestId } = wrap(
+      <DatasetDetail projectId="p-1" datasetId="ds-A" />,
     )
-    const { queryByTestId } = wrap(
-      <DatasetDetail
-        projectId="p-1"
-        datasetId="ds-A"
-        onNewAnalysis={() => {}}
-      />,
-    )
-    expect(queryByTestId('collapsible-body-transformations')).toBeNull()
-    expect(queryByTestId('collapsible-body-syntax')).toBeNull()
+    fireEvent.click(getByTestId('tab-syntax'))
+    expect(getByTestId('dataset-detail-panel-syntax')).toBeDefined()
   })
 })

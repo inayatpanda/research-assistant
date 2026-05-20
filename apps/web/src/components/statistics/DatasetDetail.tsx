@@ -1,20 +1,16 @@
 import {
   BarChart3,
-  ChevronDown,
-  ChevronRight,
   Code2,
   FlaskConical,
   Layers,
-  Plus,
   Repeat,
-  Scale,
+  SlidersHorizontal,
   Table2,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -39,7 +35,6 @@ import { useTransformations } from '@/hooks/useTransformations'
 
 import { DataView } from './DataView'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
-import { PSMWizard } from './PSMWizard'
 import { PlotWorkspace } from './PlotWorkspace'
 import { SyntaxView } from './SyntaxView'
 import { TransformationStackPanel } from './TransformationStackPanel'
@@ -71,16 +66,20 @@ const TYPE_TONE: Record<VariableType, string> = {
   unknown: 'bg-muted text-muted-foreground border-border',
 }
 
-type Tab = 'variables' | 'data' | 'plots' | 'diagnostics'
+type Tab =
+  | 'variables'
+  | 'data'
+  | 'plots'
+  | 'diagnostics'
+  | 'transformations'
+  | 'syntax'
 
 export function DatasetDetail({
   projectId,
   datasetId,
-  onNewAnalysis,
 }: {
   projectId: string
   datasetId: string
-  onNewAnalysis: (dataset: Dataset) => void
 }) {
   const { data: dataset, isLoading } = useDataset(projectId, datasetId)
   const { data: transformations = [] } = useTransformations(
@@ -89,9 +88,6 @@ export function DatasetDetail({
   )
   const { data: analyses = [] } = useAnalysesForDataset(projectId, datasetId)
   const [tab, setTab] = useState<Tab>('variables')
-  const [showSyntax, setShowSyntax] = useState(false)
-  const [psmOpen, setPsmOpen] = useState(false)
-  const [collapsed, setCollapsed] = useDatasetBlockCollapse(datasetId)
 
   if (isLoading || !dataset) {
     return (
@@ -142,24 +138,6 @@ export function DatasetDetail({
             ) : null}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPsmOpen(true)}
-            data-testid="open-psm"
-          >
-            <Scale className="h-4 w-4 mr-1.5" />
-            PSM
-          </Button>
-          <Button
-            onClick={() => onNewAnalysis(dataset)}
-            className="bg-accent hover:bg-accent-hover text-white"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            New analysis
-          </Button>
-        </div>
       </header>
 
       {longHint ? (
@@ -182,33 +160,50 @@ export function DatasetDetail({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
-        <div className="space-y-3">
-          <nav className="flex items-center gap-1 border-b border-border" role="tablist">
-            <TabButton
-              active={tab === 'variables'}
-              onClick={() => setTab('variables')}
-              label="Variables"
-            />
-            <TabButton
-              active={tab === 'data'}
-              onClick={() => setTab('data')}
-              label="Data view"
-              icon={<Table2 className="h-3.5 w-3.5 mr-1" />}
-            />
-            <TabButton
-              active={tab === 'plots'}
-              onClick={() => setTab('plots')}
-              label="Plots"
-              icon={<BarChart3 className="h-3.5 w-3.5 mr-1" />}
-            />
-            <TabButton
-              active={tab === 'diagnostics'}
-              onClick={() => setTab('diagnostics')}
-              label="Diagnostics"
-              icon={<FlaskConical className="h-3.5 w-3.5 mr-1" />}
-            />
-          </nav>
+      <div className="space-y-3" data-testid="dataset-detail-tabs">
+        <nav
+          className="flex flex-wrap items-center gap-1 border-b border-border"
+          role="tablist"
+        >
+          <TabButton
+            active={tab === 'variables'}
+            onClick={() => setTab('variables')}
+            label="Variables"
+          />
+          <TabButton
+            active={tab === 'data'}
+            onClick={() => setTab('data')}
+            label="Data view"
+            icon={<Table2 className="h-3.5 w-3.5 mr-1" />}
+          />
+          <TabButton
+            active={tab === 'plots'}
+            onClick={() => setTab('plots')}
+            label="Plots"
+            icon={<BarChart3 className="h-3.5 w-3.5 mr-1" />}
+          />
+          <TabButton
+            active={tab === 'diagnostics'}
+            onClick={() => setTab('diagnostics')}
+            label="Diagnostics"
+            icon={<FlaskConical className="h-3.5 w-3.5 mr-1" />}
+          />
+          <TabButton
+            active={tab === 'transformations'}
+            onClick={() => setTab('transformations')}
+            label="Transformations"
+            icon={<SlidersHorizontal className="h-3.5 w-3.5 mr-1" />}
+            testId="tab-transformations"
+          />
+          <TabButton
+            active={tab === 'syntax'}
+            onClick={() => setTab('syntax')}
+            label="Syntax"
+            icon={<Code2 className="h-3.5 w-3.5 mr-1" />}
+            testId="tab-syntax"
+          />
+        </nav>
+        <div data-testid={`dataset-detail-panel-${tab}`}>
           {tab === 'variables' && (
             <VariablesTable projectId={projectId} dataset={dataset} />
           )}
@@ -221,167 +216,22 @@ export function DatasetDetail({
           {tab === 'diagnostics' && (
             <DiagnosticsPanel projectId={projectId} dataset={dataset} />
           )}
-        </div>
-        <aside className="space-y-3">
-          <CollapsibleSection
-            id="transformations"
-            label="Transformations"
-            open={!collapsed.transformations}
-            onToggle={() =>
-              setCollapsed({
-                ...collapsed,
-                transformations: !collapsed.transformations,
-              })
-            }
-          >
+          {tab === 'transformations' && (
             <TransformationStackPanel
               projectId={projectId}
               datasetId={datasetId}
             />
-          </CollapsibleSection>
-          <CollapsibleSection
-            id="syntax"
-            label="Syntax"
-            open={!collapsed.syntax}
-            onToggle={() =>
-              setCollapsed({ ...collapsed, syntax: !collapsed.syntax })
-            }
-          >
-            <div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full text-[12px]"
-                onClick={() => setShowSyntax((s) => !s)}
-                data-testid="toggle-syntax"
-              >
-                <Code2 className="h-3.5 w-3.5 mr-1.5" />
-                {showSyntax ? 'Hide syntax' : 'Show syntax'}
-              </Button>
-            </div>
-            {showSyntax && (
-              <SyntaxView
-                dataset={dataset}
-                transformations={transformations}
-                analyses={analyses}
-              />
-            )}
-          </CollapsibleSection>
-        </aside>
+          )}
+          {tab === 'syntax' && (
+            <SyntaxView
+              dataset={dataset}
+              transformations={transformations}
+              analyses={analyses}
+            />
+          )}
+        </div>
       </div>
-
-      <PSMWizard
-        open={psmOpen}
-        onOpenChange={setPsmOpen}
-        projectId={projectId}
-        dataset={dataset}
-      />
     </div>
-  )
-}
-
-/**
- * DEMO-FIX-B — Per-dataset collapsed-block state, persisted to
- * `localStorage` under `dataset-<id>-blocks-collapsed`. Returns the parsed
- * record and a setter that writes through. Defaults to all blocks expanded
- * so brand-new users see the full UI.
- */
-type DatasetBlockCollapseState = {
-  transformations: boolean
-  syntax: boolean
-}
-
-const DEFAULT_COLLAPSE: DatasetBlockCollapseState = {
-  transformations: false,
-  syntax: false,
-}
-
-function useDatasetBlockCollapse(
-  datasetId: string,
-): [DatasetBlockCollapseState, (next: DatasetBlockCollapseState) => void] {
-  const storageKey = `dataset-${datasetId}-blocks-collapsed`
-  const [state, setState] = useState<DatasetBlockCollapseState>(() => {
-    if (typeof window === 'undefined') return DEFAULT_COLLAPSE
-    try {
-      const raw = window.localStorage.getItem(storageKey)
-      if (!raw) return DEFAULT_COLLAPSE
-      const parsed = JSON.parse(raw) as Partial<DatasetBlockCollapseState>
-      return {
-        transformations: !!parsed.transformations,
-        syntax: !!parsed.syntax,
-      }
-    } catch {
-      return DEFAULT_COLLAPSE
-    }
-  })
-
-  // If the dataset switches, re-read from storage so each dataset keeps its
-  // own preferences. (DatasetDetail remounts on dataset change in practice
-  // because its parent re-renders, but be defensive.)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem(storageKey)
-      if (!raw) {
-        setState(DEFAULT_COLLAPSE)
-        return
-      }
-      const parsed = JSON.parse(raw) as Partial<DatasetBlockCollapseState>
-      setState({
-        transformations: !!parsed.transformations,
-        syntax: !!parsed.syntax,
-      })
-    } catch {
-      setState(DEFAULT_COLLAPSE)
-    }
-  }, [storageKey])
-
-  const write = (next: DatasetBlockCollapseState) => {
-    setState(next)
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(next))
-    } catch {
-      // Ignore quota / disabled-storage errors.
-    }
-  }
-
-  return [state, write]
-}
-
-function CollapsibleSection({
-  id,
-  label,
-  open,
-  onToggle,
-  children,
-}: {
-  id: string
-  label: string
-  open: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <section data-testid={`collapsible-${id}`} className="space-y-2">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        data-testid={`collapsible-toggle-${id}`}
-        className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium hover:text-foreground transition-colors"
-      >
-        {open ? (
-          <ChevronDown className="h-3 w-3" />
-        ) : (
-          <ChevronRight className="h-3 w-3" />
-        )}
-        {label}
-      </button>
-      {open && (
-        <div data-testid={`collapsible-body-${id}`}>{children}</div>
-      )}
-    </section>
   )
 }
 
@@ -390,11 +240,13 @@ function TabButton({
   onClick,
   label,
   icon,
+  testId,
 }: {
   active: boolean
   onClick: () => void
   label: string
   icon?: React.ReactNode
+  testId?: string
 }) {
   return (
     <button
@@ -402,6 +254,7 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
+      data-testid={testId}
       className={`inline-flex items-center px-3 py-1.5 text-[12px] font-medium -mb-px border-b-2 transition-colors ${
         active
           ? 'border-accent text-accent'
