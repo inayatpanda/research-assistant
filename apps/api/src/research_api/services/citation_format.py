@@ -8,10 +8,38 @@ tokens like `[CITE_a1]` which this module replaces.
 from __future__ import annotations
 
 import re
+from datetime import date
 from html import escape
 from typing import Callable, Literal, Mapping, Protocol
 
-CitationStyle = Literal["vancouver", "apa", "harvard", "ieee"]
+# Phase 16 (MP16) — Extended citation style catalogue.
+#
+# Vancouver-family journal variants share author + title structure with
+# vanilla Vancouver but differ in:
+#   * journal abbreviation style (NEJM → "N Engl J Med")
+#   * "et al." trigger threshold (NEJM: 3 authors. JBJS: 6 authors per ICMJE.
+#     Lancet / BJSM / BJJ / JAMA: 6 authors per ICMJE.)
+#   * punctuation around year/volume/pages
+CitationStyle = Literal[
+    "vancouver",
+    "apa",
+    "harvard",
+    "ieee",
+    "lancet",
+    "nejm",
+    "bjj",
+    "jbjs_am",
+    "bjsm",
+    "jama",
+]
+
+# Phase 16 (MP16) — Inline rendering mode for the TipTap CitationNodeView.
+InlineCitationMode = Literal[
+    "bracket_numeric",
+    "superscript_numeric",
+    "author_year_parens",
+]
+
 _CITE_RE = re.compile(r"\[CITE_([A-Za-z0-9_-]+)\]")
 _EN_DASH = "–"
 
@@ -85,10 +113,60 @@ _INLINE_FORMATTERS: dict[CitationStyle, Callable[[_ArticleLike], str]] = {
     "vancouver": vancouver_inline,
     "apa": apa_inline,
     "harvard": harvard_inline,
-    # IEEE inline is number-based — handled via dedicated path; this entry
-    # exists so format_inline still answers for compat (returns Vancouver-ish).
+    # IEEE / Lancet / NEJM / BJJ / JBJS-Am / BJSM / JAMA inline citations are
+    # numeric — handled via the dedicated numeric path in
+    # `replace_cite_tokens`. These entries exist so `format_inline()` still
+    # answers (returns Vancouver-ish author-year for fallback rendering).
     "ieee": vancouver_inline,
+    "lancet": vancouver_inline,
+    "nejm": vancouver_inline,
+    "bjj": vancouver_inline,
+    "jbjs_am": vancouver_inline,
+    "bjsm": vancouver_inline,
+    "jama": vancouver_inline,
 }
+
+# Which styles are numeric (use IEEE-style `[N]` inline citations)?
+_NUMERIC_STYLES: set[str] = {
+    "ieee",
+    "lancet",
+    "nejm",
+    "bjj",
+    "jbjs_am",
+    "bjsm",
+    "jama",
+}
+
+
+def is_numeric_style(style: CitationStyle) -> bool:
+    """Return True for styles that render inline citations as ``[N]``.
+
+    Vancouver is excluded because the bibliography layer still emits
+    Vancouver as a numbered list but the inline form uses author-year for
+    legacy back-compat. The new MP16 numeric variants opt in explicitly.
+    """
+    return style in _NUMERIC_STYLES
+
+
+def format_inline_citation(
+    *,
+    number: int,
+    mode: InlineCitationMode = "bracket_numeric",
+) -> str:
+    """Render a single inline citation marker for a given mode.
+
+    * ``bracket_numeric``       → ``[1]``
+    * ``superscript_numeric``   → ``<sup>1</sup>``
+    * ``author_year_parens``    → ``(1)`` (numeric fallback — the actual
+      author-year string is produced by ``format_inline`` for that mode).
+
+    The CitationNodeView on the frontend mirrors this contract.
+    """
+    if mode == "superscript_numeric":
+        return f"<sup>{number}</sup>"
+    if mode == "author_year_parens":
+        return f"({number})"
+    return f"[{number}]"
 
 
 def format_inline(style: CitationStyle, article: _ArticleLike) -> str:
@@ -122,7 +200,7 @@ def replace_cite_tokens(
         article = articles_by_tag.get(tag)
         if article is None:
             return m.group(0)
-        if style == "ieee":
+        if style in _NUMERIC_STYLES:
             n = (numbering or {}).get(tag)
             if n is None:
                 return m.group(0)
@@ -349,11 +427,282 @@ def ieee_entry(article: _ArticleLike) -> str:
     return out + "."
 
 
+# --- MP16: Vancouver-family journal variants ---------------------------------
+
+def _author_list_journal(authors: list[str], *, et_al_after: int) -> str:
+    """Vancouver-style author list with a journal-specific et-al threshold.
+
+    NEJM truncates after 3 listed authors; ICMJE / Vancouver / Lancet / JAMA /
+    BJSM / BJJ / JBJS truncate after 6. Callers pass the cutoff so the same
+    helper works for all variants.
+    """
+    if not authors:
+        return "Anonymous"
+    formatted: list[str] = []
+    for a in authors[:et_al_after]:
+        last, given = _split_name(a)
+        if not last:
+            continue
+        ini = _initials(given)
+        formatted.append(f"{last} {ini}" if ini else last)
+    if not formatted:
+        return "Anonymous"
+    if len(authors) > et_al_after:
+        formatted.append("et al.")
+    return ", ".join(formatted)
+
+
+def lancet_entry(article: _ArticleLike) -> str:
+    """The Lancet — Vancouver variant.
+
+    Shape: ``Authors. Title. Journal Year; Vol: Pages.``
+    Note the single space after ``;`` between year and volume — a Lancet
+    quirk that distinguishes it from the NEJM / BJJ / JAMA forms.
+    """
+    authors = _author_list_journal(list(article.authors or []), et_al_after=6)
+    title = (article.title or "Untitled").rstrip(".")
+    journal = article.journal or ""
+    year = str(article.year) if article.year else "n.d."
+    volume = getattr(article, "volume", None)
+    pages = getattr(article, "pages", None)
+    parts = [f"{authors}.", f"{title}."]
+    if journal:
+        parts.append(f"{journal}")
+    tail = year
+    if volume:
+        tail += f"; {volume}"
+        if pages:
+            tail += f": {pages}"
+    elif pages:
+        tail += f": {pages}"
+    parts.append(f"{tail}.")
+    if article.doi:
+        parts.append(f"doi:{article.doi}")
+    return " ".join(parts)
+
+
+def nejm_entry(article: _ArticleLike) -> str:
+    """New England Journal of Medicine — ``et al.`` after **3** authors.
+
+    Shape: ``Authors. Title. Journal Year;Vol:Pages.`` (no spaces inside the
+    ``Year;Vol:Pages`` cluster).
+    """
+    authors = _author_list_journal(list(article.authors or []), et_al_after=3)
+    title = (article.title or "Untitled").rstrip(".")
+    journal = article.journal or ""
+    year = str(article.year) if article.year else "n.d."
+    volume = getattr(article, "volume", None)
+    pages = getattr(article, "pages", None)
+    parts = [f"{authors}.", f"{title}."]
+    if journal:
+        parts.append(f"{journal}")
+    tail = year
+    if volume:
+        tail += f";{volume}"
+        if pages:
+            tail += f":{pages}"
+    elif pages:
+        tail += f":{pages}"
+    parts.append(f"{tail}.")
+    if article.doi:
+        parts.append(f"doi:{article.doi}")
+    return " ".join(parts)
+
+
+def _journal_compact_entry(
+    article: _ArticleLike,
+    *,
+    forced_journal: str | None = None,
+    period_after_journal: bool = False,
+) -> str:
+    """Compact Vancouver variant used by BJJ / JBJS-Am / BJSM / JAMA.
+
+    Shape with ``period_after_journal=False`` (BJJ, BJSM):
+        ``Authors. Title. Journal Year;Vol(Issue):Pages.``
+    Shape with ``period_after_journal=True`` (JBJS-Am, JAMA):
+        ``Authors. Title. Journal. Year;Vol(Issue):Pages.``
+    """
+    authors = _author_list_journal(list(article.authors or []), et_al_after=6)
+    title = (article.title or "Untitled").rstrip(".")
+    journal = forced_journal or (article.journal or "")
+    year = str(article.year) if article.year else "n.d."
+    volume = getattr(article, "volume", None)
+    issue = getattr(article, "issue", None)
+    pages = getattr(article, "pages", None)
+
+    parts = [f"{authors}.", f"{title}."]
+    if journal:
+        parts.append(f"{journal}{'.' if period_after_journal else ''}")
+    tail = year
+    if volume:
+        tail += f";{volume}"
+        if issue:
+            tail += f"({issue})"
+        if pages:
+            tail += f":{pages}"
+    elif pages:
+        tail += f":{pages}"
+    parts.append(f"{tail}.")
+    if article.doi:
+        parts.append(f"doi:{article.doi}")
+    return " ".join(parts)
+
+
+def bjj_entry(article: _ArticleLike) -> str:
+    """Bone & Joint Journal: ``Bone Joint J Year;Vol(Issue):Pages.``"""
+    return _journal_compact_entry(
+        article, forced_journal="Bone Joint J", period_after_journal=False
+    )
+
+
+def jbjs_am_entry(article: _ArticleLike) -> str:
+    """JBJS American: ``J Bone Joint Surg Am. Year;Vol(Issue):Pages.``"""
+    return _journal_compact_entry(
+        article, forced_journal="J Bone Joint Surg Am", period_after_journal=True
+    )
+
+
+def bjsm_entry(article: _ArticleLike) -> str:
+    """BJSM: ``Br J Sports Med Year;Vol:Pages.`` (no period after journal,
+    no issue parenthesis even when issue is present — house style)."""
+    authors = _author_list_journal(list(article.authors or []), et_al_after=6)
+    title = (article.title or "Untitled").rstrip(".")
+    year = str(article.year) if article.year else "n.d."
+    volume = getattr(article, "volume", None)
+    pages = getattr(article, "pages", None)
+    parts = [f"{authors}.", f"{title}.", "Br J Sports Med"]
+    tail = year
+    if volume:
+        tail += f";{volume}"
+        if pages:
+            tail += f":{pages}"
+    elif pages:
+        tail += f":{pages}"
+    parts.append(f"{tail}.")
+    if article.doi:
+        parts.append(f"doi:{article.doi}")
+    return " ".join(parts)
+
+
+def jama_entry(article: _ArticleLike) -> str:
+    """JAMA: ``JAMA. Year;Vol(Issue):Pages.``"""
+    return _journal_compact_entry(
+        article, forced_journal="JAMA", period_after_journal=True
+    )
+
+
+# --- MP16: Grey-literature renderers -----------------------------------------
+
+def _grey_lit_entry(article: _ArticleLike) -> str | None:
+    """Return a non-journal-article entry when ``reference_type`` warrants it.
+
+    Returns ``None`` when the article is a regular journal article (i.e. the
+    caller should fall through to the per-style formatter).
+    """
+    ref_type = getattr(article, "reference_type", "journal_article") or "journal_article"
+    if ref_type == "journal_article":
+        return None
+    authors = list(article.authors or [])
+    title = (article.title or "Untitled").rstrip(".")
+    year = str(article.year) if article.year else "n.d."
+    url = getattr(article, "url", None) or None
+    doi = article.doi
+    journal = article.journal or ""  # acts as "server" / "publisher" / etc.
+
+    if ref_type == "web_resource":
+        # NLM grey-lit pattern: `Author/Org. Title [Internet]. Year [cited
+        # <today>]. Available from: URL`.
+        org = ", ".join(authors) if authors else (journal or "Anonymous")
+        cited = date.today().isoformat()
+        out = f"{org}. {title} [Internet]. {year} [cited {cited}]."
+        if url:
+            out += f" Available from: {url}"
+        return out
+
+    if ref_type == "thesis":
+        author_str = _author_list_vancouver(authors)
+        univ = journal or "Unknown institution"
+        return f"{author_str}. {title} [thesis]. {univ}; {year}."
+
+    if ref_type == "preprint":
+        author_str = _author_list_vancouver(authors)
+        server = journal or "Preprint server"
+        out = f"{author_str}. {title} [preprint]. {server} {year}."
+        if doi:
+            out += f" doi:{doi}"
+        elif url:
+            out += f" Available from: {url}"
+        return out
+
+    if ref_type == "registry_record":
+        out = f"{title}. {journal or 'Registry'}; {year}."
+        if url:
+            out += f" Available from: {url}"
+        return out
+
+    if ref_type == "report":
+        author_str = _author_list_vancouver(authors) if authors else (journal or "Anonymous")
+        out = f"{author_str}. {title} [report]. {year}."
+        if url:
+            out += f" Available from: {url}"
+        return out
+
+    if ref_type == "book":
+        author_str = _author_list_vancouver(authors)
+        publisher = journal or ""
+        out = f"{author_str}. {title}."
+        if publisher:
+            out += f" {publisher};"
+        out += f" {year}."
+        return out
+
+    if ref_type == "book_chapter":
+        author_str = _author_list_vancouver(authors)
+        book_title = journal or "Untitled book"
+        out = f"{author_str}. {title}. In: {book_title}. {year}."
+        return out
+
+    if ref_type == "conference_abstract":
+        author_str = _author_list_vancouver(authors)
+        venue = journal or "Conference"
+        out = f"{author_str}. {title} [abstract]. {venue}; {year}."
+        return out
+
+    if ref_type == "other":
+        author_str = _author_list_vancouver(authors) if authors else "Anonymous"
+        out = f"{author_str}. {title}. {year}."
+        if url:
+            out += f" Available from: {url}"
+        return out
+
+    return None
+
+
 _BIB_FORMATTERS: dict[CitationStyle, Callable[[_ArticleLike], str]] = {
     "vancouver": lambda a: vancouver_entry(a),
     "apa": apa7_entry,
     "harvard": harvard_entry,
     "ieee": ieee_entry,
+    "lancet": lancet_entry,
+    "nejm": nejm_entry,
+    "bjj": bjj_entry,
+    "jbjs_am": jbjs_am_entry,
+    "bjsm": bjsm_entry,
+    "jama": jama_entry,
+}
+
+# Per-style "et al." trigger threshold — surfaced for tests + the frontend.
+ET_AL_THRESHOLDS: dict[CitationStyle, int] = {
+    "vancouver": 6,
+    "apa": 20,
+    "harvard": 3,
+    "ieee": 3,
+    "lancet": 6,
+    "nejm": 3,
+    "bjj": 6,
+    "jbjs_am": 6,
+    "bjsm": 6,
+    "jama": 6,
 }
 
 
@@ -370,6 +719,13 @@ def format_entry(article: _ArticleLike, *, style: CitationStyle = "vancouver") -
     """
     if getattr(article, "type", "article") == "dataset":
         return _dataset_entry(article, number=None, style=style)
+    # Phase 16 (MP16) — grey-literature shape takes precedence over the
+    # per-style journal-article formatter so e.g. a "thesis" reference reads
+    # `Smith J. Title [thesis]. Univ; 2024.` regardless of which Vancouver
+    # variant the project is configured to use.
+    grey = _grey_lit_entry(article)
+    if grey is not None:
+        return grey
     if style not in _BIB_FORMATTERS:
         raise ValueError(f"Unknown citation style: {style!r}")
     return _BIB_FORMATTERS[style](article)
@@ -383,6 +739,9 @@ def format_entry_html(
         raise ValueError(f"Unknown citation style: {style!r}")
     # Build a shadow article whose string fields are pre-escaped so the
     # interpolations inside the formatter emit safe markup.
+    _ref_type = getattr(article, "reference_type", "journal_article") or "journal_article"
+    _url = getattr(article, "url", None) or None
+
     class _Esc:
         title = escape(article.title or "") if article.title else None
         authors = [escape(a) for a in (article.authors or [])]
@@ -392,6 +751,12 @@ def format_entry_html(
         volume = escape(getattr(article, "volume", None) or "") if getattr(article, "volume", None) else None
         issue = escape(getattr(article, "issue", None) or "") if getattr(article, "issue", None) else None
         pages = escape(getattr(article, "pages", None) or "") if getattr(article, "pages", None) else None
+        reference_type = _ref_type
+        url = escape(_url) if _url else None
+
+    grey = _grey_lit_entry(_Esc())  # type: ignore[arg-type]
+    if grey is not None:
+        return f'<span class="bib-entry">{grey}</span>'
     inner = _BIB_FORMATTERS[style](_Esc())  # type: ignore[arg-type]
     return f'<span class="bib-entry">{inner}</span>'
 
@@ -450,6 +815,16 @@ def bibliography_entry(
     """
     if getattr(article, "type", "article") == "dataset":
         return _dataset_entry(article, number=number, style=style)
+    # Phase 16 (MP16) — grey-literature shape takes precedence and is
+    # rendered as a numbered Vancouver-family entry when ``number`` is given.
+    grey = _grey_lit_entry(article)
+    if grey is not None:
+        if style == "vancouver" or style in _NUMERIC_STYLES:
+            prefix = f"{number}. " if number is not None else ""
+            return f"{prefix}{grey}" if style != "ieee" else (
+                f"[{number}] {grey}" if number is not None else grey
+            )
+        return grey
     if style == "vancouver":
         return vancouver_entry(article, number=number)
     if style == "ieee":
@@ -457,7 +832,12 @@ def bibliography_entry(
         return f"[{number}] {body}" if number is not None else body
     if style not in _BIB_FORMATTERS:
         raise ValueError(f"Unknown citation style: {style!r}")
-    return _BIB_FORMATTERS[style](article)
+    body = _BIB_FORMATTERS[style](article)
+    # The Vancouver-family journal variants (Lancet/NEJM/BJJ/JBJS-Am/BJSM/JAMA)
+    # render as numbered lists like Vancouver — prepend "N. " when supplied.
+    if style in _NUMERIC_STYLES and style != "ieee" and number is not None:
+        return f"{number}. {body}"
+    return body
 
 
 def extract_used_citations(
@@ -627,14 +1007,14 @@ def consolidate_inline_clusters(html: str, style: CitationStyle) -> str:
     Adjacency: only whitespace between two `<sup>` tokens counts. Any other
     character — including a comma or a closing tag — breaks the cluster.
     """
-    is_numeric_style = style in ("vancouver", "ieee")
+    is_numeric = style in _NUMERIC_STYLES or style == "vancouver"
 
     def replace(match: re.Match[str]) -> str:
         cluster_html = match.group("cluster")
         tokens = _extract_tokens(cluster_html)
         if len(tokens) <= 1:
             return cluster_html
-        if is_numeric_style:
+        if is_numeric:
             return _consolidate_numeric_cluster(tokens)
         return _consolidate_author_year_cluster(tokens)
 
@@ -673,7 +1053,7 @@ def replace_cite_tokens_with_markup(
         article = articles_by_tag.get(tag)
         if article is None:
             return m.group(0)
-        if style == "ieee":
+        if style in _NUMERIC_STYLES:
             n = (numbering or {}).get(tag)
             if n is None:
                 return m.group(0)

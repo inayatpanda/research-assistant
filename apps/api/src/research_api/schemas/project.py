@@ -14,8 +14,30 @@ StudyType = Literal[
     "Randomised Controlled Trial",
 ]
 
-CitationStyle = Literal["vancouver", "apa", "harvard"]
+# Phase 16 (MP16) — Extended citation style catalogue.
+# Vancouver-family journal variants are appended; the 4 originals stay first
+# so existing tests / persisted ``projects.citation_style`` values keep
+# validating without migration.
+CitationStyle = Literal[
+    "vancouver",
+    "apa",
+    "harvard",
+    "ieee",
+    "lancet",
+    "nejm",
+    "bjj",
+    "jbjs_am",
+    "bjsm",
+    "jama",
+]
 AIProviderName = Literal["gemini", "claude", "openai"]
+
+# Phase 16 (MP16) — Inline citation rendering mode.
+InlineCitationMode = Literal[
+    "bracket_numeric",
+    "superscript_numeric",
+    "author_year_parens",
+]
 
 
 class ProjectCreate(BaseModel):
@@ -27,6 +49,7 @@ class ProjectCreate(BaseModel):
     prospero_number: str | None = None
     clinicaltrials_number: str | None = None
     template_journal: str | None = None
+    inline_citation_mode: InlineCitationMode = "bracket_numeric"
 
 
 class ProjectUpdate(BaseModel):
@@ -39,6 +62,7 @@ class ProjectUpdate(BaseModel):
     clinicaltrials_number: str | None = None
     # `template_journal` may be unset, explicit-null (to clear), or a catalogue key.
     template_journal: str | None = None
+    inline_citation_mode: InlineCitationMode | None = None
 
 
 class ProjectRead(BaseModel):
@@ -54,5 +78,6 @@ class ProjectRead(BaseModel):
     prospero_number: str | None
     clinicaltrials_number: str | None
     template_journal: str | None = None
+    inline_citation_mode: InlineCitationMode = "bracket_numeric"
     created_at: datetime
     updated_at: datetime

@@ -7,6 +7,20 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ReviewStatus = Literal["pending", "included", "excluded", "unsure"]
 
+# Phase 16 (MP16) — Reference categorisation for grey-literature handling.
+ReferenceType = Literal[
+    "journal_article",
+    "book",
+    "book_chapter",
+    "conference_abstract",
+    "thesis",
+    "preprint",
+    "registry_record",
+    "report",
+    "web_resource",
+    "other",
+]
+
 # Phase 19 (MP19) — Canonical study design vocabulary.
 StudyDesign = Literal[
     "rct",
@@ -97,6 +111,9 @@ class ArticleCreate(BaseModel):
     review_status: ReviewStatus = "pending"
     exclusion_reason: str | None = None
     conflict_of_interest: str | None = None
+    # Phase 16 (MP16) — Reference categorisation + URL for grey lit.
+    reference_type: ReferenceType = "journal_article"
+    url: str | None = None
 
 
 class ArticleUpdate(BaseModel):
@@ -112,6 +129,8 @@ class ArticleUpdate(BaseModel):
     review_status: ReviewStatus | None = None
     exclusion_reason: str | None = None
     conflict_of_interest: str | None = None
+    reference_type: ReferenceType | None = None
+    url: str | None = None
 
 
 class ArticleRead(BaseModel):
@@ -137,6 +156,9 @@ class ArticleRead(BaseModel):
     exclusion_reason: str | None
     conflict_of_interest: str | None
     source: str = "upload"
+    # Phase 16 (MP16)
+    reference_type: ReferenceType = "journal_article"
+    url: str | None = None
     created_at: datetime
     # Optional signed URL filled in by route layer; not from DB
     file_url: str | None = None

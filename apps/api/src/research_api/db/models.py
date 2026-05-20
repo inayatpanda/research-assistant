@@ -28,6 +28,18 @@ class Project(Base):
     # Phase 8.7 — Journal template key from the server-side catalogue
     # (services/journal_templates/catalogue.py). Null = no template selected.
     template_journal: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Phase 16 (MP16) — Inline citation rendering mode for the TipTap
+    # CitationNodeView. One of ``bracket_numeric`` | ``superscript_numeric``
+    # | ``author_year_parens``. The ``server_default`` is set in addition to
+    # the Python-side default so raw-SQL INSERTs (e.g. legacy test fixtures
+    # that explicitly enumerate the columns to write) don't trip the
+    # NOT-NULL constraint.
+    inline_citation_mode: Mapped[str] = mapped_column(
+        String(32),
+        default="bracket_numeric",
+        server_default="bracket_numeric",
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -119,6 +131,18 @@ class Article(Base):
     # Phase 8.6 — ingestion provenance + PubMed cross-reference
     pmid: Mapped[str | None] = mapped_column(String(16), nullable=True)
     source: Mapped[str] = mapped_column(String(16), default="upload", nullable=False)
+
+    # Phase 16 (MP16) — Citation depth. Reference category drives style
+    # rendering (journal article, book, thesis, preprint, registry record,
+    # web resource, etc.). ``url`` is the authoritative URL for grey-lit
+    # entries whose identifier is *not* a DOI.
+    reference_type: Mapped[str] = mapped_column(
+        String(32),
+        default="journal_article",
+        server_default="journal_article",
+        nullable=False,
+    )
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
