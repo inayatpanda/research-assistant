@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   BarChart3,
   Calculator,
+  ChevronDown,
   Combine,
   FileText,
   Loader2,
@@ -24,6 +25,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { AnalysisPlanBuilder } from '@/components/statistics/AnalysisPlanBuilder'
 import { AnalysisPlanRunner } from '@/components/statistics/AnalysisPlanRunner'
 import { CrossDatasetDialog } from '@/components/statistics/CrossDatasetDialog'
@@ -101,84 +107,51 @@ function StatisticsInner({ projectId }: { projectId: string }) {
             Results section.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCrossOpen(true)}
-            data-testid="open-cross-dataset"
-            disabled={datasets.length < 2}
-          >
-            <Combine className="h-4 w-4 mr-1.5" />
-            Cross-dataset op
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPowerOpen(true)}
-            data-testid="open-power-calculator"
-          >
-            <Calculator className="h-4 w-4 mr-1.5" />
-            Power calculator
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPlansOpen(true)}
-            data-testid="open-analysis-plans"
-          >
-            <Workflow className="h-4 w-4 mr-1.5" />
-            Analysis plans
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              if (!activeDatasetId) {
-                toast.error('Pick a dataset first.')
-                return
-              }
-              setReportPending(true)
-              try {
-                const blob = await statsReportApi.export(
-                  projectId,
-                  activeDatasetId,
-                )
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = 'statistical-report.pdf'
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
-                URL.revokeObjectURL(url)
-                toast.success('Report downloaded')
-              } catch (e) {
-                const msg = e instanceof Error ? e.message : 'Export failed'
-                toast.error(msg)
-              } finally {
-                setReportPending(false)
-              }
-            }}
-            disabled={reportPending || !datasets.length}
-            data-testid="export-stats-report"
-          >
-            {reportPending ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <FileText className="h-4 w-4 mr-1.5" />
-            )}
-            Export statistical report
-          </Button>
-        </div>
+        <StatisticsToolbar
+          datasetsCount={datasets.length}
+          reportPending={reportPending}
+          onCrossDataset={() => setCrossOpen(true)}
+          onPowerCalculator={() => setPowerOpen(true)}
+          onAnalysisPlans={() => setPlansOpen(true)}
+          onExportReport={async () => {
+            if (!activeDatasetId) {
+              toast.error('Pick a dataset first.')
+              return
+            }
+            setReportPending(true)
+            try {
+              const blob = await statsReportApi.export(
+                projectId,
+                activeDatasetId,
+              )
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'statistical-report.pdf'
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              URL.revokeObjectURL(url)
+              toast.success('Report downloaded')
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Export failed'
+              toast.error(msg)
+            } finally {
+              setReportPending(false)
+            }
+          }}
+        />
       </header>
 
-      <div className="hidden lg:block min-h-[60vh]">
+      <div
+        className="hidden lg:block min-h-[60vh]"
+        data-testid="statistics-resizable-shell"
+      >
         <ResizablePanelGroup
           direction="horizontal"
           autoSaveId="divider-widths-statistics"
         >
-          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+          <ResizablePanel defaultSize={28} minSize={18} maxSize={45}>
             <aside className="pr-4 space-y-4 h-full overflow-y-auto">
               <DatasetUpload projectId={projectId} compact />
               {isLoading ? (
@@ -197,7 +170,7 @@ function StatisticsInner({ projectId }: { projectId: string }) {
             </aside>
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={70} minSize={50}>
+          <ResizablePanel defaultSize={72} minSize={55}>
             <section className="pl-4 space-y-6 h-full overflow-y-auto">
               {activeDatasetId ? (
                 <ActiveDatasetPanel
@@ -322,6 +295,145 @@ function EmptyHero() {
         CSV or XLSX. The assistant will infer variable types and you can override
         them before running tests.
       </div>
+    </div>
+  )
+}
+
+/**
+ * DEMO-FIX-B — Page-level toolbar that collapses to a single "Tools" popover
+ * when the viewport is narrower than 1100px so the working area on Statistics
+ * doesn't get shrunk by four wide buttons. Uses `window.matchMedia` so it
+ * tracks viewport changes live.
+ */
+function StatisticsToolbar({
+  datasetsCount,
+  reportPending,
+  onCrossDataset,
+  onPowerCalculator,
+  onAnalysisPlans,
+  onExportReport,
+}: {
+  datasetsCount: number
+  reportPending: boolean
+  onCrossDataset: () => void
+  onPowerCalculator: () => void
+  onAnalysisPlans: () => void
+  onExportReport: () => void
+}) {
+  const [compact, setCompact] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(max-width: 1099px)')
+    const update = () => setCompact(mql.matches)
+    update()
+    // Older Safari fallback
+    if (mql.addEventListener) {
+      mql.addEventListener('change', update)
+      return () => mql.removeEventListener('change', update)
+    }
+    mql.addListener(update)
+    return () => mql.removeListener(update)
+  }, [])
+
+  const crossBtn = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onCrossDataset}
+      data-testid="open-cross-dataset"
+      disabled={datasetsCount < 2}
+      className="justify-start w-full sm:w-auto"
+    >
+      <Combine className="h-4 w-4 mr-1.5" />
+      Cross-dataset op
+    </Button>
+  )
+  const powerBtn = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onPowerCalculator}
+      data-testid="open-power-calculator"
+      className="justify-start w-full sm:w-auto"
+    >
+      <Calculator className="h-4 w-4 mr-1.5" />
+      Power calculator
+    </Button>
+  )
+  const plansBtn = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onAnalysisPlans}
+      data-testid="open-analysis-plans"
+      className="justify-start w-full sm:w-auto"
+    >
+      <Workflow className="h-4 w-4 mr-1.5" />
+      Analysis plans
+    </Button>
+  )
+  const reportBtn = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onExportReport}
+      disabled={reportPending || datasetsCount === 0}
+      data-testid="export-stats-report"
+      className="justify-start w-full sm:w-auto"
+    >
+      {reportPending ? (
+        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+      ) : (
+        <FileText className="h-4 w-4 mr-1.5" />
+      )}
+      Export statistical report
+    </Button>
+  )
+
+  if (compact) {
+    return (
+      <div
+        className="flex items-center gap-2 shrink-0"
+        data-testid="statistics-toolbar-compact"
+      >
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="open-tools-menu"
+            >
+              Tools
+              <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-60 p-2"
+            data-testid="tools-popover"
+          >
+            <div className="flex flex-col gap-1.5">
+              {crossBtn}
+              {powerBtn}
+              {plansBtn}
+              {reportBtn}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="flex items-center gap-2 shrink-0"
+      data-testid="statistics-toolbar-full"
+    >
+      {crossBtn}
+      {powerBtn}
+      {plansBtn}
+      {reportBtn}
     </div>
   )
 }
