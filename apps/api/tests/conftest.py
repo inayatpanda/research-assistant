@@ -17,6 +17,11 @@ os.environ.setdefault("SCHEDULER_DISABLED", "1")
 # The startup-migration is exercised explicitly by tests that unset this flag.
 os.environ.setdefault("DISABLE_AUTO_MIGRATE", "1")
 
+# Phase S1 — keep the legacy static-user-id mode on by default for the
+# existing 2260-test suite. Auth-specific tests (``test_auth_routes.py``,
+# ``test_security_rbac.py`` etc.) flip this off explicitly with monkeypatch.
+os.environ.setdefault("RMA_DISABLE_AUTH", "1")
+
 from research_api.db.base import Base, make_engine, make_session_factory
 from research_api.services.ai import AIProvider, CardContext, CitationMetadata, SectionDraftContext
 from research_api.services.ai.base import WritingAction

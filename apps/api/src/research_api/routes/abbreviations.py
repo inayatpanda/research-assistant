@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..container import Container, get_container
+from ..auth_deps import get_current_user
+from ..schemas.auth import UserRead
 from ..repositories.abbreviations import SqliteAbbreviationRepository
 from ..repositories.projects import SqliteProjectRepository
 from ..schemas.abbreviation import (
@@ -24,8 +26,10 @@ async def _session(
         yield s
 
 
-def _user_id(container: Container = Depends(get_container)) -> str:
-    return container.settings.local_user_id
+def _user_id(user: UserRead = Depends(get_current_user)) -> str:
+    # Phase S1 — delegate to the real session-derived user. The legacy
+    # static-id flow remains available via ``RMA_DISABLE_AUTH=1``.
+    return user.id
 
 
 @router.get(
