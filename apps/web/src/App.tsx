@@ -25,6 +25,7 @@ import SettingsPage from '@/routes/SettingsPage'
 import StatisticsPage from '@/routes/StatisticsPage'
 import SubmissionPage from '@/routes/SubmissionPage'
 import SystematicReviewPage from '@/routes/SystematicReviewPage'
+import WelcomePage from '@/routes/WelcomePage'
 import { Navigate, useParams } from 'react-router-dom'
 
 /**
@@ -52,6 +53,10 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="health" element={<HealthPage />} />
+            {/* Phase E1.4 — First-run welcome for the Electron desktop
+                shell. Reachable directly in the browser too — it's
+                informational only. */}
+            <Route path="welcome" element={<WelcomePage />} />
 
             {/* Project-scoped routes — every page below sees a real
                 projectId via the <ProjectLayoutGuard> context. */}

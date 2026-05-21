@@ -1,7 +1,43 @@
 import axios, { AxiosError } from 'axios'
 import { z } from 'zod'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787'
+/**
+ * Resolve the API base URL with the following precedence:
+ *
+ *   1. `window.electron.apiUrl`     — injected by the Electron preload in
+ *      Phase E1 so the renderer talks to the spawned FastAPI subprocess on
+ *      its dynamically-chosen port.
+ *   2. `import.meta.env.VITE_API_URL` — Vite build-time / dev-mode override
+ *      (used by the standalone web build).
+ *   3. `http://127.0.0.1:8787`       — local dev fallback that matches the
+ *      backend's default port.
+ *
+ * The lookup is exported (`resolveApiUrl`) so tests can assert each branch
+ * of the fallback chain.
+ */
+type ElectronBridge = {
+  apiUrl?: string | null
+  tailnetUrl?: string | null
+  platform?: string
+}
+
+function resolveApiUrl(): string {
+  if (typeof window !== 'undefined') {
+    const bridge = (window as unknown as { electron?: ElectronBridge }).electron
+    const fromElectron = bridge?.apiUrl
+    if (typeof fromElectron === 'string' && fromElectron.length > 0) {
+      return fromElectron
+    }
+  }
+  const fromEnv = (import.meta as { env?: Record<string, string | undefined> })
+    .env?.VITE_API_URL
+  if (typeof fromEnv === 'string' && fromEnv.length > 0) {
+    return fromEnv
+  }
+  return 'http://127.0.0.1:8787'
+}
+
+const API_URL = resolveApiUrl()
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -1937,6 +1973,7 @@ export const __internal = {
   parseContentDispositionFilename,
   triggerBlobDownload,
   extractErrorMessage,
+  resolveApiUrl,
 }
 
 

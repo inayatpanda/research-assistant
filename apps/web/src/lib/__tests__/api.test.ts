@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   __internal,
@@ -220,6 +220,38 @@ describe('reviewsApi schemas', () => {
 
     it('returns `Request failed` for raw network errors', () => {
       expect(extract(fakeError({ message: 'Network Error' }))).toBe('Request failed')
+    })
+  })
+
+  // Phase E1 — API base URL precedence: window.electron > VITE_API_URL >
+  // localhost fallback. The renderer in the packaged Electron app receives
+  // its dynamic backend port via the preload bridge.
+  describe('resolveApiUrl', () => {
+    const resolve = __internal.resolveApiUrl
+
+    afterEach(() => {
+      // Strip anything our test left behind so we don't pollute siblings.
+      delete (window as unknown as { electron?: unknown }).electron
+    })
+
+    it('prefers window.electron.apiUrl when set', () => {
+      ;(window as unknown as { electron: { apiUrl: string } }).electron = {
+        apiUrl: 'http://127.0.0.1:18999',
+      }
+      expect(resolve()).toBe('http://127.0.0.1:18999')
+    })
+
+    it('ignores window.electron when apiUrl is missing or empty', () => {
+      ;(window as unknown as { electron: { apiUrl: string } }).electron = {
+        apiUrl: '',
+      }
+      // Falls through to env or localhost fallback. The test harness leaves
+      // VITE_API_URL unset, so we end up at the canonical local default.
+      expect(resolve()).toBe('http://127.0.0.1:8787')
+    })
+
+    it('falls back to localhost when nothing is set', () => {
+      expect(resolve()).toBe('http://127.0.0.1:8787')
     })
   })
 
