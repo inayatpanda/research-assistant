@@ -406,6 +406,10 @@ async def legacy_data_status(
             )
         ).all()
     )
+    # If nothing actually points at the legacy user any more (e.g. after
+    # a claim), report has_legacy=False so the UI stops prompting.
+    if not proj_ids and article_n == 0 and dataset_n == 0:
+        return LegacyDataStatus(has_legacy=False, legacy_user_id=legacy.id)
     return LegacyDataStatus(
         has_legacy=True,
         legacy_user_id=legacy.id,
