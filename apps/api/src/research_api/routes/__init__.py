@@ -5,6 +5,7 @@ from . import (
     files,
     health,
     highlights,
+    learn,
     manuscript_sections,
     notes,
     peer_reviews,
@@ -24,4 +25,5 @@ __all__ = [
     "abbreviations",
     "writing",
     "peer_reviews",
+    "learn",
 ]
