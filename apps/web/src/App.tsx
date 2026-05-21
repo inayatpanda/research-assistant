@@ -39,7 +39,8 @@ import { MobileShell } from '@/mobile/MobileShell'
 import MobileAccount from '@/mobile/pages/MobileAccount'
 import MobileLearn from '@/mobile/pages/MobileLearn'
 import MobileLearnEntryPage from '@/mobile/pages/MobileLearnEntryPage'
-import MobileLibraryPlaceholder from '@/mobile/pages/MobileLibraryPlaceholder'
+import MobileLibrary from '@/mobile/pages/MobileLibrary'
+import MobileReader from '@/mobile/pages/MobileReader'
 import MobileManuscriptsPlaceholder from '@/mobile/pages/MobileManuscriptsPlaceholder'
 import MobileMore from '@/mobile/pages/MobileMore'
 import MobilePeerReview from '@/mobile/pages/MobilePeerReview'
@@ -180,7 +181,8 @@ function MobileRoutes() {
       <Route path="/m" element={<MobileRequireBackend />}>
         <Route index element={<Navigate to="/m/library" replace />} />
         <Route element={<MobileShell />}>
-          <Route path="library" element={<MobileLibraryPlaceholder />} />
+          <Route path="library" element={<MobileLibrary />} />
+          <Route path="reader/:articleId" element={<MobileReader />} />
           <Route path="manuscripts" element={<MobileManuscriptsPlaceholder />} />
           <Route path="stats" element={<MobileStatsPlaceholder />} />
           <Route path="learn" element={<MobileLearn />} />
