@@ -1,0 +1,134 @@
+# Phase D1.5 — Release pipeline.
+#
+# Triggered by pushing a tag matching v*.*.* . Builds the Mac .dmg,
+# Windows NSIS .exe, and Linux .AppImage on their native runners and
+# attaches them to the GitHub Release for that tag.
+#
+# Cross-compiling Electron + PyInstaller binaries from a single host
+# is brittle (codesigning, dylib paths, AppImage runtime, etc.) — much
+# easier to fan out across the three platform runners and reassemble
+# at the release stage.
+#
+# Pre-requisites the user must have done on GitHub:
+#   1. The repo must be PUBLIC (electron-updater reads
+#      https://github.com/<owner>/<repo>/releases/latest without a
+#      token; private repos require credentials baked into the
+#      installer which we don't want to do).
+#   2. Settings → Actions → General → Workflow permissions:
+#      Read and write permissions (so the GITHUB_TOKEN can upload the
+#      release assets). The `permissions:` block below also asks for
+#      `contents: write`.
+#   3. Fill in `build.publish.owner` and `build.publish.repo` in
+#      apps/desktop/package.json before pushing the first tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: mac
+            runner: macos-latest
+            dist_script: dist:mac
+            artifact_glob: "apps/desktop/release/*.dmg"
+          - name: win
+            runner: windows-latest
+            dist_script: dist:win
+            artifact_glob: "apps/desktop/release/*.exe"
+          - name: linux
+            runner: ubuntu-latest
+            dist_script: dist:linux
+            artifact_glob: "apps/desktop/release/*.AppImage"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # --- Linux runner needs a couple of system libs for python-magic +
+      #     PyInstaller's AppImage builder. macOS + Windows ship them.
+      - name: Install Linux build deps
+        if: matrix.platform.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1 libxss1 libasound2t64 fuse libfuse2
+
+      # --- Backend ---------------------------------------------------------
+      - name: Install backend (editable) + PyInstaller
+        working-directory: apps/api
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Freeze backend with PyInstaller
+        working-directory: apps/desktop
+        shell: bash
+        run: python scripts/build_backend.py
+
+      # --- Frontend --------------------------------------------------------
+      - name: Install web deps
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Build web bundle
+        working-directory: apps/web
+        run: npm run build
+
+      # --- Electron --------------------------------------------------------
+      - name: Install desktop deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Generate placeholder icons
+        working-directory: apps/desktop
+        shell: bash
+        run: python scripts/make_placeholder_icons.py
+
+      - name: Build Electron installer
+        working-directory: apps/desktop
+        shell: bash
+        # electron-builder reads GH_TOKEN to publish assets in the
+        # "Publish" step below; the build step itself doesn't need it.
+        # We pass --publish never here because the upload happens via
+        # softprops/action-gh-release for finer control.
+        run: npm run ${{ matrix.platform.dist_script }}
+        env:
+          # Disable code signing on every platform — see apps/desktop/README.md.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      # --- Publish ---------------------------------------------------------
+      - name: Attach artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.platform.artifact_glob }}
+          # generate_release_notes runs only on the first job to hit
+          # the release; subsequent jobs just append files.
+          generate_release_notes: true
+          # Soft fail on missing globs so a Linux-only mismatch
+          # doesn't tank the whole release.
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
