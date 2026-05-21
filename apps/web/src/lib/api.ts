@@ -397,6 +397,16 @@ export const BoundingRectSchema = z.object({
 })
 export const BoundingCoordsSchema = z.object({
   rects: z.array(BoundingRectSchema).min(1),
+  // Phase D3 — optional discriminator fields used by the mobile PDF
+  // reader. ``type='pdf'`` lets the FE pick the right overlay renderer,
+  // ``page`` is the 1-based pdf.js page index, and ``text`` is the raw
+  // source string the user selected (preserved separately from
+  // Highlight.selected_text so we can fuzzy re-match after text drift).
+  // All three remain optional so the legacy {rects:[…]} shape stays
+  // round-trippable.
+  type: z.enum(['text', 'pdf']).optional(),
+  page: z.number().int().min(1).optional(),
+  text: z.string().optional(),
 })
 export type BoundingRect = z.infer<typeof BoundingRectSchema>
 export type BoundingCoords = z.infer<typeof BoundingCoordsSchema>

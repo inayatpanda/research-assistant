@@ -25,8 +25,38 @@ class BoundingRect(BaseModel):
 
 
 class BoundingCoords(BaseModel):
+    """JSON shape stored in the ``highlights.bounding_coords`` column.
+
+    Phase D3 — widened to carry an optional discriminator for the new
+    mobile PDF rendering path. The original shape (``{rects: […]}``)
+    keeps working unchanged for the desktop reader and the mobile
+    text-layer reader, which both anchor highlights against an
+    abstract-as-paragraphs DOM. PDF-anchored highlights additionally
+    persist:
+
+      * ``type='pdf'`` — a discriminator the FE switches on to choose
+        the right overlay renderer.
+      * ``page`` — the 1-based pdf.js page index the rects live on, so
+        the FE can short-circuit ``getTextContent`` lookups and so a
+        future migration tool can re-anchor on text drift.
+      * ``text`` — the literal text the user selected. Stored
+        separately from ``HighlightCreate.selected_text`` only because
+        the latter is canonicalised (e.g. trimmed) while ``text`` here
+        preserves the exact source-string the FE used to compute the
+        rects, which is what matters for fuzzy re-matching later.
+
+    Both shapes use the same 0..1-normalised ``BoundingRect`` so the
+    storage column stays type-stable and the existing desktop reader
+    still renders text-mode highlights as 0-height bars (current
+    behaviour). Unknown extra keys are silently ignored on read for
+    forward compatibility.
+    """
+
     # Cap rect count so a malicious client cannot push a huge JSON into the column.
     rects: list[BoundingRect] = Field(min_length=1, max_length=64)
+    type: Literal["text", "pdf"] | None = None
+    page: int | None = Field(default=None, ge=1)
+    text: str | None = Field(default=None, max_length=10_000)
 
 
 class HighlightCreate(BaseModel):

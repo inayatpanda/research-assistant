@@ -40,8 +40,15 @@ class SqliteHighlightRepository:
         self, *, article_id: str, data: HighlightCreate, user_id: str
     ) -> Highlight:
         payload = data.model_dump()
-        # BoundingCoords nested model needs explicit dump
-        payload["bounding_coords"] = data.bounding_coords.model_dump()
+        # BoundingCoords nested model needs explicit dump. ``exclude_none``
+        # keeps the legacy {rects:[…]} shape byte-identical to what the
+        # M2 mobile reader and the desktop reader emit, instead of
+        # back-filling Phase D3's optional ``type``/``page``/``text``
+        # discriminator keys with ``None`` (which would surprise the FE
+        # zod parser and bloat the JSON column).
+        payload["bounding_coords"] = data.bounding_coords.model_dump(
+            exclude_none=True
+        )
         h = Highlight(id=new_id(), user_id=user_id, article_id=article_id, **payload)
         self.session.add(h)
         await self.session.commit()
