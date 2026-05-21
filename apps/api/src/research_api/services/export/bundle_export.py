@@ -53,6 +53,7 @@ from ...db.models import (
     MetaInput,
     NarrativeSynthesisEntry,
     OutcomeInstrument,
+    PeerReview,
     Project,
     ProjectFrontmatter,
     ProsperoDraft,
@@ -131,6 +132,10 @@ class BundleInputs:
     economic_results: list[EconomicResult] = field(default_factory=list)
     # Phase 20 (MP20) — Interactive reporting checklists.
     checklist_runs: list[ChecklistRun] = field(default_factory=list)
+    # Phase 4.6 — AI peer-review critiques. Uploaded source files are NOT in
+    # the bundle (too heavy); the row still survives but ``source_file_ref``
+    # will be a stale reference once re-imported elsewhere.
+    peer_reviews: list[PeerReview] = field(default_factory=list)
 
 
 def _serialise(value: Any) -> Any:
@@ -262,4 +267,6 @@ def build_bundle(inputs: BundleInputs) -> dict[str, Any]:
         ],
         # Phase 20 (MP20) — Interactive reporting checklists.
         "checklist_runs": [_row_to_dict(c) for c in inputs.checklist_runs],
+        # Phase 4.6 — AI peer-review critiques.
+        "peer_reviews": [_row_to_dict(p) for p in inputs.peer_reviews],
     }

@@ -109,10 +109,19 @@ from ..services.storage.base import StorageRef
 router = APIRouter(tags=["export"])
 log = logging.getLogger("research_api.export")
 
-_ALLOWED_STYLES: tuple[CitationStyle, ...] = ("vancouver", "apa", "harvard", "ieee")
+_ALLOWED_STYLES: tuple[CitationStyle, ...] = (
+    "vancouver", "apa", "harvard", "ieee",
+    # Phase 16 (MP16) — Vancouver-family journal variants. Must stay in
+    # sync with `services.citation_format.CitationStyle` Literal.
+    "lancet", "nejm", "bjj", "jbjs_am", "bjsm", "jama",
+)
 # UI-facing aliases; the user sees "APA 7" so `?style=apa7` must be accepted
-# and resolved to the canonical `apa`.
-_STYLE_ALIASES: dict[str, CitationStyle] = {"apa7": "apa"}
+# and resolved to the canonical `apa`. Phase 16 journal aliases included so
+# the user can type either `jbjs` or `jbjs_am`.
+_STYLE_ALIASES: dict[str, CitationStyle] = {
+    "apa7": "apa",
+    "jbjs": "jbjs_am",
+}
 _IMPORT_SIZE_CAP_BYTES = 50 * 1024 * 1024  # 50 MiB
 _FILENAME_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
@@ -683,6 +692,16 @@ async def _collect_bundle_inputs(
         )
     )).scalars().all())
 
+    # Phase 4.6 — AI peer reviews.
+    from ..db.models import PeerReview
+
+    peer_reviews = list((await session.execute(
+        select(PeerReview).where(
+            PeerReview.project_id == project_id,
+            PeerReview.user_id == user_id,
+        )
+    )).scalars().all())
+
     # Phase 19 — SR depth tables.
     mesh_terms = list((await session.execute(
         select(MeshTerm).where(
@@ -758,6 +777,7 @@ async def _collect_bundle_inputs(
         economic_analyses=economic_analyses,
         economic_results=economic_results,
         checklist_runs=checklist_runs,
+        peer_reviews=peer_reviews,
     )
 
 

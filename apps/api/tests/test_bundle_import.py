@@ -287,6 +287,8 @@ async def test_import_full_round_trip_lossless(session):
         "economic_analyses": 0, "economic_results": 0,
         # Phase 20 (MP20) additions — bundle source didn't include any rows.
         "checklist_runs": 0,
+        # Phase 4.6 additions — bundle source didn't include any rows.
+        "peer_reviews": 0,
     }
 
     # Verify content survives (modulo IDs + user_id).

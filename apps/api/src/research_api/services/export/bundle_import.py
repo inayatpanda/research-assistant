@@ -52,6 +52,7 @@ from ...db.models import (
     MetaInput,
     NarrativeSynthesisEntry,
     OutcomeInstrument,
+    PeerReview,
     Project,
     ProjectFrontmatter,
     ProsperoDraft,
@@ -154,6 +155,8 @@ async def _do_import(
         "economic_analyses": 0, "economic_results": 0,
         # Phase 20 (MP20) — Interactive reporting checklists.
         "checklist_runs": 0,
+        # Phase 4.6 — AI peer-review critiques.
+        "peer_reviews": 0,
     }
 
     proj_in = bundle["project"]
@@ -516,6 +519,46 @@ async def _do_import(
         ))
         counts["checklist_runs"] += 1
     if counts["checklist_runs"]:
+        await session.flush()
+
+    # Phase 4.6 — Peer-review critiques. We re-import the row verbatim
+    # except for the uploaded source file (not transported in the bundle);
+    # the ``source_file_ref`` survives as a stale reference for audit but
+    # the export endpoint will refuse to stream the file.
+    _allowed_recs = {"reject", "major_revision", "minor_revision", "accept"}
+    _allowed_sources = {"manuscript", "uploaded_pdf", "uploaded_docx"}
+    for pr in bundle.get("peer_reviews") or []:
+        src = str(pr.get("source_type") or "manuscript")
+        if src not in _allowed_sources:
+            src = "manuscript"
+        rec = str(pr.get("recommendation") or "major_revision")
+        if rec not in _allowed_recs:
+            rec = "major_revision"
+        critique = pr.get("critique")
+        if not isinstance(critique, dict):
+            critique = {}
+        snapshot = pr.get("manuscript_snapshot")
+        if not isinstance(snapshot, dict):
+            snapshot = None
+        file_ref = pr.get("source_file_ref")
+        if not isinstance(file_ref, dict):
+            file_ref = None
+        session.add(PeerReview(
+            id=_new_id(),
+            user_id=target_user_id,
+            project_id=new_project_id,
+            source_type=src,
+            source_file_ref=file_ref,
+            source_title=str(pr.get("source_title") or "Imported peer review")[:1000],
+            manuscript_snapshot=snapshot,
+            critique=critique,
+            recommendation=rec,
+            ai_model=str(pr.get("ai_model") or "imported")[:64],
+            status=str(pr.get("status") or "completed")[:32],
+            error=pr.get("error"),
+        ))
+        counts["peer_reviews"] += 1
+    if counts["peer_reviews"]:
         await session.flush()
 
     review_in = bundle.get("review")
