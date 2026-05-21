@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -139,14 +140,30 @@ export function CoverLetterEditor({ projectId }: { projectId: string }) {
   return (
     <Card data-testid="cover-letter-editor">
       <CardHeader>
-        <CardTitle>Cover letter</CardTitle>
+        <CardTitle>
+          <LearnTooltip
+            concept="cover-letter"
+            iconOnly
+            description="What a good cover letter must include: registration, compliance, novelty, conflicts."
+          >
+            Cover letter
+          </LearnTooltip>
+        </CardTitle>
         <CardDescription>
           Target journal, novelty bullets, and the editable letter body.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1">
-          <Label htmlFor="cover-journal">Target journal</Label>
+          <Label htmlFor="cover-journal">
+            <LearnTooltip
+              concept="picking-a-journal"
+              iconOnly
+              description="How to pick a target journal: scope, impact factor, APC, time-to-decision."
+            >
+              Target journal
+            </LearnTooltip>
+          </Label>
           <Select
             value={journal ?? NONE_VALUE}
             onValueChange={(v) => setJournal(v === NONE_VALUE ? null : v)}

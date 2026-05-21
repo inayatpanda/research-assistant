@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -133,7 +134,15 @@ export function MetaAnalysisForm({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Pooling model</Label>
+              <Label>
+                <LearnTooltip
+                  concept="random-effects"
+                  iconOnly
+                  description="Random-effects models assume the true effect varies across studies; fixed-effect assumes one shared true effect."
+                >
+                  Pooling model
+                </LearnTooltip>
+              </Label>
               <Select value={model} onValueChange={(v) => setModel(v as PoolingModel)}>
                 <SelectTrigger>
                   <SelectValue />

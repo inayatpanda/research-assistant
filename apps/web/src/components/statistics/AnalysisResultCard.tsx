@@ -12,13 +12,41 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import {
   TEST_LABELS,
   type Analysis,
   type Dataset,
+  type TestKey,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
+
+/**
+ * Map an analysis test_key to the canonical Learn concept slug. Anything
+ * not in the table falls through to the kebab-cased test_key, which the
+ * LearnTooltip will gracefully ignore via `isKnownLearnConcept`.
+ */
+const TEST_LEARN_CONCEPT: Partial<Record<TestKey, string>> = {
+  independent_t: 'independent-t-test',
+  paired_t: 'paired-t-test',
+  mann_whitney: 'mann-whitney-u',
+  wilcoxon_signed: 'wilcoxon-signed-rank',
+  chi_squared: 'chi-square-independence',
+  fisher_exact: 'fisher-exact',
+  one_way_anova: 'one-way-anova',
+  kruskal_wallis: 'kruskal-wallis',
+  rm_anova: 'repeated-measures-anova',
+  pearson: 'pearson-correlation',
+  spearman: 'spearman-correlation',
+  linear_regression: 'linear-regression',
+  multiple_linear: 'multiple-linear-regression',
+  logistic: 'logistic-regression',
+  kaplan_meier: 'kaplan-meier-log-rank',
+  cox_ph: 'cox-proportional-hazards',
+  icc: 'icc',
+  mixed_effects_lm: 'mixed-effects-lm',
+}
 import {
   useDeleteAnalysis,
   useInterpretAnalysis,
@@ -87,8 +115,17 @@ export function AnalysisResultCard({
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-            {TEST_LABELS[analysis.chosen_test]}
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1">
+            <LearnTooltip
+              concept={
+                TEST_LEARN_CONCEPT[analysis.chosen_test] ??
+                analysis.chosen_test.replace(/_/g, '-')
+              }
+              iconOnly
+              description={`Open Learn entry for ${TEST_LABELS[analysis.chosen_test]}`}
+            >
+              {TEST_LABELS[analysis.chosen_test]}
+            </LearnTooltip>
           </div>
           <div className="mt-0.5 text-[13px] text-muted-foreground truncate">
             {variableSummary(analysis.variables, displayLabels)}

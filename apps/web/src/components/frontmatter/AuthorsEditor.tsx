@@ -16,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import {
   frontmatterApi,
   type AffiliationRead,
@@ -74,6 +75,15 @@ export function AuthorsEditor({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <LearnTooltip
+          concept="authorship-criteria"
+          iconOnly
+          description="The four ICMJE criteria — substantial contribution, drafting, approval, accountability — that every named author must meet."
+        >
+          ICMJE authorship criteria apply to everyone listed below.
+        </LearnTooltip>
+      </div>
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <label className="block text-xs font-medium text-muted-foreground mb-1">

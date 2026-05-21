@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import {
   frontmatterApi,
   type Funder,
@@ -44,7 +45,17 @@ export function EthicsFundingForm({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <Field label="Conflicts of interest">
+      <Field
+        label={
+          <LearnTooltip
+            concept="conflict-of-interest"
+            iconOnly
+            description="What to disclose, ICMJE form fields, when 'none' is acceptable."
+          >
+            Conflicts of interest
+          </LearnTooltip>
+        }
+      >
         <textarea
           value={coi}
           onChange={(e) => setCoi(e.target.value)}
@@ -156,7 +167,13 @@ export function EthicsFundingForm({ projectId }: { projectId: string }) {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1">

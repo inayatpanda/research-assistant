@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -161,7 +162,15 @@ export function GRADEAssessmentForm({
           />
         </div>
         <div>
-          <Label>Starting certainty</Label>
+          <Label>
+            <LearnTooltip
+              concept="grade"
+              iconOnly
+              description="GRADE starting certainty: RCTs start at high, observational studies at low."
+            >
+              Starting certainty
+            </LearnTooltip>
+          </Label>
           <div className="mt-2 flex gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -191,30 +200,35 @@ export function GRADEAssessmentForm({
         <legend className="text-sm font-medium">Downgrade domains</legend>
         <DomainSelect
           label="Risk of bias"
+          learnConcept="risk-of-bias"
           value={riskOfBias}
           onChange={setRiskOfBias}
           options={DOWNGRADE_OPTIONS}
         />
         <DomainSelect
           label="Inconsistency"
+          learnConcept="inconsistency"
           value={inconsistency}
           onChange={setInconsistency}
           options={DOWNGRADE_OPTIONS}
         />
         <DomainSelect
           label="Indirectness"
+          learnConcept="indirectness"
           value={indirectness}
           onChange={setIndirectness}
           options={DOWNGRADE_OPTIONS}
         />
         <DomainSelect
           label="Imprecision"
+          learnConcept="imprecision"
           value={imprecision}
           onChange={setImprecision}
           options={DOWNGRADE_OPTIONS}
         />
         <DomainSelect
           label="Publication bias"
+          learnConcept="publication-bias"
           value={publicationBias}
           onChange={setPublicationBias}
           options={DOWNGRADE_OPTIONS}
@@ -279,18 +293,32 @@ export function GRADEAssessmentForm({
 
 function DomainSelect<T extends string>({
   label,
+  learnConcept,
   value,
   onChange,
   options,
 }: {
   label: string
+  learnConcept?: string
   value: T
   onChange: (v: T) => void
   options: { value: T; label: string }[]
 }) {
   return (
     <div>
-      <Label>{label}</Label>
+      <Label>
+        {learnConcept ? (
+          <LearnTooltip
+            concept={learnConcept}
+            iconOnly
+            description={`Learn how the GRADE ${label.toLowerCase()} domain is judged.`}
+          >
+            {label}
+          </LearnTooltip>
+        ) : (
+          label
+        )}
+      </Label>
       <Select value={value} onValueChange={(v) => onChange(v as T)}>
         <SelectTrigger className="mt-1" aria-label={label}>
           <SelectValue />

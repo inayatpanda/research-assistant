@@ -1,5 +1,6 @@
 import { AlertTriangle, Settings2, Sparkles } from 'lucide-react'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -15,6 +16,27 @@ import {
 } from '@/lib/api'
 
 const TEST_KEYS = Object.keys(TEST_LABELS) as TestKey[]
+
+const TEST_LEARN_CONCEPT: Partial<Record<TestKey, string>> = {
+  independent_t: 'independent-t-test',
+  paired_t: 'paired-t-test',
+  mann_whitney: 'mann-whitney-u',
+  wilcoxon_signed: 'wilcoxon-signed-rank',
+  chi_squared: 'chi-square-independence',
+  fisher_exact: 'fisher-exact',
+  one_way_anova: 'one-way-anova',
+  kruskal_wallis: 'kruskal-wallis',
+  rm_anova: 'repeated-measures-anova',
+  pearson: 'pearson-correlation',
+  spearman: 'spearman-correlation',
+  linear_regression: 'linear-regression',
+  multiple_linear: 'multiple-linear-regression',
+  logistic: 'logistic-regression',
+  kaplan_meier: 'kaplan-meier-log-rank',
+  cox_ph: 'cox-proportional-hazards',
+  icc: 'icc',
+  mixed_effects_lm: 'mixed-effects-lm',
+}
 
 export function RecommendationCard({
   recommendation,
@@ -38,10 +60,18 @@ export function RecommendationCard({
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
             Recommended test
           </div>
-          <div className="mt-0.5 text-[15px] font-semibold tracking-tight">
-            {TEST_LABELS[effective]}
+          <div className="mt-0.5 text-[15px] font-semibold tracking-tight flex items-center gap-1.5 flex-wrap">
+            <LearnTooltip
+              concept={
+                TEST_LEARN_CONCEPT[effective] ?? effective.replace(/_/g, '-')
+              }
+              iconOnly
+              description={`Open Learn entry for ${TEST_LABELS[effective]}`}
+            >
+              {TEST_LABELS[effective]}
+            </LearnTooltip>
             {isOverridden && (
-              <span className="ml-2 text-[11px] font-medium text-amber-600">
+              <span className="text-[11px] font-medium text-amber-600">
                 (overridden from {TEST_LABELS[recommendation.chosen_test]})
               </span>
             )}

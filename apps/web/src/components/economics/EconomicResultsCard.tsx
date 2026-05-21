@@ -1,3 +1,4 @@
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartImage } from '@/components/statistics/ChartImage'
@@ -68,11 +69,27 @@ export function EconomicResultsCard({ analysis }: EconomicResultsCardProps) {
             </div>
           </div>
           <div>
-            <div className="text-muted-foreground">Mean QALY diff</div>
+            <div className="text-muted-foreground">
+              <LearnTooltip
+                concept="qaly"
+                iconOnly
+                description="QALY — quality-adjusted life year, combines length and quality of life into a single outcome."
+              >
+                Mean QALY diff
+              </LearnTooltip>
+            </div>
             <div className="font-semibold">{result.mean_qaly_diff.toFixed(4)}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">ICER</div>
+            <div className="text-muted-foreground">
+              <LearnTooltip
+                concept="icer"
+                iconOnly
+                description="ICER — incremental cost-effectiveness ratio, additional cost per additional QALY gained vs comparator."
+              >
+                ICER
+              </LearnTooltip>
+            </div>
             <div className="font-semibold">
               {result.icer === null
                 ? 'n/a'
@@ -87,7 +104,13 @@ export function EconomicResultsCard({ analysis }: EconomicResultsCardProps) {
         {Object.keys(result.nmb_at_thresholds ?? {}).length > 0 && (
           <div className="rounded-md border border-border p-3 text-sm">
             <div className="text-muted-foreground mb-1">
-              Net Monetary Benefit at each WTP
+              <LearnTooltip
+                concept="nmb"
+                iconOnly
+                description="Net Monetary Benefit — NMB = λ·ΔQALY − ΔCost, where λ is the willingness-to-pay threshold."
+              >
+                Net Monetary Benefit at each WTP
+              </LearnTooltip>
             </div>
             <ul className="grid grid-cols-2 md:grid-cols-3 gap-1">
               {Object.entries(result.nmb_at_thresholds)

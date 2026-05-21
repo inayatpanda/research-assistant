@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -62,7 +63,15 @@ export function ReviewerResponseEditor({ projectId }: { projectId: string }) {
   return (
     <Card data-testid="reviewer-response-editor">
       <CardHeader>
-        <CardTitle>Response to reviewers</CardTitle>
+        <CardTitle>
+          <LearnTooltip
+            concept="response-to-reviewers"
+            iconOnly
+            description="How to structure a response: comment / response / manuscript change, with line numbers."
+          >
+            Response to reviewers
+          </LearnTooltip>
+        </CardTitle>
         <CardDescription>
           Paste each reviewer&apos;s full comments block. The AI segments
           into individual comments and drafts initial responses.

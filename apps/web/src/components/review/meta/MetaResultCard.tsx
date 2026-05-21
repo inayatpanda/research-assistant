@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -104,11 +105,44 @@ export function MetaResultCard({
             </div>
             <table className="text-[12px]">
               <tbody>
-                <tr><td className="pr-2 text-muted-foreground">Q</td><td>{fmt(meta.q_value)}</td></tr>
+                <tr>
+                  <td className="pr-2 text-muted-foreground">
+                    <LearnTooltip
+                      concept="q-statistic"
+                      iconOnly
+                      description="Cochran's Q — chi-square test of heterogeneity between studies."
+                    >
+                      Q
+                    </LearnTooltip>
+                  </td>
+                  <td>{fmt(meta.q_value)}</td>
+                </tr>
                 <tr><td className="pr-2 text-muted-foreground">df</td><td>{meta.q_df ?? '—'}</td></tr>
                 <tr><td className="pr-2 text-muted-foreground">p</td><td>{fmtP(meta.q_p)}</td></tr>
-                <tr><td className="pr-2 text-muted-foreground">I²</td><td>{meta.i2 != null ? `${fmt(meta.i2, 1)}%` : '—'}</td></tr>
-                <tr><td className="pr-2 text-muted-foreground">τ²</td><td>{fmt(meta.tau2, 4)}</td></tr>
+                <tr>
+                  <td className="pr-2 text-muted-foreground">
+                    <LearnTooltip
+                      concept="i-squared"
+                      iconOnly
+                      description="I² — proportion of variability across studies due to heterogeneity rather than sampling error."
+                    >
+                      I²
+                    </LearnTooltip>
+                  </td>
+                  <td>{meta.i2 != null ? `${fmt(meta.i2, 1)}%` : '—'}</td>
+                </tr>
+                <tr>
+                  <td className="pr-2 text-muted-foreground">
+                    <LearnTooltip
+                      concept="tau-squared"
+                      iconOnly
+                      description="τ² — estimated between-study variance on the effect-size scale."
+                    >
+                      τ²
+                    </LearnTooltip>
+                  </td>
+                  <td>{fmt(meta.tau2, 4)}</td>
+                </tr>
               </tbody>
             </table>
           </div>

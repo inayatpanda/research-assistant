@@ -17,6 +17,7 @@ import { AlertTriangle, CheckCircle2, FlaskConical, Loader2 } from 'lucide-react
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -296,7 +297,15 @@ function StatResultCard({ result }: { result: DiagnosticResult }) {
       data-testid="diag-result"
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="font-medium text-[14px]">{label}</div>
+        <div className="font-medium text-[14px]">
+          <LearnTooltip
+            concept={result.test_key.replace(/_/g, '-')}
+            iconOnly
+            description={`Open Learn entry for ${label}`}
+          >
+            {label}
+          </LearnTooltip>
+        </div>
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',

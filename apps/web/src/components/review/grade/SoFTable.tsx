@@ -1,9 +1,17 @@
 import { Trash2 } from 'lucide-react'
 
+import { LearnTooltip } from '@/components/learn/LearnTooltip'
 import { Button } from '@/components/ui/button'
 import type { GradeAssessmentRead } from '@/lib/api'
 import { CERTAINTY_LABEL, CERTAINTY_SYMBOL } from '@/lib/grade'
 import { useDeleteGrade } from '@/hooks/useGrade'
+
+const CERTAINTY_DESCRIPTIONS: Record<string, string> = {
+  high: 'High certainty — we are very confident the true effect lies close to the estimate.',
+  moderate: 'Moderate certainty — the true effect is likely close to the estimate but with some uncertainty.',
+  low: 'Low certainty — the true effect may be substantially different from the estimate.',
+  very_low: 'Very low certainty — we have very little confidence in the effect estimate.',
+}
 
 export function SoFTable({
   projectId,
@@ -35,7 +43,15 @@ export function SoFTable({
           <th className="px-3 py-2 text-left">Outcome</th>
           <th className="px-3 py-2 text-left">Starting</th>
           <th className="px-3 py-2 text-left">Downgrades</th>
-          <th className="px-3 py-2 text-left">Certainty</th>
+          <th className="px-3 py-2 text-left">
+            <LearnTooltip
+              concept="grade"
+              iconOnly
+              description="GRADE certainty: high, moderate, low, or very low — reflects confidence in the effect estimate."
+            >
+              Certainty
+            </LearnTooltip>
+          </th>
           <th className="px-3 py-2 text-left">Notes</th>
           <th className="px-3 py-2" />
         </tr>
@@ -70,13 +86,22 @@ export function SoFTable({
                 )}
               </td>
               <td className="px-3 py-2">
-                <span
-                  className={`cert cert-${row.certainty} rounded px-2 py-0.5 text-xs font-medium`}
-                  data-certainty={row.certainty}
+                <LearnTooltip
+                  concept={row.certainty === 'very_low' ? 'very-low' : row.certainty}
+                  iconOnly
+                  description={
+                    CERTAINTY_DESCRIPTIONS[row.certainty] ??
+                    'GRADE certainty rating.'
+                  }
                 >
-                  {CERTAINTY_LABEL[row.certainty]}{' '}
-                  {CERTAINTY_SYMBOL[row.certainty]}
-                </span>
+                  <span
+                    className={`cert cert-${row.certainty} rounded px-2 py-0.5 text-xs font-medium`}
+                    data-certainty={row.certainty}
+                  >
+                    {CERTAINTY_LABEL[row.certainty]}{' '}
+                    {CERTAINTY_SYMBOL[row.certainty]}
+                  </span>
+                </LearnTooltip>
               </td>
               <td className="px-3 py-2 text-xs text-muted-foreground">
                 {row.notes ?? ''}
