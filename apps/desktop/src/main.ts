@@ -84,13 +84,17 @@ async function startBackend(): Promise<BackendState> {
   const port = await getPort({ port: portNumbers(18000, 18999) });
   const baseUrl = `http://127.0.0.1:${port}`;
 
+  // Phase S1 — production-mode Electron runs against the real multi-user
+  // auth subsystem. Set RMA_DEV=1 (e.g. ``RMA_DEV=1 npx electron .``)
+  // to revive the legacy static-user-id mode for local development.
+  const devMode = process.env.RMA_DEV === "1";
   const child = spawn(exe, ["--host", "127.0.0.1", "--port", String(port)], {
     env: {
       ...process.env,
       RMA_HOST: "127.0.0.1",
       RMA_PORT: String(port),
-      // S1 will flip this off; for E1 the static-user-id flow stays.
-      RMA_DISABLE_AUTH: "1",
+      // Real auth in prod; static-user-id mode only when RMA_DEV=1.
+      ...(devMode ? { RMA_DISABLE_AUTH: "1" } : { RMA_DISABLE_AUTH: "0" }),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

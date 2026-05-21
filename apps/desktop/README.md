@@ -122,10 +122,35 @@ are expected.
 
 ## What's NOT in E1 (intentional)
 
-* Real authentication — Phase S1.
 * Auto-update — reinstall to upgrade.
 * DMG custom background, branded icon, signed installer.
 * HTTPS over tailnet — HTTP only for v1.
+
+## Auth model (Phase S1)
+
+The packaged Electron app boots the FastAPI backend with
+`RMA_DISABLE_AUTH=0` — real argon2id auth + per-project membership /
+RBAC. On first launch the renderer's `<RequireAuth>` wrapper redirects
+to `/signup`; subsequent launches land on `/login`.
+
+For local development (running `npx electron .` against the source tree)
+set `RMA_DEV=1` to revive the static-`local-user` flow. CI / `pytest`
+also rely on this escape hatch via `RMA_DISABLE_AUTH=1` in
+`tests/conftest.py`.
+
+```bash
+# production-like launch (real auth)
+npx electron .
+
+# legacy single-user mode for fast iteration
+RMA_DEV=1 npx electron .
+```
+
+Existing data from pre-S1 installations: the migration 0028 step seeds
+an owner row for the legacy `local-user` so projects keep working.
+After the first signup, the renderer's `/welcome` route can offer to
+"Adopt local data" — the backend exposes `GET /api/auth/legacy-data-
+status` and `POST /api/auth/claim-legacy-data` for this.
 
 ## Common pitfalls
 
