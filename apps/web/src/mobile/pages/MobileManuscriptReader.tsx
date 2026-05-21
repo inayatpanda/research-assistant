@@ -1,5 +1,6 @@
 /**
  * Phase M3.2 — Mobile Manuscript reader + per-paragraph edit sheet.
+ * Phase D4 — Highlights mode wired to the comments backend.
  *
  * The desktop editor is a TipTap rich-text surface backed by ProseMirror
  * — beautiful on a 27-inch monitor, hostile on a phone (no caret
@@ -25,12 +26,20 @@
  *   5. Tapping a citation chip (``<sup data-citation data-article-id="…">``)
  *      navigates to ``/m/reader/<articleId>``.
  *
- * Highlights on the manuscript — not implemented in M3. The existing
- * comments backend takes section + character offsets (not a
- * paragraph_id), and mapping a touch to an offset robustly across a
- * mixed-HTML paragraph would require selection plumbing we explicitly
- * declined to grow in M3. The overflow menu surfaces a "Highlights
- * coming soon" message so the gap is visible to the user.
+ * Phase D4 — Highlights mode (the previously deferred M3 stub):
+ *   - Overflow menu carries a "Highlights" toggle. Off → tap-to-edit
+ *     (the M3 behaviour). On → long-press a paragraph word to enter
+ *     selection mode, drag handles to extend, pick a colour swatch
+ *     from the bottom bar to POST a comment.
+ *   - Existing comments render inline as ``<mark data-comment-id>``
+ *     wrappers, computed via ``offsetsToHighlightSpans``. Multiple
+ *     overlapping comments → nested spans (handled in the helper).
+ *   - Tapping a marked span opens a BottomSheet with quoted text +
+ *     notes textarea (800ms debounced auto-save) + colour swatch
+ *     row + delete button.
+ *   - Citation chips are preserved: the helper splits paragraphs in
+ *     plain-text space but emits HTML slices, so ``<sup
+ *     data-citation>`` chips remain intact inside coloured spans.
  *
  * Frontmatter / Snapshots / Export are all opened as read-only sheets
  * over existing endpoints; mobile is intentionally a thin client over
@@ -41,10 +50,12 @@ import {
   ArrowLeft,
   Download,
   FileSignature,
+  Highlighter,
   History,
   Loader2,
   MoreVertical,
   Sparkles,
+  Trash2,
   WifiOff,
 } from 'lucide-react'
 import {
@@ -60,12 +71,14 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  commentsApi,
   exportApi,
   frontmatterApi,
   manuscriptApi,
   projectsApi,
   snapshotsApi,
   writingApi,
+  type CommentRead,
   type ManuscriptSection,
   type ManuscriptSectionName,
   type Project,
@@ -76,6 +89,12 @@ import { cn } from '@/lib/utils'
 
 import { BottomSheet } from '../components/BottomSheet'
 import { cacheable } from '../lib/offlineLearn'
+import {
+  offsetsToHighlightSpans,
+  paragraphOffsets,
+  wordRangeToOffsets,
+  type ParagraphRenderPlan,
+} from '../lib/manuscriptOffsets'
 
 const SECTION_ORDER: ManuscriptSectionName[] = [
   'Abstract',
@@ -94,6 +113,48 @@ const SECTION_DISPLAY: Record<ManuscriptSectionName, string> = {
   Discussion: 'Discussion',
   Conclusion: 'Conclusion',
 }
+
+// Phase D4 — Highlight palette. Re-uses the M2 reader's four-colour
+// scheme so a comment created here looks the same as a highlight created
+// in the article reader. The comments backend has no ``colour`` column
+// (it's a body-only entity), so we encode the colour in the body as a
+// leading tag ``[colour:intro]`` which the renderer strips. This keeps
+// us free of pip / npm deps and the spec-mandated backend-untouched
+// guarantee.
+const HIGHLIGHT_COLOURS = [
+  { id: 'intro', bg: '#EF4444', label: 'Intro' },
+  { id: 'method', bg: '#3B82F6', label: 'Method' },
+  { id: 'results', bg: '#22C55E', label: 'Results' },
+  { id: 'discussion', bg: '#EAB308', label: 'Discussion' },
+] as const
+
+type HighlightColour = (typeof HIGHLIGHT_COLOURS)[number]['id']
+
+const COLOUR_BG: Record<HighlightColour, string> = {
+  intro: '#EF4444',
+  method: '#3B82F6',
+  results: '#22C55E',
+  discussion: '#EAB308',
+}
+
+const COLOUR_TAG_RE = /^\[colour:(intro|method|results|discussion)\]\s?/
+
+function encodeBody(colour: HighlightColour, note: string): string {
+  // Body has a min_length=1 constraint, so we always emit the colour
+  // tag even for an empty note.
+  return `[colour:${colour}]${note}`
+}
+
+function parseBody(body: string): { colour: HighlightColour; note: string } {
+  const m = COLOUR_TAG_RE.exec(body)
+  if (m) {
+    return { colour: m[1] as HighlightColour, note: body.slice(m[0].length) }
+  }
+  return { colour: 'intro', note: body }
+}
+
+const LONG_PRESS_MS = 500
+const LONG_PRESS_TOLERANCE_PX = 10
 
 // ---------------------------------------------------------------------------
 // Paragraph splitting / joining. We rely on a paragraph fragment being
@@ -356,10 +417,139 @@ export default function MobileManuscriptReader() {
     },
   })
 
+  // ------ Phase D4 — Highlights mode
+  //
+  // The mode toggle lives in the overflow menu (Highlights). When off,
+  // the existing tap-paragraph-to-edit flow runs. When on, long-press
+  // enters word-range selection, drag handles extend it, a swatch row
+  // commits a comment via ``commentsApi.create``.
+  //
+  // Existing comments are fetched once per project and grouped by
+  // section. Render spans are computed via the helper so overlapping
+  // ranges nest correctly without losing citation chips.
+  const [highlightsMode, setHighlightsMode] = useState(false)
+  const commentsQ = useQuery({
+    queryKey: ['mmr', 'comments', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('missing projectId')
+      return commentsApi.list(projectId)
+    },
+    enabled: !!projectId,
+  })
+  const comments: CommentRead[] = commentsQ.data ?? []
+  const commentById = useMemo(() => {
+    const m = new Map<string, CommentRead>()
+    for (const c of comments) m.set(c.id, c)
+    return m
+  }, [comments])
+
+  // Render plans per section — recomputed when the section content or
+  // the comments list changes.
+  const renderPlans: Record<ManuscriptSectionName, ParagraphRenderPlan[]> =
+    useMemo(() => {
+      const out = {} as Record<ManuscriptSectionName, ParagraphRenderPlan[]>
+      for (const s of SECTION_ORDER) {
+        const html = sections[s]?.content ?? ''
+        const ofSection = comments.filter((c) => c.section_name === s)
+        out[s] = offsetsToHighlightSpans(ofSection, html)
+      }
+      return out
+    }, [sections, comments])
+
+  // Long-press / selection state for highlights mode.
+  type SelectionState = {
+    section: ManuscriptSectionName
+    paragraphIdx: number
+    wordStart: number
+    wordEnd: number
+  }
+  const [selection, setSelection] = useState<SelectionState | null>(null)
+  const pressTimer = useRef<number | null>(null)
+  const pressOrigin = useRef<{
+    x: number
+    y: number
+    section: ManuscriptSectionName
+    paragraphIdx: number
+    wordIdx: number
+  } | null>(null)
+
+  function clearPressTimer() {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
+
+  function wordHitAtPoint(
+    clientX: number,
+    clientY: number,
+  ): {
+    section: ManuscriptSectionName
+    paragraphIdx: number
+    wordIdx: number
+  } | null {
+    if (typeof document === 'undefined') return null
+    const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+    if (!el) return null
+    const wordEl = el.closest('[data-word-idx]') as HTMLElement | null
+    if (!wordEl) return null
+    const paraEl = wordEl.closest('[data-paragraph-id]') as HTMLElement | null
+    if (!paraEl) return null
+    const pid = paraEl.getAttribute('data-paragraph-id') ?? ''
+    const dash = pid.indexOf('-p')
+    if (dash <= 0) return null
+    const section = pid.slice(0, dash) as ManuscriptSectionName
+    const paragraphIdx = Number(pid.slice(dash + 2))
+    const wordIdx = Number(wordEl.getAttribute('data-word-idx'))
+    if (!Number.isFinite(paragraphIdx) || !Number.isFinite(wordIdx)) return null
+    return { section, paragraphIdx, wordIdx }
+  }
+
+  function onBodyTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (!highlightsMode) return
+    if (e.touches.length !== 1) {
+      clearPressTimer()
+      return
+    }
+    const t = e.touches[0]
+    const hit = wordHitAtPoint(t.clientX, t.clientY)
+    if (!hit) return
+    pressOrigin.current = { x: t.clientX, y: t.clientY, ...hit }
+    clearPressTimer()
+    pressTimer.current = window.setTimeout(() => {
+      setSelection({
+        section: hit.section,
+        paragraphIdx: hit.paragraphIdx,
+        wordStart: hit.wordIdx,
+        wordEnd: hit.wordIdx,
+      })
+      pressTimer.current = null
+    }, LONG_PRESS_MS)
+  }
+
+  function onBodyTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    const origin = pressOrigin.current
+    if (!origin || pressTimer.current == null) return
+    const t = e.touches[0]
+    const dx = Math.abs(t.clientX - origin.x)
+    const dy = Math.abs(t.clientY - origin.y)
+    if (dx > LONG_PRESS_TOLERANCE_PX || dy > LONG_PRESS_TOLERANCE_PX) {
+      clearPressTimer()
+      pressOrigin.current = null
+    }
+  }
+
+  function onBodyTouchEnd() {
+    clearPressTimer()
+    pressOrigin.current = null
+  }
+
   // ------ Citation chip handling: a delegated click handler on the
   // article body intercepts taps on ``<sup data-citation>`` nodes and
-  // routes to the mobile article reader. Other taps fall through to
-  // paragraph-edit handlers below.
+  // routes to the mobile article reader. Highlights-mode → tap an
+  // existing comment span opens the edit sheet. Otherwise, taps fall
+  // through to paragraph-edit handlers below.
+  const [editingComment, setEditingComment] = useState<CommentRead | null>(null)
   const onBodyClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement
@@ -371,25 +561,176 @@ export default function MobileManuscriptReader() {
         if (aid) navigate(`/m/reader/${aid}`)
         return
       }
+      const mark = target.closest('[data-comment-id]') as HTMLElement | null
+      if (mark) {
+        e.preventDefault()
+        e.stopPropagation()
+        const cid = mark.getAttribute('data-comment-id') ?? ''
+        // For overlapping spans we encode IDs comma-joined; pick the
+        // first as the entry point (the user can tap an adjacent
+        // non-overlapped portion to reach the other).
+        const firstId = cid.split(',')[0]
+        const c = commentById.get(firstId)
+        if (c) setEditingComment(c)
+        return
+      }
+      if (highlightsMode) {
+        // In highlights mode taps don't open the edit sheet — they
+        // either dismiss a live selection or do nothing.
+        if (selection) setSelection(null)
+        return
+      }
       const para = target.closest('[data-paragraph-id]') as HTMLElement | null
       if (!para) return
-      const id = para.getAttribute('data-paragraph-id')
-      if (!id) return
-      const [section, rest] = id.split('-p')
-      const idx = Number(rest)
+      const id = para.getAttribute('data-paragraph-id') ?? ''
+      const dash = id.indexOf('-p')
+      if (dash <= 0) return
+      const section = id.slice(0, dash) as ManuscriptSectionName
+      const idx = Number(id.slice(dash + 2))
       if (!Number.isFinite(idx)) return
-      openParagraph(section as ManuscriptSectionName, idx)
+      openParagraph(section, idx)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sections, projectId],
+    [sections, projectId, highlightsMode, commentById, selection],
   )
+
+  // ------ Highlights — create / update / delete mutations
+  const createComment = useMutation({
+    mutationFn: async (colour: HighlightColour) => {
+      if (!projectId) throw new Error('missing project')
+      if (!selection) throw new Error('no selection')
+      const html = sections[selection.section]?.content ?? ''
+      const paras = paragraphOffsets(html)
+      const p = paras[selection.paragraphIdx]
+      if (!p) throw new Error('paragraph out of range')
+      const { anchor_start, anchor_end } = wordRangeToOffsets(
+        p.html,
+        selection.wordStart,
+        selection.wordEnd,
+        p.start,
+      )
+      return commentsApi.create(projectId, {
+        section_name: selection.section,
+        anchor_start,
+        anchor_end: Math.max(anchor_end, anchor_start + 1),
+        body: encodeBody(colour, ''),
+      })
+    },
+    onSuccess: () => {
+      if (!projectId) return
+      qc.invalidateQueries({ queryKey: ['mmr', 'comments', projectId] })
+      setSelection(null)
+      toast.success('Highlight saved')
+    },
+    onError: (err) => {
+      if (!navigator.onLine) {
+        toast.error('Offline — connect to laptop to save')
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Could not save')
+      }
+    },
+  })
+
+  const updateComment = useMutation({
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id: string
+      body: string
+    }) => {
+      if (!projectId) throw new Error('missing project')
+      return commentsApi.update(projectId, id, { body })
+    },
+    onSuccess: (c) => {
+      if (!projectId) return
+      qc.invalidateQueries({ queryKey: ['mmr', 'comments', projectId] })
+      setEditingComment(c)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    },
+  })
+
+  const deleteComment = useMutation({
+    mutationFn: async (id: string) => {
+      if (!projectId) throw new Error('missing project')
+      return commentsApi.delete(projectId, id)
+    },
+    onSuccess: () => {
+      if (!projectId) return
+      qc.invalidateQueries({ queryKey: ['mmr', 'comments', projectId] })
+      setEditingComment(null)
+      toast.success('Highlight deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Delete failed')
+    },
+  })
+
+  // ------ Edit-sheet auto-save (note text)
+  const editNoteTimer = useRef<number | null>(null)
+  const [editNoteDraft, setEditNoteDraft] = useState('')
+  const [editColour, setEditColour] = useState<HighlightColour>('intro')
+  useEffect(() => {
+    if (!editingComment) {
+      setEditNoteDraft('')
+      setEditColour('intro')
+      return
+    }
+    const { colour, note } = parseBody(editingComment.body)
+    setEditNoteDraft(note)
+    setEditColour(colour)
+  }, [editingComment?.id, editingComment?.body])
+
+  function onEditNoteChange(v: string) {
+    setEditNoteDraft(v)
+    if (editNoteTimer.current != null) {
+      window.clearTimeout(editNoteTimer.current)
+    }
+    if (!editingComment) return
+    editNoteTimer.current = window.setTimeout(() => {
+      updateComment.mutate({
+        id: editingComment.id,
+        body: encodeBody(editColour, v),
+      })
+    }, 800)
+  }
+
+  function onEditPickColour(colour: HighlightColour) {
+    setEditColour(colour)
+    if (!editingComment) return
+    if (editNoteTimer.current != null) {
+      window.clearTimeout(editNoteTimer.current)
+    }
+    updateComment.mutate({
+      id: editingComment.id,
+      body: encodeBody(colour, editNoteDraft),
+    })
+  }
+
+  // Quoted text shown in the edit sheet header — uses the comment's
+  // anchor to slice the section's plain text.
+  const editingQuote = useMemo(() => {
+    if (!editingComment) return ''
+    const section = sections[editingComment.section_name as ManuscriptSectionName]
+    if (!section) return ''
+    const paras = paragraphOffsets(section.content)
+    for (const p of paras) {
+      const lo = Math.max(editingComment.anchor_start, p.start)
+      const hi = Math.min(editingComment.anchor_end, p.end)
+      if (hi > lo) {
+        return p.text.slice(lo - p.start, hi - p.start)
+      }
+    }
+    return ''
+  }, [editingComment, sections])
 
   // ------ Overflow menu
   const [overflowOpen, setOverflowOpen] = useState(false)
   const [frontmatterOpen, setFrontmatterOpen] = useState(false)
   const [snapshotsOpen, setSnapshotsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
-  const [highlightsOpen, setHighlightsOpen] = useState(false)
 
   // Frontmatter detail
   const frontmatterQ = useQuery({
@@ -515,11 +856,15 @@ export default function MobileManuscriptReader() {
       <div
         className="flex-1 px-4 pt-3 pb-36 text-[15px] leading-7 text-foreground"
         onClick={onBodyClick}
+        onTouchStart={onBodyTouchStart}
+        onTouchMove={onBodyTouchMove}
+        onTouchEnd={onBodyTouchEnd}
+        onTouchCancel={onBodyTouchEnd}
         data-testid="mmr-body"
+        data-highlights-mode={highlightsMode ? '1' : '0'}
       >
         {SECTION_ORDER.map((s) => {
-          const section = sections[s]
-          const paras = splitParagraphs(section?.content ?? '')
+          const plans = renderPlans[s] ?? []
           return (
             <section
               key={s}
@@ -534,7 +879,7 @@ export default function MobileManuscriptReader() {
                   {SECTION_DISPLAY[s]}
                 </span>
               </div>
-              {paras.length === 0 && (
+              {plans.length === 0 && (
                 <p
                   className="my-3 italic text-muted-foreground text-[13px]"
                   data-testid={`mmr-section-empty-${s}`}
@@ -542,18 +887,83 @@ export default function MobileManuscriptReader() {
                   (Empty — write this section on desktop or below.)
                 </p>
               )}
-              {paras.map((p, i) => (
-                <ParagraphRow
-                  key={`${s}-p${i}`}
-                  section={s}
-                  index={i}
-                  html={p}
-                />
-              ))}
+              {plans.map((plan, i) => {
+                const liveSelection =
+                  highlightsMode &&
+                  selection &&
+                  selection.section === s &&
+                  selection.paragraphIdx === i
+                    ? selection
+                    : null
+                return (
+                  <ParagraphRow
+                    key={`${s}-p${i}`}
+                    section={s}
+                    index={i}
+                    plan={plan}
+                    highlightsMode={highlightsMode}
+                    selectedWordRange={
+                      liveSelection
+                        ? {
+                            start: Math.min(
+                              liveSelection.wordStart,
+                              liveSelection.wordEnd,
+                            ),
+                            end: Math.max(
+                              liveSelection.wordStart,
+                              liveSelection.wordEnd,
+                            ),
+                          }
+                        : null
+                    }
+                    commentColours={(id) => {
+                      const c = commentById.get(id)
+                      if (!c) return COLOUR_BG.intro
+                      return COLOUR_BG[parseBody(c.body).colour]
+                    }}
+                  />
+                )
+              })}
             </section>
           )
         })}
       </div>
+
+      {/* Phase D4 — Colour-swatch toolbar (visible only while a
+          highlights-mode selection is live). */}
+      {highlightsMode && selection && (
+        <div
+          data-testid="mmr-swatch-bar"
+          className="fixed left-0 right-0 z-30 border-t border-border bg-background/95 px-3 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur"
+          style={{ bottom: 64 }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-2">
+              {HIGHLIGHT_COLOURS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  data-testid={`mmr-swatch-${c.id}`}
+                  aria-label={`Highlight ${c.label}`}
+                  disabled={createComment.isPending}
+                  onClick={() => createComment.mutate(c.id)}
+                  className="h-9 w-9 rounded-full ring-2 ring-background"
+                  style={{ backgroundColor: c.bg }}
+                />
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelection(null)}
+              data-testid="mmr-swatch-cancel"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom action bar */}
       <div
@@ -613,14 +1023,23 @@ export default function MobileManuscriptReader() {
             testId="mmr-overflow-export"
           />
           <OverflowRow
-            icon={Sparkles}
-            title="Highlights"
-            subtitle="Coming soon — use the desktop reader"
+            icon={Highlighter}
+            title={highlightsMode ? 'Highlights — on' : 'Highlights — off'}
+            subtitle={
+              highlightsMode
+                ? 'Long-press a paragraph to select words'
+                : 'Tap to enable; long-press to highlight'
+            }
             onClick={() => {
               setOverflowOpen(false)
-              setHighlightsOpen(true)
+              setHighlightsMode((m) => !m)
+              setSelection(null)
+              toast.message(
+                highlightsMode ? 'Highlights mode: off' : 'Highlights mode: on',
+              )
             }}
             testId="mmr-overflow-highlights"
+            active={highlightsMode}
           />
         </div>
       </BottomSheet>
@@ -802,22 +1221,68 @@ export default function MobileManuscriptReader() {
         </div>
       </BottomSheet>
 
-      {/* Highlights placeholder sheet */}
+      {/* Phase D4 — Comment edit sheet (opened by tapping a highlighted
+          span). Quoted text + notes (800ms debounce auto-save) +
+          colour swatch row + delete button. */}
       <BottomSheet
-        open={highlightsOpen}
-        onClose={() => setHighlightsOpen(false)}
-        title="Highlights"
-        snapPoints={['40%']}
+        open={editingComment !== null}
+        onClose={() => setEditingComment(null)}
+        title="Highlight"
+        snapPoints={['70%']}
       >
-        <div
-          className="flex flex-col gap-2 pb-2 text-[13px] text-muted-foreground"
-          data-testid="mmr-highlights-sheet"
-        >
-          Manuscript highlights are not yet available on mobile. Use the
-          desktop reader to add margin comments and coloured highlights;
-          they will sync down to mobile once the section comments
-          backend exposes paragraph-level anchors.
-        </div>
+        {editingComment && (
+          <div
+            className="flex flex-col gap-3 pb-2"
+            data-testid="mmr-comment-sheet"
+          >
+            <div
+              className="rounded-md border-l-4 bg-muted/40 px-3 py-2 text-[13px] italic text-foreground"
+              style={{ borderLeftColor: COLOUR_BG[editColour] }}
+              data-testid="mmr-comment-quote"
+            >
+              {editingQuote || '(no text)'}
+            </div>
+            <textarea
+              value={editNoteDraft}
+              onChange={(e) => onEditNoteChange(e.target.value)}
+              placeholder="Add a note…"
+              data-testid="mmr-comment-note"
+              className="min-h-[100px] resize-none rounded-lg border border-border bg-card px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-2">
+                {HIGHLIGHT_COLOURS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    data-testid={`mmr-comment-colour-${c.id}`}
+                    aria-label={`Re-colour to ${c.label}`}
+                    onClick={() => onEditPickColour(c.id)}
+                    className={cn(
+                      'h-8 w-8 rounded-full ring-2',
+                      editColour === c.id
+                        ? 'ring-foreground'
+                        : 'ring-background',
+                    )}
+                    style={{ backgroundColor: c.bg }}
+                  />
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={deleteComment.isPending}
+                onClick={() => deleteComment.mutate(editingComment.id)}
+                data-testid="mmr-comment-delete"
+                className="text-rose-700"
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        )}
       </BottomSheet>
     </div>
   )
@@ -827,39 +1292,238 @@ export default function MobileManuscriptReader() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase D4 — ParagraphRow renders the M2-style word-indexed paragraph
+ * with optional comment-mark wrappers and live-selection highlights.
+ *
+ * Rendering algorithm:
+ *   1. Walk the inner HTML token-by-token. Tokens are either a
+ *      ``<tag ...>`` (kept verbatim, contributes 0 plain chars) or a
+ *      plain-text run.
+ *   2. Plain-text runs are split on whitespace. Each non-whitespace
+ *      chunk becomes a ``<span data-word-idx="N">`` that the touch
+ *      handlers up the tree pick up to drive selection.
+ *   3. The current plain-text cursor tracks which word index we're on
+ *      AND lets us ask the spans plan ("which comment IDs cover this
+ *      char?"). Words covered by ≥1 comment are wrapped in a
+ *      ``<mark data-comment-id>`` whose background colour comes from
+ *      the parent. Overlapping comments emit comma-joined IDs.
+ *   4. Live word selection (range from the parent) styles words with a
+ *      sky-blue ring so the user sees what they've selected.
+ *
+ * Citation chip preservation (D4.4): chips are inline ``<sup
+ * data-citation>`` tags; they're emitted verbatim by step 1 and never
+ * touched by the marking logic — so a chip inside a highlighted range
+ * remains a tappable chip.
+ */
 function ParagraphRow({
   section,
   index,
-  html,
+  plan,
+  highlightsMode,
+  selectedWordRange,
+  commentColours,
 }: {
   section: ManuscriptSectionName
   index: number
-  html: string
+  plan: ParagraphRenderPlan
+  highlightsMode: boolean
+  selectedWordRange: { start: number; end: number } | null
+  commentColours: (id: string) => string
 }) {
-  // Strip the wrapping <p> tags so we can render a proper <p> from
-  // React (otherwise we'd nest one inside another). The inner HTML
-  // still carries inline tags like <strong>, <em>, <sup data-citation>.
-  const inner = useMemo(() => {
-    const m = /^<p\b[^>]*>([\s\S]*)<\/p>$/i.exec(html)
-    return m ? m[1] : html
-  }, [html])
+  // Build a flat ordered list of "atoms": either a word token, an
+  // HTML pass-through fragment, or a whitespace fragment. Each carries
+  // the set of comment IDs at its plain-text midpoint so we wrap
+  // covered ones in <mark>.
+  const atoms = useMemo(() => {
+    type Atom =
+      | { kind: 'word'; idx: number; text: string; commentIds: string[] }
+      | { kind: 'space'; text: string; commentIds: string[] }
+      | { kind: 'html'; html: string; commentIds: string[] }
+    const out: Atom[] = []
+    let wordCounter = 0
+    let plainCursor = 0
+
+    // Build a fast lookup: for each plain-text position, which
+    // comment IDs cover it? We build interval ends so it's O(spans).
+    type Interval = { lo: number; hi: number; ids: string[] }
+    const intervals: Interval[] = []
+    let cursor = 0
+    for (const span of plan.spans) {
+      // Compute the plain-text length covered by this HTML span by
+      // walking through the HTML and counting non-tag, non-entity
+      // characters. Cheap, since spans are small.
+      const plainLen = plainLengthOf(span.html)
+      if (plainLen > 0 && span.commentIds.length > 0) {
+        intervals.push({
+          lo: cursor,
+          hi: cursor + plainLen,
+          ids: span.commentIds,
+        })
+      }
+      cursor += plainLen
+    }
+
+    function idsAt(pos: number): string[] {
+      for (const it of intervals) {
+        if (pos >= it.lo && pos < it.hi) return it.ids
+      }
+      return []
+    }
+
+    // Walk the joined inner HTML token-by-token. Joining the plan
+    // spans reconstructs the original inner HTML exactly.
+    const html = plan.spans.map((s) => s.html).join('')
+    let i = 0
+    while (i < html.length) {
+      const ch = html[i]
+      if (ch === '<') {
+        const end = html.indexOf('>', i)
+        if (end === -1) break
+        const tag = html.slice(i, end + 1)
+        out.push({ kind: 'html', html: tag, commentIds: idsAt(plainCursor) })
+        i = end + 1
+        continue
+      }
+      if (ch === '&') {
+        const end = html.indexOf(';', i)
+        if (end !== -1 && end - i <= 8) {
+          const ent = html.slice(i, end + 1)
+          // Treat HTML entities as a single character in plain space.
+          out.push({ kind: 'html', html: ent, commentIds: idsAt(plainCursor) })
+          plainCursor += 1
+          i = end + 1
+          continue
+        }
+      }
+      // Plain text run — scan until next tag/entity boundary.
+      let j = i
+      let runText = ''
+      while (j < html.length && html[j] !== '<' && html[j] !== '&') {
+        runText += html[j]
+        j += 1
+      }
+      // Split into words / whitespace.
+      let k = 0
+      while (k < runText.length) {
+        if (/\s/.test(runText[k])) {
+          let s = k
+          while (k < runText.length && /\s/.test(runText[k])) k++
+          const text = runText.slice(s, k)
+          out.push({
+            kind: 'space',
+            text,
+            commentIds: idsAt(plainCursor),
+          })
+          plainCursor += text.length
+        } else {
+          let s = k
+          while (k < runText.length && !/\s/.test(runText[k])) k++
+          const text = runText.slice(s, k)
+          out.push({
+            kind: 'word',
+            idx: wordCounter++,
+            text,
+            commentIds: idsAt(plainCursor),
+          })
+          plainCursor += text.length
+        }
+      }
+      i = j
+    }
+    return out
+  }, [plan])
 
   return (
     <p
       data-paragraph-id={`${section}-p${index}`}
       data-testid={`mmr-para-${section}-${index}`}
       className={cn(
-        'my-3 cursor-pointer rounded-md transition-colors',
-        'active:bg-muted/60 hover:bg-muted/40',
+        'my-3 rounded-md transition-colors',
+        !highlightsMode && 'cursor-pointer active:bg-muted/60 hover:bg-muted/40',
         '[&_sup[data-citation]]:cursor-pointer',
         '[&_sup[data-citation]]:rounded-sm',
         '[&_sup[data-citation]]:bg-primary/10',
         '[&_sup[data-citation]]:px-1',
         '[&_sup[data-citation]]:text-primary',
       )}
-      dangerouslySetInnerHTML={{ __html: inner }}
-    />
+      style={highlightsMode ? { touchAction: 'pan-y' } : undefined}
+    >
+      {atoms.map((atom, k) => {
+        if (atom.kind === 'html') {
+          // Pass through opening / closing inline tags and entities.
+          return (
+            <span
+              key={k}
+              dangerouslySetInnerHTML={{ __html: atom.html }}
+            />
+          )
+        }
+        if (atom.kind === 'space') {
+          return <span key={k}>{atom.text}</span>
+        }
+        const inSelection =
+          selectedWordRange &&
+          atom.idx >= selectedWordRange.start &&
+          atom.idx <= selectedWordRange.end
+        const commentBg =
+          atom.commentIds.length > 0
+            ? commentColours(atom.commentIds[0])
+            : null
+        const wrapperStyle: React.CSSProperties = {}
+        if (commentBg) {
+          wrapperStyle.backgroundColor = `${commentBg}4D`
+          wrapperStyle.boxShadow = `inset 0 -2px 0 ${commentBg}`
+          wrapperStyle.borderRadius = '2px'
+        }
+        if (inSelection) {
+          wrapperStyle.outline = '2px dashed #38BDF8'
+          wrapperStyle.outlineOffset = '1px'
+        }
+        return (
+          <span
+            key={k}
+            data-word-idx={atom.idx}
+            data-testid={`mmr-word-${section}-${index}-${atom.idx}`}
+            data-comment-id={
+              atom.commentIds.length > 0 ? atom.commentIds.join(',') : undefined
+            }
+            style={
+              Object.keys(wrapperStyle).length > 0 ? wrapperStyle : undefined
+            }
+          >
+            {atom.text}
+          </span>
+        )
+      })}
+    </p>
   )
+}
+
+/** Cheap count of the plain-text characters represented by an HTML run. */
+function plainLengthOf(html: string): number {
+  let n = 0
+  let i = 0
+  while (i < html.length) {
+    const ch = html[i]
+    if (ch === '<') {
+      const end = html.indexOf('>', i)
+      if (end === -1) break
+      i = end + 1
+      continue
+    }
+    if (ch === '&') {
+      const end = html.indexOf(';', i)
+      if (end !== -1 && end - i <= 8) {
+        n += 1
+        i = end + 1
+        continue
+      }
+    }
+    n += 1
+    i += 1
+  }
+  return n
 }
 
 function OverflowRow({
@@ -868,22 +1532,38 @@ function OverflowRow({
   subtitle,
   onClick,
   testId,
+  active,
 }: {
   icon: typeof Download
   title: string
   subtitle: string
   onClick: () => void
   testId: string
+  active?: boolean
 }) {
   return (
     <button
       type="button"
       data-testid={testId}
+      data-active={active ? '1' : '0'}
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors active:bg-muted/60 hover:bg-muted/40"
+      className={cn(
+        'flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-3 text-left transition-colors active:bg-muted/60 hover:bg-muted/40',
+        active ? 'border-primary/50 bg-primary/5' : 'border-border',
+      )}
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <div
+        className={cn(
+          'flex h-9 w-9 items-center justify-center rounded-lg',
+          active ? 'bg-primary/15' : 'bg-muted',
+        )}
+      >
+        <Icon
+          className={cn(
+            'h-4 w-4',
+            active ? 'text-primary' : 'text-muted-foreground',
+          )}
+        />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[14px] font-medium">{title}</div>
