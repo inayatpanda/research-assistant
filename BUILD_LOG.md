@@ -5,6 +5,77 @@ Newest entries on top. Each entry: timestamp · phase · what changed · any inc
 
 ---
 
+## 2026-05-21 · Phase D2 — Landing site ✅ COMPLETE
+
+**Scope**
+
+* New `apps/site` standalone Vite + React 19 + TypeScript + Tailwind project. Own
+  `package.json`, own `node_modules` — no shared deps with `apps/web`. Five
+  routes: `/`, `/install`, `/sync`, `/docs`, `/changelog`.
+* `src/lib/detectOS.ts` — pure UA → `'mac'|'win'|'linux'` mapping with iPadOS
+  masquerade handling (iPad reports `Macintosh` → mapped to mac+isMobile),
+  Android disambiguation (`Linux` + `Android` → linux+isMobile), and a fallback
+  to `mac` for unknown agents.
+* `src/pages/HomePage.tsx` — hero with auto-detected CTA, 8-feature grid (Library,
+  Reader, Manuscript editor, Statistics, Meta-analysis, Peer Review, Submission,
+  Mobile PWA), trust strip, footer CTA card.
+* `src/pages/InstallPage.tsx` — 3 OS download cards. The card matching the
+  detected platform gets `data-active="true"` and an accent ring. Each card
+  includes platform-specific first-launch workaround instructions (Gatekeeper,
+  SmartScreen, AppImage chmod).
+* `src/pages/SyncPage.tsx` — three-step Tailscale guide (install / sign-in / show
+  tailnet URL) with sticky "Why Tailscale?" + "Inviting collaborators" side
+  panels and a 4-item troubleshooting accordion.
+* `src/pages/DocsPage.tsx` — what / who / cost + 12-question FAQ accordion.
+* `src/pages/ChangelogPage.tsx` — reverse-chrono release entries sourced from
+  hand-authored `src/data/changelog.ts` (E1, M0-M5, S1, D1, D2 entries). Footnote
+  flags the future GitHub Releases auto-generation.
+* `src/components/Accordion.tsx` — local disclosure widget (no Radix) so the
+  marketing bundle stays small. Keyboard accessible via native `<button>`.
+* `apps/site/wrangler.toml` + `apps/site/README.md` — Cloudflare Pages config
+  (`name = "research-assistant"`, `pages_build_output_dir = "dist"`,
+  `compatibility_date = "2026-05-21"`) plus a deployment runbook for the user
+  including the GitHub-repo placeholder replace step and custom-domain wiring.
+* `public/_redirects` — SPA fallback (`/* /index.html 200`) so deep links work
+  on Pages.
+
+**Decisions**
+
+* Landing site is a separate Vite app, not a route on `apps/web`. Kept the
+  bundle to 254 KB / 81 KB gzip (React + Router + lucide-react only) so the
+  marketing page loads fast on cold visits.
+* Disclosure / accordion is hand-rolled, not Radix — fewer deps, no a11y
+  primitives the marketing site doesn't need.
+* All download URLs use the placeholder `TBD-OWNER/TBD-REPO` — the README
+  documents the find-and-replace step the user does once the GitHub repo is
+  created.
+
+**Tests** — 11 new vitests in `apps/site/src/__tests__/`:
+`HomePage.test.tsx` (2: hero copy + 8 feature cards present),
+`InstallPage.test.tsx` (3: 3 cards, detection highlight, win URL),
+`SyncPage.test.tsx` (1: three direct-child steps + troubleshooting heading),
+`DocsPage.test.tsx` (2: 12 questions + expand/collapse cycle),
+`ChangelogPage.test.tsx` (1: reverse-chrono ordering invariant),
+`App.test.tsx` (2: `/` + `/install` routing via MemoryRouter),
+`detectOS.test.ts` (7: Mac/Win/Linux/iPad/Android/unknown UA + URL builder).
+Final site count: **18 vitest passing**.
+
+Backend pytest **2293/2293 green** (unchanged), web vitest **433/433 green**
+(unchanged). `apps/site` `tsc --noEmit` clean. `npm run build` produces a 254 KB
+`dist/` (81 KB gzipped JS + 4.5 KB gzipped CSS).
+
+**Incidents**
+
+* Initial `SyncPage.test.tsx` used `within(stepsList).getAllByRole('listitem')`
+  which counted nested `<li>` elements from the troubleshooting accordion (6
+  instead of 3). Scoped to direct children only — see test comment.
+* TS6133 on `isMobile` local in `detectOS.ts` — the local helper was redundant
+  once the branches all returned explicit booleans; removed.
+
+**Tag**: (untagged — user deploys site separately from desktop releases).
+
+---
+
 ## 2026-05-20 · Mini-phase 16 — Citation depth ✅ COMPLETE
 
 **Scope**
