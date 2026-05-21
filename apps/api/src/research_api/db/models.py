@@ -1657,3 +1657,73 @@ class ChecklistRun(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class PeerReview(Base):
+    """Phase 4.6 — One AI peer-review critique for a project.
+
+    Two source modes share the table:
+
+    * ``source_type == 'manuscript'`` — reviews the user's own manuscript.
+      ``manuscript_snapshot`` stores a frozen copy of the sections at
+      review time so the critique remains meaningful even after the
+      manuscript evolves. ``source_file_ref`` is NULL.
+    * ``source_type == 'uploaded_pdf' | 'uploaded_docx'`` — reviews an
+      externally uploaded document. ``source_file_ref`` holds
+      ``{"backend", "key", "filename", "size"}``. ``manuscript_snapshot``
+      is NULL.
+
+    ``critique`` is the structured JSON the AI provider returns; see
+    ``services/ai/prompts/peer_review.py`` for the schema.
+    ``recommendation`` is one of reject | major_revision |
+    minor_revision | accept.
+    """
+
+    __tablename__ = "peer_reviews"
+    __table_args__ = (
+        Index(
+            "ix_peer_reviews_project_user_created",
+            "project_id",
+            "user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+            name="fk_peer_reviews_project_id",
+        ),
+        nullable=False,
+    )
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_file_ref: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    source_title: Mapped[str] = mapped_column(String(1000), nullable=False)
+    manuscript_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    critique: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    recommendation: Mapped[str] = mapped_column(String(32), nullable=False)
+    ai_model: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
