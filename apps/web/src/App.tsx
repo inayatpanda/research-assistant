@@ -36,10 +36,16 @@ import { Navigate, Outlet, useParams } from 'react-router-dom'
 // Phase M0 — mobile shell + DeviceRouter.
 import { DeviceRouter } from '@/mobile/DeviceRouter'
 import { MobileShell } from '@/mobile/MobileShell'
-import MobileLearnPlaceholder from '@/mobile/pages/MobileLearnPlaceholder'
+import MobileAccount from '@/mobile/pages/MobileAccount'
+import MobileLearn from '@/mobile/pages/MobileLearn'
+import MobileLearnEntryPage from '@/mobile/pages/MobileLearnEntryPage'
 import MobileLibraryPlaceholder from '@/mobile/pages/MobileLibraryPlaceholder'
 import MobileManuscriptsPlaceholder from '@/mobile/pages/MobileManuscriptsPlaceholder'
-import MobileMorePlaceholder from '@/mobile/pages/MobileMorePlaceholder'
+import MobileMore from '@/mobile/pages/MobileMore'
+import MobilePeerReview from '@/mobile/pages/MobilePeerReview'
+import MobilePeerReviewDetail from '@/mobile/pages/MobilePeerReviewDetail'
+import MobileSettings from '@/mobile/pages/MobileSettings'
+import MobileSetupHelp from '@/mobile/pages/MobileSetupHelp'
 import MobileSetupPage from '@/mobile/pages/MobileSetupPage'
 import MobileStatsPlaceholder from '@/mobile/pages/MobileStatsPlaceholder'
 import { useResolvedBackendUrl } from '@/mobile/lib/backendUrl'
@@ -177,8 +183,19 @@ function MobileRoutes() {
           <Route path="library" element={<MobileLibraryPlaceholder />} />
           <Route path="manuscripts" element={<MobileManuscriptsPlaceholder />} />
           <Route path="stats" element={<MobileStatsPlaceholder />} />
-          <Route path="learn" element={<MobileLearnPlaceholder />} />
-          <Route path="more" element={<MobileMorePlaceholder />} />
+          <Route path="learn" element={<MobileLearn />} />
+          <Route path="learn/:category/:slug" element={<MobileLearnEntryPage />} />
+          <Route path="more" element={<MobileMore />} />
+          {/* Phase M1.3 — peer review entry + detail. */}
+          <Route path="peer-review" element={<MobilePeerReview />} />
+          <Route
+            path="peer-review/:projectId/:id"
+            element={<MobilePeerReviewDetail />}
+          />
+          {/* Phase M1.4 — account / settings / tailscale help. */}
+          <Route path="account" element={<MobileAccount />} />
+          <Route path="settings" element={<MobileSettings />} />
+          <Route path="setup-help" element={<MobileSetupHelp />} />
           {/* Catch-all under /m/* → bounce to library. */}
           <Route path="*" element={<Navigate to="/m/library" replace />} />
         </Route>
