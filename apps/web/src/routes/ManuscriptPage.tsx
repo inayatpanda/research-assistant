@@ -13,6 +13,7 @@ import { FiguresPanel } from '@/components/figures/FiguresPanel'
 import { FrontMatterPanel } from '@/components/frontmatter/FrontMatterPanel'
 import { AbbreviationsPanel } from '@/components/manuscript/AbbreviationsPanel'
 import { CommentsRail } from '@/components/manuscript/CommentsRail'
+import { EditorToolbar } from '@/components/manuscript/EditorToolbar'
 import { FinalManuscriptView } from '@/components/manuscript/FinalManuscriptView'
 import { JournalChip } from '@/components/manuscript/JournalChip'
 import { ManuscriptEditor } from '@/components/manuscript/ManuscriptEditor'
@@ -250,13 +251,16 @@ function ManuscriptInner({
           ) : isFrontMatter ? (
             <FrontMatterPanel projectId={projectId} />
           ) : (
-            <ManuscriptEditor
-              key={`${projectId}-${tab}`}
-              projectId={projectId}
-              section={tab as ManuscriptSectionName}
-              onWordsChange={setSectionWords}
-              onEditorReady={setEditor}
-            />
+            <>
+              <EditorToolbar projectId={projectId} editor={editor} />
+              <ManuscriptEditor
+                key={`${projectId}-${tab}`}
+                projectId={projectId}
+                section={tab as ManuscriptSectionName}
+                onWordsChange={setSectionWords}
+                onEditorReady={setEditor}
+              />
+            </>
           )}
         </div>
 

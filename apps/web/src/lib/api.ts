@@ -528,6 +528,43 @@ export const ManuscriptSectionSchema = z.object({
 })
 export type ManuscriptSection = z.infer<typeof ManuscriptSectionSchema>
 
+// Phase 4.5 — articles-table column presets. Mirror of
+// ``research_api.schemas.articles_table.ColumnPreset``. Adding/removing
+// values here must stay in lockstep with the backend; the dialog reads
+// the union, so a typo will surface as a TS error.
+export const ArticlesTableColumnPresetSchema = z.enum([
+  'author_year_citation',
+  'title',
+  'journal',
+  'year',
+  'country',
+  'study_design',
+  'sample_size_n',
+  'intervention',
+  'comparator',
+  'primary_outcome',
+  'follow_up',
+  'effect_estimate',
+  'risk_of_bias_rating',
+  'doi',
+  'url',
+])
+export type ArticlesTableColumnPreset = z.infer<typeof ArticlesTableColumnPresetSchema>
+
+export type ArticlesTableColumnSpec = {
+  preset: ArticlesTableColumnPreset | null
+  label: string
+}
+
+export type ArticlesTableRequest = {
+  article_ids: string[]
+  columns: ArticlesTableColumnSpec[]
+  include_et_al?: boolean
+  include_full_authors?: boolean
+}
+
+export const ArticlesTableResponseSchema = z.object({ html: z.string() })
+
 export const manuscriptApi = {
   getSection: async (
     projectId: string,
@@ -546,6 +583,16 @@ export const manuscriptApi = {
       content,
     })
     return ManuscriptSectionSchema.parse(r.data)
+  },
+  buildArticlesTable: async (
+    projectId: string,
+    body: ArticlesTableRequest,
+  ): Promise<string> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/manuscript/articles-table`,
+      body,
+    )
+    return ArticlesTableResponseSchema.parse(r.data).html
   },
 }
 

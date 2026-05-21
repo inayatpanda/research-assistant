@@ -1,5 +1,5 @@
 import { ImagePlus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
 
@@ -9,6 +9,7 @@ import {
   useReorderFigures,
   useUpdateFigure,
 } from '@/hooks/useFigures'
+import { setFigureNumbersFrom } from '@/lib/tiptap/figureNumbers'
 
 import { FigureCard } from './FigureCard'
 import { FigureUploadDialog } from './FigureUploadDialog'
@@ -24,6 +25,14 @@ export function FiguresPanel({
   const remove = useDeleteFigure(projectId)
   const reorder = useReorderFigures(projectId)
   const update = useUpdateFigure(projectId)
+
+  // Phase 4.5 — keep the FigRef NodeView store in sync with the canonical
+  // server-side numbering. Re-runs whenever the figures list changes
+  // (upload, delete, reorder, renumber) so existing in-editor FigRef
+  // nodes update their visible "Figure N" label without a remount.
+  useEffect(() => {
+    setFigureNumbersFrom(figures)
+  }, [figures])
 
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
