@@ -83,6 +83,7 @@ from .routes.journal_templates import router as journal_templates_router
 from .routes.living import router as living_router
 from .routes.manuscript_sections import router as manuscript_sections_router
 from .routes.notes import router as notes_router
+from .routes.peer_reviews import router as peer_reviews_router
 from .routes.plots import router as plots_router
 from .routes.power import router as power_router
 from .routes.projects import router as projects_router
@@ -228,3 +229,4 @@ app.include_router(diagnostics_router, prefix="/api")
 app.include_router(economic_analyses_router, prefix="/api")
 # Phase 20 (MP20) — Interactive reporting checklists (12 catalogues).
 app.include_router(checklists_router, prefix="/api")
+app.include_router(peer_reviews_router, prefix="/api")

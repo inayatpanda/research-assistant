@@ -7,6 +7,7 @@ from . import (
     highlights,
     manuscript_sections,
     notes,
+    peer_reviews,
     projects,
     writing,
 )
@@ -22,4 +23,5 @@ __all__ = [
     "manuscript_sections",
     "abbreviations",
     "writing",
+    "peer_reviews",
 ]
