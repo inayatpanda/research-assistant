@@ -1,21 +1,34 @@
-"""Phase 5a — Learn hub loader.
+"""Phase 5a + 5b — Learn hub loader.
 
-Walks ``learn/stat_tests/*.md``, parses YAML frontmatter + Markdown body,
-validates each entry against a Pydantic schema, and exposes an in-memory
-index keyed by slug.
+Walks Markdown files under ``learn/<category>/*.md``, parses YAML
+frontmatter + Markdown body, validates each entry against a Pydantic
+schema, and exposes an in-memory index keyed by ``(category, slug)``.
 
-The loader has zero new third-party deps: it parses frontmatter with a tiny
-inline scanner (no ``python-frontmatter``) and validates with Pydantic v2
-(already pinned). Markdown body is returned as raw text — the frontend
-renders it. Keeping rendering client-side avoids pulling ``markdown-it-py``
-into the API.
+Phase 5b generalised the loader to support four categories:
 
-Module-load behaviour: ``load_all_stat_tests()`` is invoked lazily the
-first time the index is requested. Tests that mutate the on-disk catalogue
-can call ``_reset_cache()`` to force a re-scan.
+* ``stat_tests``   — original 27 statistical-test references.
+* ``checklists``   — reporting-guideline checklists (CONSORT etc.).
+* ``economics``    — health-economics concept reference.
+* ``submission``   — manuscript-submission how-to topics.
 
-CLI: ``python -m research_api.learn.loader --count`` prints the number of
-entries. Useful as a Phase 5a smoke check.
+Each category declares its own frontmatter schema (subclass of
+``_BaseFrontmatter``) and its own immutable entry dataclass. The
+public surface is two helpers:
+
+* :func:`load_category` — return every parsed entry for ``category``.
+* :func:`get_entry`     — fetch one entry by ``(category, slug)``.
+
+Category-specific shortcuts (``load_all_stat_tests``, ``list_stat_tests``,
+``get_stat_test``) are preserved for backwards-compat with Phase 5a
+tests and route handlers.
+
+The loader has zero new third-party deps: it parses frontmatter with a
+tiny inline scanner (no ``python-frontmatter``) and validates with
+Pydantic v2 (already pinned). Markdown body is returned as raw text —
+the frontend renders it.
+
+CLI: ``python -m research_api.learn.loader --count`` prints the entry
+count per category. Useful as a smoke check.
 """
 from __future__ import annotations
 
@@ -32,7 +45,18 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger("research_api.learn.loader")
 
-STAT_TESTS_DIR = Path(__file__).resolve().parent / "stat_tests"
+_LEARN_ROOT = Path(__file__).resolve().parent
+STAT_TESTS_DIR = _LEARN_ROOT / "stat_tests"
+CHECKLISTS_DIR = _LEARN_ROOT / "checklists"
+ECONOMICS_DIR = _LEARN_ROOT / "economics"
+SUBMISSION_DIR = _LEARN_ROOT / "submission"
+
+_CATEGORY_DIRS: dict[str, Path] = {
+    "stat_tests": STAT_TESTS_DIR,
+    "checklists": CHECKLISTS_DIR,
+    "economics": ECONOMICS_DIR,
+    "submission": SUBMISSION_DIR,
+}
 
 _FRONTMATTER_RE = re.compile(
     r"^---\s*\n(?P<fm>.*?)\n---\s*\n(?P<body>.*)$",
@@ -40,21 +64,21 @@ _FRONTMATTER_RE = re.compile(
 )
 
 # Acceptable values for `worked_example_domain`. Keep tight so the test
-# suite can guarantee the ~9/9/9 ortho/med/surg split.
+# suite can guarantee the ortho/medicine/surgery split.
 _ALLOWED_DOMAINS = {"orthopaedics", "medicine", "surgery"}
 
 
-class StatTestFrontmatter(BaseModel):
-    """Validated frontmatter for one stat-test entry."""
+# ---------------------------------------------------------------------------
+# Frontmatter schemas
+# ---------------------------------------------------------------------------
+
+
+class _BaseFrontmatter(BaseModel):
+    """Common keys that every Learn entry must declare."""
 
     slug: str = Field(..., min_length=1, max_length=80)
     title: str = Field(..., min_length=1)
-    family: str = Field(..., min_length=1)
-    when_to_use: str = Field(..., min_length=1)
-    assumptions: list[str] = Field(default_factory=list)
-    alternatives: list[str] = Field(default_factory=list)
     worked_example_domain: str
-    worked_example_dataset: str = Field(..., min_length=1)
     related_concepts: list[str] = Field(default_factory=list)
 
     @field_validator("slug")
@@ -76,13 +100,40 @@ class StatTestFrontmatter(BaseModel):
         return v
 
 
+class StatTestFrontmatter(_BaseFrontmatter):
+    family: str = Field(..., min_length=1)
+    when_to_use: str = Field(..., min_length=1)
+    assumptions: list[str] = Field(default_factory=list)
+    alternatives: list[str] = Field(default_factory=list)
+    worked_example_dataset: str = Field(..., min_length=1)
+
+
+class ChecklistFrontmatter(_BaseFrontmatter):
+    reporting_standard: str = Field(..., min_length=1)
+    applies_to_study_types: list[str] = Field(default_factory=list)
+    version: str = Field(..., min_length=1)
+    official_url: str = Field(..., min_length=1)
+
+
+class EconomicsFrontmatter(_BaseFrontmatter):
+    concept_family: str = Field(..., min_length=1)
+    formula: str = ""
+    units: str = ""
+
+
+class SubmissionFrontmatter(_BaseFrontmatter):
+    topic: str = Field(..., min_length=1)
+    topic_family: str = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# Entry dataclasses
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True)
 class StatTestEntry:
-    """A parsed stat-test reference entry.
-
-    ``body_md`` is the raw Markdown (no frontmatter). ``short_blurb`` is
-    the first sentence of ``when_to_use`` — small enough for list views.
-    """
+    """A parsed stat-test reference entry."""
 
     slug: str
     title: str
@@ -97,9 +148,7 @@ class StatTestEntry:
 
     @property
     def short_blurb(self) -> str:
-        # Use ``when_to_use`` as the snippet — already curated copy.
         s = self.when_to_use.strip()
-        # Truncate to first sentence-ish boundary for very long blurbs.
         if len(s) > 180:
             cut = s[:180]
             tail = cut.rfind(" ")
@@ -116,9 +165,108 @@ class StatTestEntry:
         )
 
 
-class StatTestSummary(BaseModel):
-    """List-view payload (no body)."""
+@dataclass(frozen=True)
+class ChecklistEntry:
+    slug: str
+    title: str
+    reporting_standard: str
+    applies_to_study_types: tuple[str, ...]
+    version: str
+    official_url: str
+    worked_example_domain: str
+    related_concepts: tuple[str, ...]
+    body_md: str
 
+    @property
+    def short_blurb(self) -> str:
+        # First sentence of the body that isn't a heading.
+        for line in self.body_md.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                return stripped[:200]
+        return f"{self.reporting_standard} reporting checklist."
+
+    def to_summary(self) -> "ChecklistSummary":
+        return ChecklistSummary(
+            slug=self.slug,
+            title=self.title,
+            reporting_standard=self.reporting_standard,
+            applies_to_study_types=list(self.applies_to_study_types),
+            version=self.version,
+            short_blurb=self.short_blurb,
+            worked_example_domain=self.worked_example_domain,
+        )
+
+
+@dataclass(frozen=True)
+class EconomicsEntry:
+    slug: str
+    title: str
+    concept_family: str
+    formula: str
+    units: str
+    worked_example_domain: str
+    related_concepts: tuple[str, ...]
+    body_md: str
+
+    @property
+    def short_blurb(self) -> str:
+        for line in self.body_md.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                return stripped[:200]
+        return f"{self.title} ({self.concept_family})."
+
+    def to_summary(self) -> "EconomicsSummary":
+        return EconomicsSummary(
+            slug=self.slug,
+            title=self.title,
+            concept_family=self.concept_family,
+            formula=self.formula,
+            units=self.units,
+            short_blurb=self.short_blurb,
+            worked_example_domain=self.worked_example_domain,
+        )
+
+
+@dataclass(frozen=True)
+class SubmissionEntry:
+    slug: str
+    title: str
+    topic: str
+    topic_family: str
+    worked_example_domain: str
+    related_concepts: tuple[str, ...]
+    body_md: str
+
+    @property
+    def short_blurb(self) -> str:
+        for line in self.body_md.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                return stripped[:200]
+        return f"{self.title}."
+
+    def to_summary(self) -> "SubmissionSummary":
+        return SubmissionSummary(
+            slug=self.slug,
+            title=self.title,
+            topic=self.topic,
+            topic_family=self.topic_family,
+            short_blurb=self.short_blurb,
+            worked_example_domain=self.worked_example_domain,
+        )
+
+
+LearnEntry = StatTestEntry | ChecklistEntry | EconomicsEntry | SubmissionEntry
+
+
+# ---------------------------------------------------------------------------
+# Pydantic read/summary models (HTTP layer)
+# ---------------------------------------------------------------------------
+
+
+class StatTestSummary(BaseModel):
     slug: str
     title: str
     family: str
@@ -127,8 +275,6 @@ class StatTestSummary(BaseModel):
 
 
 class StatTestRead(BaseModel):
-    """Detail-view payload."""
-
     slug: str
     title: str
     family: str
@@ -141,6 +287,77 @@ class StatTestRead(BaseModel):
     body_md: str
 
 
+class ChecklistSummary(BaseModel):
+    slug: str
+    title: str
+    reporting_standard: str
+    applies_to_study_types: list[str]
+    version: str
+    short_blurb: str
+    worked_example_domain: str
+
+
+class ChecklistRead(BaseModel):
+    slug: str
+    title: str
+    reporting_standard: str
+    applies_to_study_types: list[str]
+    version: str
+    official_url: str
+    worked_example_domain: str
+    related_concepts: list[str]
+    body_md: str
+
+
+class EconomicsSummary(BaseModel):
+    slug: str
+    title: str
+    concept_family: str
+    formula: str
+    units: str
+    short_blurb: str
+    worked_example_domain: str
+
+
+class EconomicsRead(BaseModel):
+    slug: str
+    title: str
+    concept_family: str
+    formula: str
+    units: str
+    worked_example_domain: str
+    related_concepts: list[str]
+    body_md: str
+
+
+class SubmissionSummary(BaseModel):
+    slug: str
+    title: str
+    topic: str
+    topic_family: str
+    short_blurb: str
+    worked_example_domain: str
+
+
+class SubmissionRead(BaseModel):
+    slug: str
+    title: str
+    topic: str
+    topic_family: str
+    worked_example_domain: str
+    related_concepts: list[str]
+    body_md: str
+
+
+class LearnSearchHit(BaseModel):
+    """A single cross-category search result."""
+
+    category: str
+    slug: str
+    title: str
+    snippet: str
+
+
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
@@ -150,36 +367,38 @@ class LearnParseError(RuntimeError):
     """Raised when a Markdown file has malformed frontmatter or body."""
 
 
-def _parse_one(path: Path) -> StatTestEntry:
+def _read_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_text(encoding="utf-8")
     m = _FRONTMATTER_RE.match(raw)
     if not m:
         raise LearnParseError(f"{path.name}: missing/invalid YAML frontmatter")
-
     try:
         fm_dict: Any = yaml.safe_load(m.group("fm")) or {}
     except yaml.YAMLError as exc:
         raise LearnParseError(f"{path.name}: bad YAML — {exc}") from exc
     if not isinstance(fm_dict, dict):
         raise LearnParseError(f"{path.name}: frontmatter must be a mapping")
+    body = m.group("body").strip()
+    if not body:
+        raise LearnParseError(f"{path.name}: empty body")
+    return fm_dict, body
 
+
+def _expect_filename_matches_slug(path: Path, slug: str) -> None:
+    expected = f"{slug}.md"
+    if path.name != expected:
+        raise LearnParseError(
+            f"{path.name}: slug {slug!r} expects filename {expected!r}"
+        )
+
+
+def _parse_stat_test(path: Path) -> StatTestEntry:
+    fm_dict, body = _read_frontmatter(path)
     try:
         fm = StatTestFrontmatter.model_validate(fm_dict)
     except ValidationError as exc:
         raise LearnParseError(f"{path.name}: frontmatter validation — {exc}") from exc
-
-    body = m.group("body").strip()
-    if not body:
-        raise LearnParseError(f"{path.name}: empty body")
-
-    # Filename must agree with the declared slug so URLs and on-disk
-    # storage stay in lockstep.
-    expected = f"{fm.slug}.md"
-    if path.name != expected:
-        raise LearnParseError(
-            f"{path.name}: slug {fm.slug!r} expects filename {expected!r}"
-        )
-
+    _expect_filename_matches_slug(path, fm.slug)
     return StatTestEntry(
         slug=fm.slug,
         title=fm.title,
@@ -194,20 +413,94 @@ def _parse_one(path: Path) -> StatTestEntry:
     )
 
 
-@lru_cache(maxsize=1)
-def load_all_stat_tests() -> tuple[StatTestEntry, ...]:
-    """Scan + parse every Markdown file in ``stat_tests/``.
+def _parse_checklist(path: Path) -> ChecklistEntry:
+    fm_dict, body = _read_frontmatter(path)
+    try:
+        fm = ChecklistFrontmatter.model_validate(fm_dict)
+    except ValidationError as exc:
+        raise LearnParseError(f"{path.name}: frontmatter validation — {exc}") from exc
+    _expect_filename_matches_slug(path, fm.slug)
+    return ChecklistEntry(
+        slug=fm.slug,
+        title=fm.title,
+        reporting_standard=fm.reporting_standard,
+        applies_to_study_types=tuple(fm.applies_to_study_types),
+        version=fm.version,
+        official_url=fm.official_url,
+        worked_example_domain=fm.worked_example_domain,
+        related_concepts=tuple(fm.related_concepts),
+        body_md=body,
+    )
 
-    Cached at module level. Duplicate slugs raise ``LearnParseError``.
+
+def _parse_economics(path: Path) -> EconomicsEntry:
+    fm_dict, body = _read_frontmatter(path)
+    try:
+        fm = EconomicsFrontmatter.model_validate(fm_dict)
+    except ValidationError as exc:
+        raise LearnParseError(f"{path.name}: frontmatter validation — {exc}") from exc
+    _expect_filename_matches_slug(path, fm.slug)
+    return EconomicsEntry(
+        slug=fm.slug,
+        title=fm.title,
+        concept_family=fm.concept_family,
+        formula=fm.formula,
+        units=fm.units,
+        worked_example_domain=fm.worked_example_domain,
+        related_concepts=tuple(fm.related_concepts),
+        body_md=body,
+    )
+
+
+def _parse_submission(path: Path) -> SubmissionEntry:
+    fm_dict, body = _read_frontmatter(path)
+    try:
+        fm = SubmissionFrontmatter.model_validate(fm_dict)
+    except ValidationError as exc:
+        raise LearnParseError(f"{path.name}: frontmatter validation — {exc}") from exc
+    _expect_filename_matches_slug(path, fm.slug)
+    return SubmissionEntry(
+        slug=fm.slug,
+        title=fm.title,
+        topic=fm.topic,
+        topic_family=fm.topic_family,
+        worked_example_domain=fm.worked_example_domain,
+        related_concepts=tuple(fm.related_concepts),
+        body_md=body,
+    )
+
+
+_PARSERS = {
+    "stat_tests": _parse_stat_test,
+    "checklists": _parse_checklist,
+    "economics": _parse_economics,
+    "submission": _parse_submission,
+}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=8)
+def load_category(category: str) -> tuple[LearnEntry, ...]:
+    """Scan + parse every Markdown file in ``learn/<category>/``.
+
+    Cached at module level. Duplicate slugs raise :class:`LearnParseError`.
+    Unknown categories raise :class:`ValueError`.
     """
-    if not STAT_TESTS_DIR.exists():
-        logger.warning("learn: stat_tests dir missing at %s", STAT_TESTS_DIR)
+    if category not in _CATEGORY_DIRS:
+        raise ValueError(f"unknown learn category: {category!r}")
+    directory = _CATEGORY_DIRS[category]
+    if not directory.exists():
+        logger.warning("learn: %s dir missing at %s", category, directory)
         return ()
-
-    entries: list[StatTestEntry] = []
+    parse = _PARSERS[category]
+    entries: list[LearnEntry] = []
     seen: dict[str, Path] = {}
-    for md_path in sorted(STAT_TESTS_DIR.glob("*.md")):
-        entry = _parse_one(md_path)
+    for md_path in sorted(directory.glob("*.md")):
+        entry = parse(md_path)
         if entry.slug in seen:
             raise LearnParseError(
                 f"duplicate slug {entry.slug!r}: {md_path.name} and {seen[entry.slug].name}"
@@ -217,12 +510,8 @@ def load_all_stat_tests() -> tuple[StatTestEntry, ...]:
     return tuple(entries)
 
 
-def list_stat_tests() -> list[StatTestSummary]:
-    return [e.to_summary() for e in load_all_stat_tests()]
-
-
-def get_stat_test(slug: str) -> StatTestEntry | None:
-    for e in load_all_stat_tests():
+def get_entry(category: str, slug: str) -> LearnEntry | None:
+    for e in load_category(category):
         if e.slug == slug:
             return e
     return None
@@ -230,7 +519,109 @@ def get_stat_test(slug: str) -> StatTestEntry | None:
 
 def _reset_cache() -> None:
     """Test hook — drop the lru_cache so a fresh scan runs on next call."""
-    load_all_stat_tests.cache_clear()
+    load_category.cache_clear()
+
+
+# --- Phase 5a back-compat shortcuts (stat-tests) ---
+
+
+def load_all_stat_tests() -> tuple[StatTestEntry, ...]:
+    return load_category("stat_tests")  # type: ignore[return-value]
+
+
+def list_stat_tests() -> list[StatTestSummary]:
+    return [e.to_summary() for e in load_all_stat_tests()]
+
+
+def get_stat_test(slug: str) -> StatTestEntry | None:
+    e = get_entry("stat_tests", slug)
+    return e if isinstance(e, StatTestEntry) else None
+
+
+# --- Phase 5b shortcuts ---
+
+
+def load_all_checklists() -> tuple[ChecklistEntry, ...]:
+    return load_category("checklists")  # type: ignore[return-value]
+
+
+def list_checklists() -> list[ChecklistSummary]:
+    return [e.to_summary() for e in load_all_checklists()]
+
+
+def get_checklist(slug: str) -> ChecklistEntry | None:
+    e = get_entry("checklists", slug)
+    return e if isinstance(e, ChecklistEntry) else None
+
+
+def load_all_economics() -> tuple[EconomicsEntry, ...]:
+    return load_category("economics")  # type: ignore[return-value]
+
+
+def list_economics() -> list[EconomicsSummary]:
+    return [e.to_summary() for e in load_all_economics()]
+
+
+def get_economics(slug: str) -> EconomicsEntry | None:
+    e = get_entry("economics", slug)
+    return e if isinstance(e, EconomicsEntry) else None
+
+
+def load_all_submission() -> tuple[SubmissionEntry, ...]:
+    return load_category("submission")  # type: ignore[return-value]
+
+
+def list_submission() -> list[SubmissionSummary]:
+    return [e.to_summary() for e in load_all_submission()]
+
+
+def get_submission(slug: str) -> SubmissionEntry | None:
+    e = get_entry("submission", slug)
+    return e if isinstance(e, SubmissionEntry) else None
+
+
+# --- Cross-category search ---
+
+
+def search_all(query: str, *, limit: int = 30) -> list[LearnSearchHit]:
+    """Naive substring search across every category. Case-insensitive."""
+    q = query.strip().lower()
+    if not q:
+        return []
+    hits: list[LearnSearchHit] = []
+    for category in _CATEGORY_DIRS:
+        try:
+            entries = load_category(category)
+        except LearnParseError:
+            continue
+        for entry in entries:
+            hay = " ".join(
+                [
+                    entry.title.lower(),
+                    entry.slug.lower(),
+                    entry.body_md.lower(),
+                ]
+            )
+            if q in hay:
+                body_lc = entry.body_md.lower()
+                idx = body_lc.find(q)
+                if idx == -1:
+                    snippet = entry.body_md[:160].replace("\n", " ").strip()
+                else:
+                    start = max(0, idx - 60)
+                    end = min(len(entry.body_md), idx + 100)
+                    snippet = entry.body_md[start:end].replace("\n", " ").strip()
+                hits.append(
+                    LearnSearchHit(
+                        category=category,
+                        slug=entry.slug,
+                        title=entry.title,
+                        snippet=snippet,
+                    )
+                )
+                if len(hits) >= limit:
+                    return hits
+    return hits
 
 
 # ---------------------------------------------------------------------------
@@ -240,23 +631,38 @@ def _reset_cache() -> None:
 
 def _main() -> int:
     parser = argparse.ArgumentParser(description="Learn hub loader")
-    parser.add_argument("--count", action="store_true", help="print entry count")
-    parser.add_argument("--list", action="store_true", help="print slugs")
+    parser.add_argument("--count", action="store_true", help="print entry count per category")
+    parser.add_argument("--list", action="store_true", help="print slugs per category")
+    parser.add_argument(
+        "--category",
+        choices=tuple(_CATEGORY_DIRS),
+        help="restrict --count/--list to one category",
+    )
     args = parser.parse_args()
 
-    try:
-        entries = load_all_stat_tests()
-    except LearnParseError as exc:
-        print(f"ERROR: {exc}")
-        return 1
+    cats = (args.category,) if args.category else tuple(_CATEGORY_DIRS)
 
     if args.count:
-        print(len(entries))
+        for cat in cats:
+            try:
+                entries = load_category(cat)
+            except LearnParseError as exc:
+                print(f"{cat}: ERROR {exc}")
+                return 1
+            print(f"{cat}\t{len(entries)}")
         return 0
+
     if args.list:
-        for e in entries:
-            print(f"{e.slug}\t{e.title}")
+        for cat in cats:
+            try:
+                entries = load_category(cat)
+            except LearnParseError as exc:
+                print(f"{cat}: ERROR {exc}")
+                return 1
+            for e in entries:
+                print(f"{cat}\t{e.slug}\t{e.title}")
         return 0
+
     parser.print_help()
     return 0
 
