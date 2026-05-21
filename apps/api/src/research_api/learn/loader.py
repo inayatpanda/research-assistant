@@ -4,12 +4,14 @@ Walks Markdown files under ``learn/<category>/*.md``, parses YAML
 frontmatter + Markdown body, validates each entry against a Pydantic
 schema, and exposes an in-memory index keyed by ``(category, slug)``.
 
-Phase 5b generalised the loader to support four categories:
+Phase 5b generalised the loader to support four categories; Phase 5c
+adds a fifth (``walkthroughs``):
 
 * ``stat_tests``   — original 27 statistical-test references.
 * ``checklists``   — reporting-guideline checklists (CONSORT etc.).
 * ``economics``    — health-economics concept reference.
 * ``submission``   — manuscript-submission how-to topics.
+* ``walkthroughs`` — long-form, end-to-end study workflow narratives.
 
 Each category declares its own frontmatter schema (subclass of
 ``_BaseFrontmatter``) and its own immutable entry dataclass. The
@@ -50,12 +52,14 @@ STAT_TESTS_DIR = _LEARN_ROOT / "stat_tests"
 CHECKLISTS_DIR = _LEARN_ROOT / "checklists"
 ECONOMICS_DIR = _LEARN_ROOT / "economics"
 SUBMISSION_DIR = _LEARN_ROOT / "submission"
+WALKTHROUGHS_DIR = _LEARN_ROOT / "walkthroughs"
 
 _CATEGORY_DIRS: dict[str, Path] = {
     "stat_tests": STAT_TESTS_DIR,
     "checklists": CHECKLISTS_DIR,
     "economics": ECONOMICS_DIR,
     "submission": SUBMISSION_DIR,
+    "walkthroughs": WALKTHROUGHS_DIR,
 }
 
 _FRONTMATTER_RE = re.compile(
@@ -124,6 +128,14 @@ class EconomicsFrontmatter(_BaseFrontmatter):
 class SubmissionFrontmatter(_BaseFrontmatter):
     topic: str = Field(..., min_length=1)
     topic_family: str = Field(..., min_length=1)
+
+
+class WalkthroughFrontmatter(_BaseFrontmatter):
+    """Phase 5c — long-form walkthrough narratives."""
+
+    estimated_reading_minutes: int = Field(..., ge=1, le=120)
+    study_type: str = Field(..., min_length=1)
+    sections: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +270,44 @@ class SubmissionEntry:
         )
 
 
-LearnEntry = StatTestEntry | ChecklistEntry | EconomicsEntry | SubmissionEntry
+@dataclass(frozen=True)
+class WalkthroughEntry:
+    slug: str
+    title: str
+    study_type: str
+    estimated_reading_minutes: int
+    sections: tuple[str, ...]
+    worked_example_domain: str
+    related_concepts: tuple[str, ...]
+    body_md: str
+
+    @property
+    def short_blurb(self) -> str:
+        for line in self.body_md.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                return stripped[:200]
+        return f"{self.title}."
+
+    def to_summary(self) -> "WalkthroughSummary":
+        return WalkthroughSummary(
+            slug=self.slug,
+            title=self.title,
+            study_type=self.study_type,
+            estimated_reading_minutes=self.estimated_reading_minutes,
+            sections=list(self.sections),
+            short_blurb=self.short_blurb,
+            worked_example_domain=self.worked_example_domain,
+        )
+
+
+LearnEntry = (
+    StatTestEntry
+    | ChecklistEntry
+    | EconomicsEntry
+    | SubmissionEntry
+    | WalkthroughEntry
+)
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +393,27 @@ class SubmissionRead(BaseModel):
     title: str
     topic: str
     topic_family: str
+    worked_example_domain: str
+    related_concepts: list[str]
+    body_md: str
+
+
+class WalkthroughSummary(BaseModel):
+    slug: str
+    title: str
+    study_type: str
+    estimated_reading_minutes: int
+    sections: list[str]
+    short_blurb: str
+    worked_example_domain: str
+
+
+class WalkthroughRead(BaseModel):
+    slug: str
+    title: str
+    study_type: str
+    estimated_reading_minutes: int
+    sections: list[str]
     worked_example_domain: str
     related_concepts: list[str]
     body_md: str
@@ -470,11 +540,31 @@ def _parse_submission(path: Path) -> SubmissionEntry:
     )
 
 
+def _parse_walkthrough(path: Path) -> WalkthroughEntry:
+    fm_dict, body = _read_frontmatter(path)
+    try:
+        fm = WalkthroughFrontmatter.model_validate(fm_dict)
+    except ValidationError as exc:
+        raise LearnParseError(f"{path.name}: frontmatter validation — {exc}") from exc
+    _expect_filename_matches_slug(path, fm.slug)
+    return WalkthroughEntry(
+        slug=fm.slug,
+        title=fm.title,
+        study_type=fm.study_type,
+        estimated_reading_minutes=fm.estimated_reading_minutes,
+        sections=tuple(fm.sections),
+        worked_example_domain=fm.worked_example_domain,
+        related_concepts=tuple(fm.related_concepts),
+        body_md=body,
+    )
+
+
 _PARSERS = {
     "stat_tests": _parse_stat_test,
     "checklists": _parse_checklist,
     "economics": _parse_economics,
     "submission": _parse_submission,
+    "walkthroughs": _parse_walkthrough,
 }
 
 
@@ -578,6 +668,22 @@ def list_submission() -> list[SubmissionSummary]:
 def get_submission(slug: str) -> SubmissionEntry | None:
     e = get_entry("submission", slug)
     return e if isinstance(e, SubmissionEntry) else None
+
+
+# --- Phase 5c shortcuts ---
+
+
+def load_all_walkthroughs() -> tuple[WalkthroughEntry, ...]:
+    return load_category("walkthroughs")  # type: ignore[return-value]
+
+
+def list_walkthroughs() -> list[WalkthroughSummary]:
+    return [e.to_summary() for e in load_all_walkthroughs()]
+
+
+def get_walkthrough(slug: str) -> WalkthroughEntry | None:
+    e = get_entry("walkthroughs", slug)
+    return e if isinstance(e, WalkthroughEntry) else None
 
 
 # --- Cross-category search ---

@@ -31,14 +31,18 @@ from ..learn.loader import (
     StatTestSummary,
     SubmissionRead,
     SubmissionSummary,
+    WalkthroughRead,
+    WalkthroughSummary,
     get_checklist,
     get_economics,
     get_stat_test,
     get_submission,
+    get_walkthrough,
     list_checklists,
     list_economics,
     list_stat_tests,
     list_submission,
+    list_walkthroughs,
     search_all,
 )
 
@@ -155,6 +159,36 @@ async def get_submission_entry(slug: str) -> SubmissionRead:
         title=entry.title,
         topic=entry.topic,
         topic_family=entry.topic_family,
+        worked_example_domain=entry.worked_example_domain,
+        related_concepts=list(entry.related_concepts),
+        body_md=entry.body_md,
+    )
+
+
+# --- Walkthroughs (Phase 5c) ---
+
+
+@router.get("/walkthroughs", response_model=list[WalkthroughSummary])
+async def get_walkthroughs_list() -> list[WalkthroughSummary]:
+    """Return every walkthrough summary."""
+    return list_walkthroughs()
+
+
+@router.get("/walkthroughs/{slug}", response_model=WalkthroughRead)
+async def get_walkthrough_entry(slug: str) -> WalkthroughRead:
+    """Return one walkthrough entry (frontmatter + Markdown body)."""
+    entry = get_walkthrough(slug)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"walkthrough {slug!r} not found",
+        )
+    return WalkthroughRead(
+        slug=entry.slug,
+        title=entry.title,
+        study_type=entry.study_type,
+        estimated_reading_minutes=entry.estimated_reading_minutes,
+        sections=list(entry.sections),
         worked_example_domain=entry.worked_example_domain,
         related_concepts=list(entry.related_concepts),
         body_md=entry.body_md,
