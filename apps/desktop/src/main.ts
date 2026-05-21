@@ -27,9 +27,15 @@ import {
   clipboard,
   dialog,
   Menu,
+  Notification,
   shell,
 } from "electron";
 import getPort, { portNumbers } from "get-port";
+// Lazy require — electron-updater pulls in some Node-only deps that
+// don't tree-shake well, and we want a hard error on import to be
+// caught (we log + continue rather than crashing the app).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import { autoUpdater } from "electron-updater";
 
 import { detectTailnetUrl } from "./tailscale";
 
@@ -42,6 +48,11 @@ type BackendState = {
 let backend: BackendState | null = null;
 let mainWindow: BrowserWindow | null = null;
 let tailnetUrl: string | null = null;
+// D1.4 — flipped to true on ``update-available``; surfaces in the Help menu
+// as a hint that something to download is sitting on GitHub.
+let updateAvailable = false;
+let updateDownloaded = false;
+let pendingUpdateVersion: string | null = null;
 
 const isPackaged = app.isPackaged;
 
@@ -264,10 +275,152 @@ function buildMenu() {
           label: "Tailscale setup",
           click: () => shell.openExternal("https://tailscale.com/download"),
         },
+        // D1.4 — update-status badge. When an update is sitting on
+        // GitHub, the user sees a one-click way to either restart now
+        // (if it's already downloaded) or be reminded what version is
+        // coming. We rebuild the menu on each state transition.
+        ...(updateDownloaded
+          ? [
+              { type: "separator" as const },
+              {
+                label: `Restart to install v${pendingUpdateVersion ?? "?"}`,
+                click: () => {
+                  try {
+                    autoUpdater.quitAndInstall();
+                  } catch (err) {
+                    console.warn("[updater] quitAndInstall failed:", err);
+                  }
+                },
+              },
+            ]
+          : updateAvailable
+            ? [
+                { type: "separator" as const },
+                {
+                  label: `Downloading update v${pendingUpdateVersion ?? "?"}…`,
+                  enabled: false,
+                },
+              ]
+            : []),
       ],
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+/**
+ * D1.4 — wire ``electron-updater`` against the public GitHub repo
+ * declared in ``package.json``→``build.publish``.
+ *
+ * Update lifecycle:
+ *   1. After the window is shown, call ``checkForUpdatesAndNotify()``.
+ *   2. ``update-available`` → set the menu badge + fire an OS toast.
+ *   3. ``update-downloaded`` → ask the user whether to relaunch now.
+ *   4. ``error`` → log + carry on (the most common cause is the user
+ *      still having the placeholder ``owner: 'TBD'`` in package.json
+ *      because they haven't published a release yet).
+ *
+ * Disabled when:
+ *   * The app isn't packaged (running ``npx electron .`` from source).
+ *     The dev backend doesn't have a version to compare against.
+ *   * The GitHub owner/repo are still the placeholder ``TBD``. We log a
+ *     one-time warning so the user knows to fill them in.
+ */
+function setupAutoUpdater() {
+  if (!isPackaged) {
+    console.log("[updater] skipped — running from source");
+    return;
+  }
+  // Read the publish block — electron-builder injects it into the
+  // bundled ``app-update.yml``. ``autoUpdater.getFeedURL()`` doesn't
+  // help before we call check, so we crack open package.json directly.
+  type PkgPublish = { owner?: string; repo?: string };
+  let publish: PkgPublish = {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const pkg = require(path.join(app.getAppPath(), "package.json"));
+    publish = (pkg?.build?.publish ?? {}) as PkgPublish;
+  } catch {
+    /* fall through — guarded below */
+  }
+  if (publish.owner === "TBD" || publish.repo === "TBD") {
+    console.warn(
+      "[updater] disabled — package.json build.publish.{owner,repo} " +
+        "are still the placeholder 'TBD'. Fill them in once your GitHub " +
+        "repo is public, then rebuild. See apps/desktop/README.md.",
+    );
+    return;
+  }
+
+  autoUpdater.logger = {
+    info: (m: unknown) => console.log("[updater]", m),
+    warn: (m: unknown) => console.warn("[updater]", m),
+    error: (m: unknown) => console.error("[updater]", m),
+    // electron-log expects a debug method too; no-op here is fine.
+    debug: () => {},
+  } as unknown as typeof autoUpdater.logger;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    updateAvailable = true;
+    pendingUpdateVersion = info?.version ?? null;
+    rebuildMenuWithUpdateBadge();
+    try {
+      new Notification({
+        title: "Research Assistant",
+        body: `Update available — v${pendingUpdateVersion ?? "?"} is downloading…`,
+      }).show();
+    } catch {
+      /* notifications may be disabled by user — ignore */
+    }
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    console.log("[updater] up to date");
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    updateDownloaded = true;
+    pendingUpdateVersion = info?.version ?? pendingUpdateVersion;
+    rebuildMenuWithUpdateBadge();
+    const choice = dialog.showMessageBoxSync({
+      type: "info",
+      title: "Update ready to install",
+      message: `Research Assistant v${pendingUpdateVersion ?? "?"} is ready.`,
+      detail:
+        "Click Restart to relaunch the app and finish installing. " +
+        "Otherwise the update will be applied next time you quit.",
+      buttons: ["Restart now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+
+  autoUpdater.on("error", (err) => {
+    // The most common error is a 404 on the GitHub Releases API while
+    // no release has been published yet. We don't want this to surface
+    // to the user as a dialog — log and move on.
+    console.warn("[updater] error:", err?.message ?? err);
+  });
+
+  // Fire and forget. Returning the promise would block bootstrap.
+  void autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.warn("[updater] check failed:", err?.message ?? err);
+  });
+}
+
+/**
+ * Rebuild the application menu so the Help submenu picks up the
+ * "Update available" / "Update downloaded — restart" badge. Cheap
+ * enough to rebuild on every state change.
+ */
+function rebuildMenuWithUpdateBadge() {
+  buildMenu();
 }
 
 async function createWindow() {
@@ -319,6 +472,16 @@ async function bootstrap() {
   process.env.RMA_API_URL = backend.baseUrl;
   process.env.RMA_TAILNET_URL = tailnetUrl ?? "";
   await createWindow();
+  // D1.4 — check for updates *after* the main window is up so the
+  // user sees the app first; a 1.5 s nudge lets initial frame paint
+  // settle before we fire the network request.
+  setTimeout(() => {
+    try {
+      setupAutoUpdater();
+    } catch (err) {
+      console.warn("[updater] setup failed:", err);
+    }
+  }, 1500);
 }
 
 app.whenReady().then(bootstrap);
