@@ -44,7 +44,7 @@
  * failure.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, MoreVertical } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -59,6 +59,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
+  absoluteFileUrl,
   articlesApi,
   highlightsApi,
   type Article,
@@ -68,6 +69,11 @@ import {
 import { cn } from '@/lib/utils'
 
 import { BottomSheet } from '../components/BottomSheet'
+import {
+  MobilePdfReader,
+  type MobilePdfReaderTestHandle,
+  type PdfHighlightDraft,
+} from '../components/MobilePdfReader'
 import { SelectionHandles, type HandleSide } from '../components/SelectionHandles'
 import { cacheable } from '../lib/offlineLearn'
 
@@ -136,14 +142,28 @@ function segmentText(raw: string): { words: WordToken[]; paragraphs: Paragraph[]
 
 export type MobileReaderTestHandle = {
   __forceSelection: (start: number, end: number) => void
+  /** Phase D3 — drive a pdf-mode highlight creation without touching pdfjs. */
+  __forcePdfHighlight?: (draft: PdfHighlightDraft) => void
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-const MobileReader = forwardRef<MobileReaderTestHandle>(
-  function MobileReader(_, ref) {
+type MobileReaderProps = {
+  /**
+   * Phase D3 — injectable pdfjs ``getDocument`` for tests. Production
+   * callers leave this undefined and the PDF reader dynamically imports
+   * ``pdfjs-dist`` + boots its worker via ``@/lib/pdfjsSetup``. Wiring
+   * it through the page lets the MobileReader test suite stub pdf.js
+   * end-to-end without bringing a canvas to jsdom.
+   */
+  pdfjsGetDocument?: (url: string) => { promise: Promise<unknown> }
+}
+
+const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
+  function MobileReader(props, ref) {
+    const { pdfjsGetDocument } = props
     const params = useParams<{ articleId: string }>()
     const articleId = params.articleId
     const navigate = useNavigate()
@@ -226,12 +246,33 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
     const [range, setRange] = useState<Range>(null)
     const [editingHighlight, setEditingHighlight] = useState<Highlight | null>(null)
 
+    // Phase D3 — render mode (PDF vs extracted text). Switches automatically
+    // when the article carries a PDF file ref, but the user can flip back
+    // to text from the overflow menu (slow connection, prefers reflowed
+    // reading, etc.).
+    const hasPdf = !!(
+      article && article.file_url && (article.file_type === 'application/pdf')
+    )
+    const [readingMode, setReadingMode] = useState<'pdf' | 'text'>(
+      hasPdf ? 'pdf' : 'text',
+    )
+    useEffect(() => {
+      setReadingMode(hasPdf ? 'pdf' : 'text')
+    }, [hasPdf])
+    const [performanceMode, setPerformanceMode] = useState(false)
+    const [overflowOpen, setOverflowOpen] = useState(false)
+
+    const pdfRef = useRef<MobilePdfReaderTestHandle | null>(null)
+
     // Imperative test hook.
     useImperativeHandle(
       ref,
       () => ({
         __forceSelection: (start: number, end: number) => {
           setRange({ start: Math.min(start, end), end: Math.max(start, end) })
+        },
+        __forcePdfHighlight: (draft: PdfHighlightDraft) => {
+          pdfRef.current?.__forceNewHighlight(draft)
         },
       }),
       [],
@@ -382,6 +423,50 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
       },
     })
 
+    // Phase D3 — separate PDF-mode create mutation. The shape of the
+    // request body differs from text-mode (no word-derived
+    // selected_text, real page_number, pdf-typed bounding_coords) so a
+    // dedicated mutation is cleaner than overloading createMutation.
+    const createPdfMutation = useMutation({
+      mutationFn: async ({
+        draft,
+        colour,
+      }: {
+        draft: PdfHighlightDraft
+        colour: HighlightColour
+      }) => {
+        if (!articleId) throw new Error('missing article')
+        return highlightsApi.create(articleId, {
+          page_number: draft.page,
+          selected_text: draft.text,
+          colour,
+          section: SECTION_FOR_COLOUR[colour],
+          bounding_coords: {
+            rects: draft.rects,
+            type: 'pdf',
+            page: draft.page,
+            text: draft.text,
+          },
+        })
+      },
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ['mreader', 'highlights', articleId] })
+        setPdfDraft(null)
+        toast.success('Highlight saved')
+      },
+      onError: (err) => {
+        const msg = err instanceof Error ? err.message : 'Failed to save'
+        if (!navigator.onLine) {
+          toast.error('Offline — connect to laptop to save')
+        } else {
+          toast.error(msg)
+        }
+      },
+    })
+
+    // Holds the pending PDF selection while the user picks a colour.
+    const [pdfDraft, setPdfDraft] = useState<PdfHighlightDraft | null>(null)
+
     const updateMutation = useMutation({
       mutationFn: async ({ id, note }: { id: string; note: string }) => {
         return highlightsApi.update(id, { user_note: note })
@@ -521,9 +606,74 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
               Offline
             </span>
           )}
+          <button
+            type="button"
+            aria-label="More options"
+            data-testid="mreader-overflow"
+            onClick={() => setOverflowOpen(true)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md hover:bg-muted"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </button>
         </header>
 
-        {/* Article body */}
+        {/* Article body — Phase D3: branch on render mode */}
+        {readingMode === 'pdf' && article.file_url && (
+          <MobilePdfReader
+            ref={pdfRef}
+            fileUrl={absoluteFileUrl(article.file_url) ?? article.file_url}
+            highlights={highlights}
+            onHighlightTap={(h) => setEditingHighlight(h)}
+            onCreateHighlight={(draft) => setPdfDraft(draft)}
+            performanceMode={performanceMode}
+            pdfjsGetDocument={
+              pdfjsGetDocument as
+                | ((url: string) => { promise: Promise<never> })
+                | undefined
+            }
+          />
+        )}
+
+        {/* PDF colour picker — appears once a draft is staged */}
+        {readingMode === 'pdf' && pdfDraft && (
+          <div
+            data-testid="mreader-pdf-swatch-bar"
+            className="fixed left-0 right-0 z-30 border-t border-border bg-background/95 px-3 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur"
+            style={{ bottom: 64 }}
+          >
+            <div className="mb-2 line-clamp-2 text-[12px] italic text-muted-foreground">
+              {pdfDraft.text}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-2">
+                {HIGHLIGHT_COLOURS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    data-testid={`mreader-pdf-pill-${c.id}`}
+                    aria-label={`Highlight ${c.label}`}
+                    onClick={() =>
+                      createPdfMutation.mutate({ draft: pdfDraft, colour: c.id })
+                    }
+                    className="h-9 w-9 rounded-full ring-2 ring-background"
+                    style={{ backgroundColor: c.bg }}
+                  />
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPdfDraft(null)}
+                data-testid="mreader-pdf-cancel"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {readingMode === 'text' && (
         <div
           ref={containerRef}
           data-testid="mreader-body"
@@ -595,9 +745,10 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
           {/* Selection handles overlay */}
           <SelectionHandlesAnchored range={range} words={words} containerRef={containerRef} onMove={onHandleMove} />
         </div>
+        )}
 
         {/* Colour-swatch toolbar (visible only when a selection is live) */}
-        {range && (
+        {readingMode === 'text' && range && (
           <div
             data-testid="mreader-swatch-bar"
             className="fixed left-0 right-0 z-30 border-t border-border bg-background/95 px-3 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur"
@@ -776,6 +927,60 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
               </Button>
             </div>
           )}
+        </BottomSheet>
+
+        {/* D3.6 — Overflow menu */}
+        <BottomSheet
+          open={overflowOpen}
+          onClose={() => setOverflowOpen(false)}
+          title="Reader options"
+          snapPoints={['45%']}
+        >
+          <div
+            data-testid="mreader-overflow-sheet"
+            className="flex flex-col gap-2 pb-2"
+          >
+            {hasPdf && (
+              <button
+                type="button"
+                data-testid="mreader-toggle-mode"
+                onClick={() => {
+                  setReadingMode((m) => (m === 'pdf' ? 'text' : 'pdf'))
+                  setOverflowOpen(false)
+                }}
+                className="rounded-lg border border-border bg-card px-3 py-3 text-left text-[14px] hover:bg-muted"
+              >
+                {readingMode === 'pdf'
+                  ? 'Switch to reading mode (extracted text)'
+                  : 'Switch to PDF mode'}
+              </button>
+            )}
+            {hasPdf && readingMode === 'pdf' && (
+              <button
+                type="button"
+                data-testid="mreader-toggle-perf"
+                onClick={() => {
+                  setPerformanceMode((v) => !v)
+                  setOverflowOpen(false)
+                }}
+                className="rounded-lg border border-border bg-card px-3 py-3 text-left text-[14px] hover:bg-muted"
+              >
+                Performance mode: {performanceMode ? 'on' : 'off'}
+              </button>
+            )}
+            {article.file_url && (
+              <a
+                data-testid="mreader-open-original"
+                href={absoluteFileUrl(article.file_url) ?? article.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOverflowOpen(false)}
+                className="rounded-lg border border-border bg-card px-3 py-3 text-[14px] hover:bg-muted"
+              >
+                View original PDF
+              </a>
+            )}
+          </div>
         </BottomSheet>
       </div>
     )
