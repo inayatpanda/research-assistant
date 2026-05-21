@@ -431,6 +431,8 @@ export type HighlightUpdate = {
   user_note?: string | null
   ai_summary?: string | null
   sort_order?: number
+  // D1.1 — mobile reader can now recolour an existing highlight in-place.
+  colour?: HighlightColour
 }
 
 export const highlightsApi = {

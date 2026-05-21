@@ -47,6 +47,10 @@ class HighlightUpdate(BaseModel):
     user_note: str | None = Field(default=None, max_length=4_000)
     ai_summary: str | None = Field(default=None, max_length=2_000)
     sort_order: int | None = None
+    # D1.1 — mobile reader needs to change colour after creation.
+    # Validated against the same Literal as HighlightCreate.colour so an
+    # invalid value yields 422 instead of silently mangling the row.
+    colour: HighlightColour | None = None
 
 
 class HighlightRead(BaseModel):

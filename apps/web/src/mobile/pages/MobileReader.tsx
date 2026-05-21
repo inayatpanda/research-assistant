@@ -394,6 +394,21 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
       },
     })
 
+    // D1.1 — separate mutation so the colour PATCH updates the open
+    // bottom-sheet's local state in addition to invalidating the list.
+    const recolourMutation = useMutation({
+      mutationFn: async ({ id, colour }: { id: string; colour: HighlightColour }) => {
+        return highlightsApi.update(id, { colour })
+      },
+      onSuccess: (h) => {
+        qc.invalidateQueries({ queryKey: ['mreader', 'highlights', articleId] })
+        setEditingHighlight(h)
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : 'Could not change colour')
+      },
+    })
+
     const deleteMutation = useMutation({
       mutationFn: async (id: string) => highlightsApi.delete(id),
       onSuccess: () => {
@@ -452,11 +467,8 @@ const MobileReader = forwardRef<MobileReaderTestHandle>(
 
     function onEditColour(colour: HighlightColour) {
       if (!editingHighlight) return
-      // PATCH only accepts user_note / ai_summary / sort_order. To
-      // change colour we'd need a separate route — flag as TODO and
-      // surface a friendly message.
-      toast.info('Colour changes not yet supported on mobile. Use the desktop reader.')
-      void colour
+      if (editingHighlight.colour === colour) return
+      recolourMutation.mutate({ id: editingHighlight.id, colour })
     }
 
     // ------ Render
