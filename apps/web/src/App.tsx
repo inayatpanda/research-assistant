@@ -49,7 +49,11 @@ import MobilePeerReviewDetail from '@/mobile/pages/MobilePeerReviewDetail'
 import MobileSettings from '@/mobile/pages/MobileSettings'
 import MobileSetupHelp from '@/mobile/pages/MobileSetupHelp'
 import MobileSetupPage from '@/mobile/pages/MobileSetupPage'
-import MobileStatsPlaceholder from '@/mobile/pages/MobileStatsPlaceholder'
+import MobileStatsConfigure from '@/mobile/pages/MobileStatsConfigure'
+import MobileStatsPickAnalysis from '@/mobile/pages/MobileStatsPickAnalysis'
+import MobileStatsPreview from '@/mobile/pages/MobileStatsPreview'
+import MobileStatsResults from '@/mobile/pages/MobileStatsResults'
+import MobileStatsUpload from '@/mobile/pages/MobileStatsUpload'
 import { useResolvedBackendUrl } from '@/mobile/lib/backendUrl'
 
 /**
@@ -189,7 +193,24 @@ function MobileRoutes() {
             path="manuscripts/:projectId"
             element={<MobileManuscriptReader />}
           />
-          <Route path="stats" element={<MobileStatsPlaceholder />} />
+          {/* Phase M4 — 5-page Statistics wizard. */}
+          <Route path="stats" element={<MobileStatsUpload />} />
+          <Route
+            path="stats/:datasetId/preview"
+            element={<MobileStatsPreview />}
+          />
+          <Route
+            path="stats/:datasetId/pick-analysis"
+            element={<MobileStatsPickAnalysis />}
+          />
+          <Route
+            path="stats/:datasetId/configure/:analysisType"
+            element={<MobileStatsConfigure />}
+          />
+          <Route
+            path="stats/:datasetId/results/:analysisId"
+            element={<MobileStatsResults />}
+          />
           <Route path="learn" element={<MobileLearn />} />
           <Route path="learn/:category/:slug" element={<MobileLearnEntryPage />} />
           <Route path="more" element={<MobileMore />} />
