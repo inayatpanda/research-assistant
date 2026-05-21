@@ -17,12 +17,14 @@ import EconomicsPage from '@/routes/EconomicsPage'
 import HealthPage from '@/routes/HealthPage'
 import LibraryPage from '@/routes/LibraryPage'
 import ManuscriptPage from '@/routes/ManuscriptPage'
+import PeerReviewPage from '@/routes/PeerReviewPage'
 import ProjectHomePage from '@/routes/ProjectHomePage'
 import ReaderPage from '@/routes/ReaderPage'
 import SettingsPage from '@/routes/SettingsPage'
 import StatisticsPage from '@/routes/StatisticsPage'
 import SubmissionPage from '@/routes/SubmissionPage'
 import SystematicReviewPage from '@/routes/SystematicReviewPage'
+import { Navigate, useParams } from 'react-router-dom'
 
 /**
  * MP12.5 — URL-scoped project routing.
@@ -59,7 +61,11 @@ export default function App() {
               <Route path="reader/:articleId" element={<ReaderPage />} />
               <Route path="compile" element={<CompilePage />} />
               <Route path="manuscript" element={<ManuscriptPage />} />
-              <Route path="review" element={<SystematicReviewPage />} />
+              <Route path="peer-review" element={<PeerReviewPage />} />
+              <Route path="systematic-review" element={<SystematicReviewPage />} />
+              {/* Phase 4.6 — legacy `/review` path now redirects to
+                  systematic-review so existing deep links keep working. */}
+              <Route path="review" element={<ScopedReviewRedirect />} />
               <Route path="consort" element={<ConsortPage />} />
               <Route path="statistics" element={<StatisticsPage />} />
               <Route path="economics" element={<EconomicsPage />} />
@@ -76,7 +82,18 @@ export default function App() {
               path="manuscript"
               element={<LegacyRedirect to="/manuscript" />}
             />
-            <Route path="review" element={<LegacyRedirect to="/review" />} />
+            <Route
+              path="review"
+              element={<LegacyRedirect to="/systematic-review" />}
+            />
+            <Route
+              path="systematic-review"
+              element={<LegacyRedirect to="/systematic-review" />}
+            />
+            <Route
+              path="peer-review"
+              element={<LegacyRedirect to="/peer-review" />}
+            />
             <Route path="consort" element={<LegacyRedirect to="/consort" />} />
             <Route
               path="statistics"
@@ -92,4 +109,15 @@ export default function App() {
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   )
+}
+
+
+/**
+ * Phase 4.6 — Redirects ``/projects/:projectId/review`` →
+ * ``/projects/:projectId/systematic-review`` so legacy deep links still
+ * resolve after the rename.
+ */
+function ScopedReviewRedirect() {
+  const { projectId } = useParams<{ projectId: string }>()
+  return <Navigate to={`/projects/${projectId}/systematic-review`} replace />
 }

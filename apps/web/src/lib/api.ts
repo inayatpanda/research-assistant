@@ -4479,3 +4479,103 @@ export const checklistsApi = {
     await api.delete(`/api/projects/${projectId}/checklists/${runId}`)
   },
 }
+
+
+// ─── Phase 4.6 — AI peer reviews ──────────────────────────────────────────
+
+export const PeerReviewRecommendationSchema = z.enum([
+  'reject',
+  'major_revision',
+  'minor_revision',
+  'accept',
+])
+export type PeerReviewRecommendation = z.infer<
+  typeof PeerReviewRecommendationSchema
+>
+
+export const PeerReviewSourceTypeSchema = z.enum([
+  'manuscript',
+  'uploaded_pdf',
+  'uploaded_docx',
+])
+export type PeerReviewSourceType = z.infer<typeof PeerReviewSourceTypeSchema>
+
+export const PeerReviewStatusSchema = z.enum(['pending', 'completed', 'failed'])
+export type PeerReviewStatus = z.infer<typeof PeerReviewStatusSchema>
+
+export const PeerReviewSummarySchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  source_type: PeerReviewSourceTypeSchema,
+  source_title: z.string(),
+  recommendation: PeerReviewRecommendationSchema,
+  ai_model: z.string(),
+  status: PeerReviewStatusSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+export type PeerReviewSummary = z.infer<typeof PeerReviewSummarySchema>
+
+export const PeerReviewReadSchema = PeerReviewSummarySchema.extend({
+  source_file_ref: z
+    .object({
+      backend: z.string(),
+      key: z.string(),
+      filename: z.string(),
+      size: z.number().optional(),
+      mime: z.string().optional(),
+    })
+    .nullable(),
+  manuscript_snapshot: z.record(z.unknown()).nullable(),
+  critique: z.record(z.unknown()),
+  error: z.string().nullable(),
+})
+export type PeerReviewRead = z.infer<typeof PeerReviewReadSchema>
+
+export const peerReviewsApi = {
+  list: async (projectId: string): Promise<PeerReviewSummary[]> => {
+    const r = await api.get(`/api/projects/${projectId}/peer-reviews`)
+    return z.array(PeerReviewSummarySchema).parse(r.data)
+  },
+  get: async (projectId: string, id: string): Promise<PeerReviewRead> => {
+    const r = await api.get(`/api/projects/${projectId}/peer-reviews/${id}`)
+    return PeerReviewReadSchema.parse(r.data)
+  },
+  generateFromManuscript: async (
+    projectId: string,
+    body?: { title_override?: string | null },
+  ): Promise<PeerReviewRead> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/peer-reviews/manuscript`,
+      body ?? {},
+    )
+    return PeerReviewReadSchema.parse(r.data)
+  },
+  generateFromUpload: async (
+    projectId: string,
+    file: File,
+  ): Promise<PeerReviewRead> => {
+    const form = new FormData()
+    form.append('file', file)
+    const r = await api.post(
+      `/api/projects/${projectId}/peer-reviews/upload`,
+      form,
+    )
+    return PeerReviewReadSchema.parse(r.data)
+  },
+  delete: async (projectId: string, id: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/peer-reviews/${id}`)
+  },
+  download: async (
+    projectId: string,
+    id: string,
+    format: 'pdf' | 'docx',
+  ): Promise<Blob> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/peer-reviews/${id}/export`,
+      undefined,
+      { params: { format }, responseType: 'blob' },
+    )
+    return r.data as Blob
+  },
+}
