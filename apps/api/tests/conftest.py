@@ -154,6 +154,64 @@ class FakeAIProvider(AIProvider):
         ]
         return {"comments": comments, "model": "fake-model"}
 
+    async def peer_review(
+        self,
+        *,
+        manuscript_text: str,
+        title: str,
+        study_type: str | None,
+        metadata: dict[str, int] | None = None,
+    ) -> dict:
+        """Phase 4.6 — Deterministic fake peer-review critique.
+
+        Reports the recommendation as ``major_revision`` unless the
+        manuscript contains the substring ``ACCEPT_ME`` (test-only escape
+        hatch). Every list key is populated with at least one entry so
+        downstream rendering paths can be exercised.
+        """
+        self.calls.append("peer_review")
+        rec = "accept" if "ACCEPT_ME" in (manuscript_text or "") else "major_revision"
+        meta = metadata or {}
+        return {
+            "overall_impression": (
+                f"Fake peer review of '{title}' (study_type={study_type or 'n/a'}, "
+                f"text_len={len(manuscript_text or '')}, "
+                f"figures={meta.get('n_figures', 0)}, "
+                f"tables={meta.get('n_tables', 0)})."
+            ),
+            "strengths": [
+                "Clear research question",
+                "Reasonable sample size",
+            ],
+            "major_issues": [
+                "Methods: randomisation procedure not described",
+            ],
+            "minor_issues": [
+                "Abstract: word count exceeds 250",
+            ],
+            "methodological_concerns": [
+                "Methods: blinding strategy not specified",
+            ],
+            "statistical_concerns": [
+                "Results: no confidence intervals reported",
+            ],
+            "reporting_concerns": [
+                "No CONSORT flow diagram",
+            ],
+            "presentation_concerns": [
+                "Figure legends are terse",
+            ],
+            "references_concerns": [
+                "Several DOIs missing from the reference list",
+            ],
+            "suggestions_for_improvement": [
+                "Add CONSORT-compliant flow diagram",
+                "Report effect sizes with 95% CIs",
+            ],
+            "recommendation": rec,
+            "model": self._active_model,
+        }
+
     async def interpret_economic_result(
         self,
         *,

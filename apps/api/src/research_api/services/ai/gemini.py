@@ -28,6 +28,7 @@ from .prompts import (
     WRITING_ASSIST_PROMPT,
     build_cover_letter_prompt,
     build_meta_interpretation_prompt,
+    build_peer_review_prompt,
     build_result_interpretation_prompt,
     build_reviewer_response_prompt,
     build_screening_suggestion_prompt,
@@ -283,6 +284,29 @@ class GeminiProvider(AIProvider):
         comments = _parse_reviewer_response_json(raw)
         return {"comments": comments, "model": self.active_model or "unknown"}
 
+    async def peer_review(
+        self,
+        *,
+        manuscript_text: str,
+        title: str,
+        study_type: str | None,
+        metadata: dict[str, int] | None = None,
+    ) -> dict[str, Any]:
+        if not (manuscript_text or "").strip() or len(manuscript_text.strip()) < 200:
+            raise AISourceInsufficient(
+                "manuscript too short to peer-review", provider="gemini"
+            )
+        system, user = build_peer_review_prompt(
+            title=title,
+            study_type=study_type,
+            manuscript_text=manuscript_text,
+            metadata=metadata,
+        )
+        raw = await self._generate_with_resilience(f"{system}\n\n{user}")
+        critique = _parse_peer_review_json(raw)
+        critique["model"] = self.active_model or "unknown"
+        return critique
+
     async def interpret_economic_result(
         self,
         *,
@@ -401,6 +425,66 @@ def _parse_reviewer_response_json(raw: str) -> list[dict[str, str]]:
         raise AIError(
             "reviewer-response returned an empty comments list", provider="gemini"
         )
+    return out
+
+
+_ALLOWED_PEER_RECS = frozenset(
+    {"reject", "major_revision", "minor_revision", "accept"}
+)
+_PEER_LIST_KEYS: tuple[str, ...] = (
+    "strengths",
+    "major_issues",
+    "minor_issues",
+    "methodological_concerns",
+    "statistical_concerns",
+    "reporting_concerns",
+    "presentation_concerns",
+    "references_concerns",
+    "suggestions_for_improvement",
+)
+
+
+def _parse_peer_review_json(raw: str) -> dict[str, Any]:
+    """Tolerantly parse the peer-review JSON envelope.
+
+    Strips Markdown ```json fences. Coerces missing list keys to ``[]`` and
+    missing string keys to ``""``. Validates ``recommendation`` against the
+    4-level allow-list and falls back to ``"major_revision"`` if absent.
+    """
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            stripped = stripped[start : end + 1]
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise AIError(
+            f"could not parse peer-review JSON: {e}; raw[:200]={raw[:200]!r}",
+            provider="gemini",
+        ) from e
+    if not isinstance(data, dict):
+        raise AIError("peer-review output is not a JSON object", provider="gemini")
+
+    out: dict[str, Any] = {}
+    impression = data.get("overall_impression")
+    out["overall_impression"] = (
+        impression.strip() if isinstance(impression, str) else ""
+    )
+    for key in _PEER_LIST_KEYS:
+        raw_val = data.get(key)
+        if isinstance(raw_val, list):
+            out[key] = [str(x).strip() for x in raw_val if str(x).strip()]
+        else:
+            out[key] = []
+    rec = data.get("recommendation")
+    rec_norm = (
+        rec.strip().lower() if isinstance(rec, str) else "major_revision"
+    )
+    if rec_norm not in _ALLOWED_PEER_RECS:
+        rec_norm = "major_revision"
+    out["recommendation"] = rec_norm
     return out
 
 

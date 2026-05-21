@@ -13,6 +13,11 @@ from .meta_interpretation import (
     META_INTERPRETATION_PROMPT,
     build_meta_interpretation_prompt,
 )
+from .peer_review import (
+    PEER_REVIEW_SYSTEM_PROMPT,
+    PEER_REVIEW_USER_PROMPT,
+    build_peer_review_prompt,
+)
 from .result_interpretation import (
     RESULT_INTERPRETATION_PROMPT,
     build_result_interpretation_prompt,
@@ -38,6 +43,9 @@ __all__ = [
     "WRITING_ASSIST_PROMPT",
     "META_INTERPRETATION_PROMPT",
     "build_meta_interpretation_prompt",
+    "PEER_REVIEW_SYSTEM_PROMPT",
+    "PEER_REVIEW_USER_PROMPT",
+    "build_peer_review_prompt",
     "RESULT_INTERPRETATION_PROMPT",
     "ECONOMIC_INTERPRETATION_PROMPT",
     "build_economic_interpretation_prompt",

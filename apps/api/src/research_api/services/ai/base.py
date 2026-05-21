@@ -101,6 +101,16 @@ class AIProvider(Protocol):
         abstract: str | None,
     ) -> dict[str, Any]: ...
 
+    # Phase 4.6 — AI peer-review critique.
+    async def peer_review(
+        self,
+        *,
+        manuscript_text: str,
+        title: str,
+        study_type: str | None,
+        metadata: dict[str, int] | None = None,
+    ) -> dict[str, Any]: ...
+
     # Phase 18 (MP18) — Health economics interpretation.
     async def interpret_economic_result(
         self,
