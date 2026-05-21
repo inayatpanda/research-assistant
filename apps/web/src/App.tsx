@@ -15,6 +15,7 @@ import ConsortPage from '@/routes/ConsortPage'
 import DashboardPage from '@/routes/DashboardPage'
 import EconomicsPage from '@/routes/EconomicsPage'
 import HealthPage from '@/routes/HealthPage'
+import LearnPage from '@/routes/LearnPage'
 import LibraryPage from '@/routes/LibraryPage'
 import ManuscriptPage from '@/routes/ManuscriptPage'
 import PeerReviewPage from '@/routes/PeerReviewPage'
@@ -71,6 +72,9 @@ export default function App() {
               <Route path="economics" element={<EconomicsPage />} />
               <Route path="checklists" element={<ChecklistsPage />} />
               <Route path="submission" element={<SubmissionPage />} />
+              {/* Phase 5a — Learn hub (reference content, mounted under
+                  Settings as a "Reference & how-to" entry point). */}
+              <Route path="learn" element={<LearnPage />} />
             </Route>
 
             {/* Legacy redirects — will be removed in MP14. */}

@@ -4579,3 +4579,39 @@ export const peerReviewsApi = {
     return r.data as Blob
   },
 }
+
+// --- Phase 5a — Learn hub (read-only reference content) ---
+
+export const LearnStatTestSummarySchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  family: z.string(),
+  short_blurb: z.string(),
+  worked_example_domain: z.string(),
+})
+export type LearnStatTestSummary = z.infer<typeof LearnStatTestSummarySchema>
+
+export const LearnStatTestReadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  family: z.string(),
+  when_to_use: z.string(),
+  assumptions: z.array(z.string()),
+  alternatives: z.array(z.string()),
+  worked_example_domain: z.string(),
+  worked_example_dataset: z.string(),
+  related_concepts: z.array(z.string()),
+  body_md: z.string(),
+})
+export type LearnStatTestRead = z.infer<typeof LearnStatTestReadSchema>
+
+export const learnApi = {
+  listStatTests: async (): Promise<LearnStatTestSummary[]> => {
+    const r = await api.get('/api/learn/stat-tests')
+    return z.array(LearnStatTestSummarySchema).parse(r.data)
+  },
+  getStatTest: async (slug: string): Promise<LearnStatTestRead> => {
+    const r = await api.get(`/api/learn/stat-tests/${slug}`)
+    return LearnStatTestReadSchema.parse(r.data)
+  },
+}
