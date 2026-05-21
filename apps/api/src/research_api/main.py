@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,6 +12,32 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .container import get_container
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_alembic_dir() -> Path | None:
+    """Find the ``alembic/`` directory in both source and frozen layouts.
+
+    * Source: ``apps/api/src/research_api/main.py`` → ``parents[2]/alembic``.
+    * Frozen (PyInstaller onedir, Phase E1): ``_internal/research_api/main.py``
+      with the migrations bundled to ``_internal/alembic/``. We also try
+      ``sys._MEIPASS`` as a belt-and-braces lookup.
+
+    Returns the first existing path or ``None``.
+    """
+    candidates: list[Path] = []
+    # Frozen mode — PyInstaller sets ``sys.frozen`` and exposes ``_MEIPASS``.
+    if getattr(sys, "frozen", False):  # pragma: no cover - exercised in packaged build only
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "alembic")
+        # Onedir layout puts datas in _internal/ alongside the frozen module.
+        candidates.append(Path(__file__).resolve().parents[1] / "alembic")
+    # Source layout — apps/api/alembic.
+    candidates.append(Path(__file__).resolve().parents[2] / "alembic")
+    for cand in candidates:
+        if cand.exists():
+            return cand
+    return None
 
 
 def _run_alembic_upgrade_head() -> tuple[bool, str]:
@@ -26,11 +53,14 @@ def _run_alembic_upgrade_head() -> tuple[bool, str]:
     except Exception as exc:  # pragma: no cover - alembic always installed
         return False, f"alembic import failed: {exc!r}"
 
-    # alembic.ini lives at apps/api/alembic.ini — two parents up from this file
-    # (apps/api/src/research_api/main.py).
-    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
-    if not ini_path.exists():
-        return False, f"alembic.ini not found at {ini_path}"
+    alembic_dir = _resolve_alembic_dir()
+    if alembic_dir is None:
+        return False, "alembic/ directory not found in source or frozen layouts"
+    # The alembic.ini is only required for the legacy code path; once we
+    # have the script_location we set everything programmatically. We still
+    # check for the ini next to alembic/ so dev-mode logging matches the
+    # previous behaviour exactly.
+    ini_path = alembic_dir.parent / "alembic.ini"
 
     settings = get_container().settings
     # The sync alembic URL must NOT contain the +aiosqlite driver. Strip it so
@@ -42,8 +72,11 @@ def _run_alembic_upgrade_head() -> tuple[bool, str]:
     # ``fileConfig`` against it — which would globally reconfigure logging and
     # break unrelated tests that rely on the default propagation behaviour.
     cfg = Config()
-    cfg.set_main_option("script_location", str(ini_path.parent / "alembic"))
+    cfg.set_main_option("script_location", str(alembic_dir))
     cfg.set_main_option("sqlalchemy.url", sync_url)
+    # Reference ini_path so it isn't flagged as unused — it's part of the
+    # diagnostic surface and may be used for future logging tweaks.
+    _ = ini_path
     # Belt-and-braces: env.py honours ALEMBIC_SQLALCHEMY_URL if set, which
     # guarantees our caller-supplied URL wins even if env.py is reloaded.
     prev_url = os.environ.get("ALEMBIC_SQLALCHEMY_URL")

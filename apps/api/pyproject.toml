@@ -41,6 +41,10 @@ dev = [
   "anyio>=4",
   "ruff>=0.6",
   "respx>=0.21",
+  # Phase E1 — Electron desktop packaging. Build-time only; PyInstaller
+  # freezes the FastAPI backend into a folder that ships next to the
+  # Electron shell. Never imported at runtime.
+  "pyinstaller>=6.20",
 ]
 
 [build-system]
