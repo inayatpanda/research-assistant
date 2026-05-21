@@ -1,0 +1,14 @@
+# Compiled TS
+build/*.js
+build/*.js.map
+
+# PyInstaller intermediate + output
+dist/
+release/
+build/backend/
+build/icons/*.png
+build/icons/*.ico
+build/icons/*.icns
+
+# Node
+node_modules/
