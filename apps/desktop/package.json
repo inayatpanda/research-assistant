@@ -10,9 +10,10 @@
     "build:backend": "../api/.venv/bin/python scripts/build_backend.py",
     "build:frontend": "npm --prefix ../web run build",
     "start": "npm run build && electron .",
-    "dist": "npm run build && npm run build:icons && electron-builder",
-    "dist:mac": "npm run build && npm run build:icons && electron-builder --mac",
-    "dist:win": "npm run build && npm run build:icons && electron-builder --win"
+    "dist": "npm run build && npm run build:icons && electron-builder --publish never",
+    "dist:mac": "npm run build && npm run build:icons && electron-builder --mac --publish never",
+    "dist:win": "npm run build && npm run build:icons && electron-builder --win --publish never",
+    "dist:linux": "npm run build && npm run build:icons && electron-builder --linux --publish never"
   },
   "devDependencies": {
     "@types/node": "^24.12.3",
@@ -61,6 +62,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icons/icon-512.png",
+      "category": "Office"
     }
   }
 }

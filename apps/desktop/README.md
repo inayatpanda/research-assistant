@@ -1,8 +1,15 @@
-# Research Assistant — Desktop (Phase E1)
+# Research Assistant — Desktop (Phase E1 + D1)
 
 Electron shell that bundles the FastAPI backend + the React frontend into a
-single installable app. Mac `.dmg` and Windows NSIS `.exe` only — Linux is
-deferred.
+single installable app. Targets all three desktop platforms:
+
+* macOS — `.dmg` (unsigned; see *Code signing* below)
+* Windows — NSIS `.exe` (unsigned)
+* Linux — `.AppImage`
+
+Builds run per-platform — cross-compiling Linux/Windows binaries from macOS
+is fiddly enough that we run each target on its native runner via the
+`release.yml` GitHub Actions workflow (see `RELEASE.md`).
 
 ## Layout
 
@@ -48,8 +55,16 @@ npm install     # first time only
 npm run build
 
 # 5. Produce the installable. Outputs land in apps/desktop/release/.
-npm run dist:mac   # or `dist:win` on Windows
+npm run dist:mac     # macOS    → release/*.dmg
+# or, on the matching native runner:
+npm run dist:win     # Windows  → release/*.exe (NSIS installer)
+npm run dist:linux   # Linux    → release/*.AppImage
 ```
+
+All three `dist:*` scripts pass `--publish never` so a local build never
+attempts to upload to GitHub. The CI release workflow (`release.yml`) is
+the only place that publishes — it sets `GH_TOKEN` and invokes
+electron-builder with the GitHub provider implicitly.
 
 For day-to-day dev with the frozen backend (no need to rebuild the installer):
 
@@ -122,9 +137,23 @@ are expected.
 
 ## What's NOT in E1 (intentional)
 
-* Auto-update — reinstall to upgrade.
 * DMG custom background, branded icon, signed installer.
-* HTTPS over tailnet — HTTP only for v1.
+* HTTPS over tailnet by default — HTTP only for v1. The optional
+  upgrade path via `tailscale serve --https=443` is documented at
+  [`docs/setup/https-over-tailnet.md`](../../docs/setup/https-over-tailnet.md).
+
+## Auto-update (Phase D1.4)
+
+Auto-update is wired through `electron-updater` and reads release metadata
+from the public GitHub repo identified in `package.json` →
+`build.publish`. **You must fill in `owner` and `repo`** in that block
+(both are placeholder `"TBD"` strings right now) before the first
+release goes out, otherwise the updater will silently no-op and log a
+warning at startup.
+
+The CI workflow in `.github/workflows/release.yml` builds + publishes
+artifacts to GitHub Releases when you push a `vX.Y.Z` tag. See
+[`RELEASE.md`](../../RELEASE.md) for the full release procedure.
 
 ## Auth model (Phase S1)
 

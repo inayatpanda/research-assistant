@@ -97,6 +97,12 @@ def _write_pngs() -> dict[int, Path]:
     fallback = ICONS_DIR / "icon.png"
     shutil.copyfile(paths[512], fallback)
     print(f"wrote {fallback.relative_to(DESKTOP_DIR)}")
+    # D1.2 — Linux AppImage build references ``icon-512.png`` directly
+    # (electron-builder won't accept the generic ``icon.png`` as the
+    # Linux icon in our config). Copy from the 512 master.
+    linux_icon = ICONS_DIR / "icon-512.png"
+    shutil.copyfile(paths[512], linux_icon)
+    print(f"wrote {linux_icon.relative_to(DESKTOP_DIR)}")
     return paths
 
 
