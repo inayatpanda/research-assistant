@@ -1,0 +1,10 @@
+# Build artefacts
+node_modules/
+dist/
+.tmp/
+.vite/
+
+# Override the top-level data/ exclusion — src/data is source code, not
+# user data. The repo root .gitignore blocks any "data/" path, which
+# would otherwise hide src/data/changelog.ts.
+!src/data/
