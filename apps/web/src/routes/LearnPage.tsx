@@ -105,7 +105,6 @@ export default function LearnPage() {
     queryKey: ['learn', 'checklists'],
     queryFn: learnApi.listChecklists,
     staleTime: 5 * 60 * 1000,
-    enabled: activeCat === 'checklists',
   })
   const { data: checklistDetail } = useQuery({
     queryKey: ['learn', 'checklist', activeSlug],
@@ -119,7 +118,6 @@ export default function LearnPage() {
     queryKey: ['learn', 'economics'],
     queryFn: learnApi.listEconomics,
     staleTime: 5 * 60 * 1000,
-    enabled: activeCat === 'economics',
   })
   const { data: economicsDetail } = useQuery({
     queryKey: ['learn', 'economics', activeSlug],
@@ -133,7 +131,6 @@ export default function LearnPage() {
     queryKey: ['learn', 'submission'],
     queryFn: learnApi.listSubmission,
     staleTime: 5 * 60 * 1000,
-    enabled: activeCat === 'submission',
   })
   const { data: submissionDetail } = useQuery({
     queryKey: ['learn', 'submission-item', activeSlug],
@@ -147,7 +144,6 @@ export default function LearnPage() {
     queryKey: ['learn', 'walkthroughs'],
     queryFn: learnApi.listWalkthroughs,
     staleTime: 5 * 60 * 1000,
-    enabled: activeCat === 'walkthroughs',
   })
   const { data: walkthroughDetail } = useQuery({
     queryKey: ['learn', 'walkthrough', activeSlug],
@@ -295,15 +291,32 @@ export default function LearnPage() {
       animate="animate"
       exit="exit"
       data-testid="learn-page-shell"
-      className="mx-auto max-w-7xl px-6 py-8 space-y-6"
+      className="mx-auto max-w-screen-2xl px-6 py-8 space-y-6"
     >
-      <div className="flex items-center gap-3">
-        <BookOpen className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-            Reference
+      <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 ring-1 ring-accent/20">
+            <BookOpen className="h-5 w-5 text-accent" />
           </div>
-          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Learn</h1>
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+              Reference & how-to
+            </div>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Learn</h1>
+          </div>
+        </div>
+        <div className="hidden md:flex flex-col items-end text-[11px] text-muted-foreground leading-tight pt-1">
+          <span>
+            {(tests?.length ?? 0) +
+              (checklists?.length ?? 0) +
+              (economics?.length ?? 0) +
+              (submission?.length ?? 0) +
+              (walkthroughs?.length ?? 0)}{' '}
+            curated entries
+          </span>
+          <span className="text-[10px]">
+            stat tests · checklists · economics · submission · walkthroughs
+          </span>
         </div>
       </div>
 
@@ -323,7 +336,7 @@ export default function LearnPage() {
               data-testid={`learn-cat-tab-${c.key}`}
               onClick={() => setActiveCat(c.key)}
               className={cn(
-                'relative px-4 py-2 text-[13px] font-medium transition-colors',
+                'relative px-4 py-2.5 text-[13px] font-medium transition-colors',
                 active
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -333,7 +346,7 @@ export default function LearnPage() {
               {active && (
                 <motion.span
                   layoutId="learn-cat-underline"
-                  className="absolute left-0 right-0 -bottom-px h-[2px] bg-accent"
+                  className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-accent"
                 />
               )}
             </button>
@@ -342,9 +355,10 @@ export default function LearnPage() {
       </div>
 
       {(
-        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6 min-h-[60vh]">
-          {/* Left: search + list */}
-          <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)] 3xl:grid-cols-[320px_minmax(0,1fr)] gap-6 min-h-[60vh]">
+          {/* Left: search + list — sticky on large screens so scrolling
+              long Markdown doesn't lose navigation */}
+          <div className="space-y-3 md:sticky md:top-6 md:self-start md:max-h-[calc(100vh-7rem)] md:overflow-y-auto md:pr-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -469,8 +483,15 @@ export default function LearnPage() {
 function EmptyDetail() {
   return (
     <Card>
-      <CardContent className="py-8 text-[13px] text-muted-foreground">
-        Pick an entry from the list to read it here.
+      <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+          <BookOpen className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="text-[14px] font-medium">Pick an entry to start reading</div>
+        <div className="text-[12px] text-muted-foreground max-w-sm">
+          Choose a topic from the list on the left, or use the search box above to
+          look across every category at once.
+        </div>
       </CardContent>
     </Card>
   )
@@ -503,10 +524,10 @@ function StatTestDetail({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md bg-muted/40 px-3 py-2 mb-4 text-[13px] text-muted-foreground">
+        <div className="rounded-md bg-muted/40 px-3 py-2 mb-4 text-[13px] text-muted-foreground max-w-3xl">
           {detail.when_to_use}
         </div>
-        <MarkdownView source={detail.body_md} />
+        <MarkdownView source={detail.body_md} className="max-w-3xl" />
       </CardContent>
     </Card>
   )
@@ -559,7 +580,7 @@ function ChecklistDetail({
         </a>
       </CardHeader>
       <CardContent>
-        <MarkdownView source={detail.body_md} />
+        <MarkdownView source={detail.body_md} className="max-w-3xl" />
       </CardContent>
     </Card>
   )
@@ -591,13 +612,13 @@ function EconomicsDetail({
           )}
         </div>
         {detail.formula && (
-          <pre className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground overflow-x-auto">
+          <pre className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground overflow-x-auto max-w-3xl">
             {detail.formula}
           </pre>
         )}
       </CardHeader>
       <CardContent>
-        <MarkdownView source={detail.body_md} />
+        <MarkdownView source={detail.body_md} className="max-w-3xl" />
       </CardContent>
     </Card>
   )
@@ -628,7 +649,7 @@ function SubmissionDetail({
         </div>
       </CardHeader>
       <CardContent>
-        <MarkdownView source={detail.body_md} />
+        <MarkdownView source={detail.body_md} className="max-w-3xl" />
       </CardContent>
     </Card>
   )
@@ -665,7 +686,7 @@ function WalkthroughDetail({
   return (
     <div
       data-testid="walkthrough-detail"
-      className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6"
+      className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-6"
     >
       <Card>
         <CardHeader>
@@ -693,23 +714,23 @@ function WalkthroughDetail({
           </div>
         </CardHeader>
         <CardContent>
-          <MarkdownView source={detail.body_md} />
+          <MarkdownView source={detail.body_md} className="max-w-3xl" />
         </CardContent>
       </Card>
       <aside
         data-testid="walkthrough-toc"
         className="hidden lg:block sticky top-6 self-start"
       >
-        <div className="rounded-md border border-border bg-card p-3 text-[12px]">
+        <div className="rounded-md border border-border bg-card p-3 text-[12px] max-h-[calc(100vh-6rem)] overflow-y-auto">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
             On this page
           </div>
-          <ol className="space-y-1">
+          <ol className="space-y-1.5">
             {toc.map((t) => (
               <li key={t.id}>
                 <a
                   href={`#${t.id}`}
-                  className="text-muted-foreground hover:text-foreground hover:underline decoration-dotted underline-offset-4"
+                  className="block text-muted-foreground hover:text-foreground hover:underline decoration-dotted underline-offset-4 leading-snug"
                 >
                   {t.text}
                 </a>

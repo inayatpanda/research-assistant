@@ -25,7 +25,7 @@ export default function SettingsPage() {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="max-w-3xl mx-auto px-8 py-10 space-y-6"
+      className="max-w-screen-2xl mx-auto px-8 py-10 space-y-6"
     >
       <div>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
@@ -38,6 +38,10 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      <div
+        data-testid="settings-grid"
+        className="grid grid-cols-1 2xl:grid-cols-2 4xl:grid-cols-3 gap-6 auto-rows-min items-start"
+      >
       <Card>
         <CardHeader>
           <CardTitle className="text-[15px]">AI providers</CardTitle>
@@ -97,6 +101,7 @@ export default function SettingsPage() {
       <LearnLink projectId={projectId} />
 
       <HealthLink />
+      </div>
     </motion.div>
   )
 }
