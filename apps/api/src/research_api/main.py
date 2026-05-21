@@ -62,6 +62,7 @@ from .routes.abbreviations import router as abbreviations_router
 from .routes.analyses import router as analyses_router
 from .routes.analysis_plans import router as analysis_plans_router
 from .routes.articles import router as articles_router
+from .routes.articles_table import router as articles_table_router
 from .routes.comments import router as comments_router
 from .routes.compilation import router as compilation_router
 from .routes.checklists import router as checklists_router
@@ -183,6 +184,8 @@ app.include_router(health_router)
 app.include_router(files_router)
 app.include_router(projects_router, prefix="/api")
 app.include_router(articles_router, prefix="/api")
+# Phase 4.5 — Manuscript articles-table render endpoint.
+app.include_router(articles_table_router, prefix="/api")
 app.include_router(ingest_router, prefix="/api")
 app.include_router(highlights_router, prefix="/api")
 app.include_router(notes_router, prefix="/api")
