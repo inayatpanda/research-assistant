@@ -1,0 +1,12 @@
+# Phase D2 — Cloudflare Pages config for the Research Assistant landing site.
+#
+# Deploys via `wrangler pages deploy dist` after `npm run build`. The free
+# tier covers static asset hosting, automatic HTTPS, and global CDN. The
+# user connects their custom domain via the Cloudflare dashboard after the
+# first deploy — see ./README.md.
+name = "research-assistant"
+compatibility_date = "2026-05-21"
+pages_build_output_dir = "dist"
+
+[build]
+command = "npm run build"

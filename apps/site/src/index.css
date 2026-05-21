@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-workspace text-ink antialiased;
+    font-family: theme('fontFamily.sans');
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  h1, h2, h3, h4 {
+    @apply text-ink;
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer components {
+  .container-narrow {
+    @apply mx-auto w-full max-w-6xl px-6;
+  }
+  .container-wide {
+    @apply mx-auto w-full max-w-7xl px-6;
+  }
+  .surface-card {
+    @apply rounded-2xl border border-slate-200/70 bg-white p-6 shadow-card;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground shadow-cta transition-all hover:-translate-y-0.5 hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-ink transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+  }
+  .link-soft {
+    @apply text-accent underline-offset-4 hover:underline;
+  }
+  .badge-soft {
+    @apply inline-flex items-center gap-1 rounded-full bg-accent-tint px-3 py-1 text-xs font-medium text-accent;
+  }
+}
