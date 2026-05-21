@@ -4683,6 +4683,31 @@ export const LearnSearchHitSchema = z.object({
 })
 export type LearnSearchHit = z.infer<typeof LearnSearchHitSchema>
 
+// --- Phase 5c — walkthroughs ---
+
+export const LearnWalkthroughSummarySchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  study_type: z.string(),
+  estimated_reading_minutes: z.number().int(),
+  sections: z.array(z.string()),
+  short_blurb: z.string(),
+  worked_example_domain: z.string(),
+})
+export type LearnWalkthroughSummary = z.infer<typeof LearnWalkthroughSummarySchema>
+
+export const LearnWalkthroughReadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  study_type: z.string(),
+  estimated_reading_minutes: z.number().int(),
+  sections: z.array(z.string()),
+  worked_example_domain: z.string(),
+  related_concepts: z.array(z.string()),
+  body_md: z.string(),
+})
+export type LearnWalkthroughRead = z.infer<typeof LearnWalkthroughReadSchema>
+
 export const learnApi = {
   listStatTests: async (): Promise<LearnStatTestSummary[]> => {
     const r = await api.get('/api/learn/stat-tests')
@@ -4719,5 +4744,13 @@ export const learnApi = {
   search: async (q: string): Promise<LearnSearchHit[]> => {
     const r = await api.get('/api/learn/search', { params: { q } })
     return z.array(LearnSearchHitSchema).parse(r.data)
+  },
+  listWalkthroughs: async (): Promise<LearnWalkthroughSummary[]> => {
+    const r = await api.get('/api/learn/walkthroughs')
+    return z.array(LearnWalkthroughSummarySchema).parse(r.data)
+  },
+  getWalkthrough: async (slug: string): Promise<LearnWalkthroughRead> => {
+    const r = await api.get(`/api/learn/walkthroughs/${slug}`)
+    return LearnWalkthroughReadSchema.parse(r.data)
   },
 }

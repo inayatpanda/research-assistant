@@ -10,12 +10,12 @@
  *   - Left:   Filtered list of entries, grouped by family / topic family.
  *   - Right:  Selected entry detail with rendered Markdown.
  *
- * Categories live (Phase 5b):
+ * Categories live (Phase 5c):
  *   - stat-tests   (Phase 5a)
  *   - checklists   (Phase 5b)
  *   - economics    (Phase 5b)
  *   - submission   (Phase 5b)
- *   - walkthroughs ("Coming soon" — Phase 5c)
+ *   - walkthroughs (Phase 5c — long-form end-to-end study narratives)
  *
  * URL contract:
  *   ?slug=<slug>         pre-select that entry on mount.
@@ -23,7 +23,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { BookOpen, Search } from 'lucide-react'
+import { BookOpen, Clock, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -37,6 +37,7 @@ import {
   type LearnEconomicsSummary,
   type LearnStatTestSummary,
   type LearnSubmissionSummary,
+  type LearnWalkthroughSummary,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
 import { cn } from '@/lib/utils'
@@ -141,6 +142,33 @@ export default function LearnPage() {
     staleTime: 5 * 60 * 1000,
   })
 
+  // --- Walkthroughs (Phase 5c) ---
+  const { data: walkthroughs, isLoading: walkthroughsLoading } = useQuery({
+    queryKey: ['learn', 'walkthroughs'],
+    queryFn: learnApi.listWalkthroughs,
+    staleTime: 5 * 60 * 1000,
+    enabled: activeCat === 'walkthroughs',
+  })
+  const { data: walkthroughDetail } = useQuery({
+    queryKey: ['learn', 'walkthrough', activeSlug],
+    queryFn: () => (activeSlug ? learnApi.getWalkthrough(activeSlug) : null),
+    enabled: !!activeSlug && activeCat === 'walkthroughs',
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // --- Cross-category search (Phase 5c) ---
+  // When the user types more than 1 char in the search input we also hit the
+  // backend's /api/learn/search endpoint for cross-category hits. We debounce
+  // a tiny bit via the query key + staleTime to avoid a request per keystroke
+  // turning into a thundering herd.
+  const trimmedSearch = search.trim()
+  const { data: crossHits } = useQuery({
+    queryKey: ['learn', 'search', trimmedSearch.toLowerCase()],
+    queryFn: () => learnApi.search(trimmedSearch),
+    enabled: trimmedSearch.length >= 2,
+    staleTime: 30 * 1000,
+  })
+
   // Source of truth for the active list (used for default-select effect).
   const activeList = useMemo<
     (
@@ -148,6 +176,7 @@ export default function LearnPage() {
       | LearnChecklistSummary
       | LearnEconomicsSummary
       | LearnSubmissionSummary
+      | LearnWalkthroughSummary
     )[]
     | undefined
   >(() => {
@@ -160,10 +189,12 @@ export default function LearnPage() {
         return economics
       case 'submission':
         return submission
+      case 'walkthroughs':
+        return walkthroughs
       default:
         return undefined
     }
-  }, [activeCat, tests, checklists, economics, submission])
+  }, [activeCat, tests, checklists, economics, submission, walkthroughs])
 
   // Default to the first entry on first render of each category.
   useEffect(() => {
@@ -176,7 +207,8 @@ export default function LearnPage() {
     (activeCat === 'stat-tests' && testsLoading) ||
     (activeCat === 'checklists' && checklistsLoading) ||
     (activeCat === 'economics' && economicsLoading) ||
-    (activeCat === 'submission' && submissionLoading)
+    (activeCat === 'submission' && submissionLoading) ||
+    (activeCat === 'walkthroughs' && walkthroughsLoading)
 
   // --- Build the filtered + grouped list ---
   const grouped = useMemo(() => {
@@ -200,6 +232,7 @@ export default function LearnPage() {
       else if ('reporting_standard' in it) key = 'Reporting guidelines'
       else if ('concept_family' in it) key = it.concept_family
       else if ('topic_family' in it) key = it.topic_family
+      else if ('study_type' in it) key = it.study_type
       if (!buckets[key]) buckets[key] = []
       buckets[key].push(it)
     }
@@ -227,17 +260,33 @@ export default function LearnPage() {
   const searchPlaceholder = useMemo(() => {
     switch (activeCat) {
       case 'stat-tests':
-        return 'Search stat tests'
+        return 'Search stat tests (Enter for all categories)'
       case 'checklists':
-        return 'Search reporting checklists'
+        return 'Search reporting checklists (Enter for all)'
       case 'economics':
-        return 'Search health economics'
+        return 'Search health economics (Enter for all)'
       case 'submission':
-        return 'Search submission topics'
+        return 'Search submission topics (Enter for all)'
+      case 'walkthroughs':
+        return 'Search walkthroughs (Enter for all)'
       default:
         return 'Search'
     }
   }, [activeCat])
+
+  // When the user has typed something, group cross-category hits per
+  // category so we can render an "All categories" panel that links into
+  // each result regardless of the active tab.
+  const groupedCrossHits = useMemo(() => {
+    if (!crossHits || trimmedSearch.length < 2) return null
+    const out: Record<string, typeof crossHits> = {}
+    for (const h of crossHits) {
+      const cat = h.category === 'stat_tests' ? 'stat-tests' : h.category
+      if (!out[cat]) out[cat] = []
+      out[cat].push(h)
+    }
+    return out
+  }, [crossHits, trimmedSearch])
 
   return (
     <motion.div
@@ -292,17 +341,7 @@ export default function LearnPage() {
         })}
       </div>
 
-      {activeCat === 'walkthroughs' ? (
-        <Card data-testid="learn-coming-soon">
-          <CardHeader>
-            <CardTitle className="text-[15px]">Coming soon</CardTitle>
-          </CardHeader>
-          <CardContent className="text-[13px] text-muted-foreground">
-            Walkthroughs are the next addition to Learn — step-by-step guides
-            covering an entire study lifecycle. They are planned for Phase 5c.
-          </CardContent>
-        </Card>
-      ) : (
+      {(
         <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6 min-h-[60vh]">
           {/* Left: search + list */}
           <div className="space-y-3">
@@ -387,6 +426,20 @@ export default function LearnPage() {
 
           {/* Right: detail */}
           <div data-testid="learn-detail-pane">
+            {groupedCrossHits && Object.keys(groupedCrossHits).length > 0 && (
+              <CrossCategoryHits
+                hits={groupedCrossHits}
+                query={trimmedSearch}
+                onJump={(cat, slug) => {
+                  setActiveCat(cat as CategoryKey)
+                  setActiveSlug(slug)
+                  const next = new URLSearchParams(params)
+                  next.set('cat', cat)
+                  next.set('slug', slug)
+                  setParams(next, { replace: true })
+                }}
+              />
+            )}
             {activeCat === 'stat-tests' && (
               <StatTestDetail detail={testDetail} />
             )}
@@ -398,6 +451,9 @@ export default function LearnPage() {
             )}
             {activeCat === 'submission' && (
               <SubmissionDetail detail={submissionDetail} />
+            )}
+            {activeCat === 'walkthroughs' && (
+              <WalkthroughDetail detail={walkthroughDetail} />
             )}
           </div>
         </div>
@@ -573,6 +629,150 @@ function SubmissionDetail({
       </CardHeader>
       <CardContent>
         <MarkdownView source={detail.body_md} />
+      </CardContent>
+    </Card>
+  )
+}
+
+// Extract every H2 from a Markdown body so we can render a sticky TOC.
+function extractTocFromMarkdown(src: string): { id: string; text: string }[] {
+  const out: { id: string; text: string }[] = []
+  for (const raw of src.split('\n')) {
+    const line = raw.trim()
+    if (line.startsWith('## ') && !line.startsWith('### ')) {
+      const text = line.replace(/^##\s+/, '')
+      const id = text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+      out.push({ id, text })
+    }
+  }
+  return out
+}
+
+function WalkthroughDetail({
+  detail,
+}: {
+  detail:
+    | (Awaited<ReturnType<typeof learnApi.getWalkthrough>> | null)
+    | undefined
+}) {
+  if (!detail) return <EmptyDetail />
+  const toc = extractTocFromMarkdown(detail.body_md)
+  return (
+    <div
+      data-testid="walkthrough-detail"
+      className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6"
+    >
+      <Card>
+        <CardHeader>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+            Walkthrough — {detail.study_type.replace(/_/g, ' ')}
+          </div>
+          <CardTitle className="text-[18px]">{detail.title}</CardTitle>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <Badge
+              variant="secondary"
+              className="text-[11px] flex items-center gap-1"
+              data-testid="walkthrough-reading-time"
+            >
+              <Clock className="h-3 w-3" />
+              {detail.estimated_reading_minutes} min read
+            </Badge>
+            <Badge variant="secondary" className="capitalize">
+              worked example: {detail.worked_example_domain}
+            </Badge>
+            {detail.related_concepts.slice(0, 4).map((c) => (
+              <Badge key={c} variant="outline" className="text-[11px]">
+                {c}
+              </Badge>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <MarkdownView source={detail.body_md} />
+        </CardContent>
+      </Card>
+      <aside
+        data-testid="walkthrough-toc"
+        className="hidden lg:block sticky top-6 self-start"
+      >
+        <div className="rounded-md border border-border bg-card p-3 text-[12px]">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+            On this page
+          </div>
+          <ol className="space-y-1">
+            {toc.map((t) => (
+              <li key={t.id}>
+                <a
+                  href={`#${t.id}`}
+                  className="text-muted-foreground hover:text-foreground hover:underline decoration-dotted underline-offset-4"
+                >
+                  {t.text}
+                </a>
+              </li>
+            ))}
+            {toc.length === 0 && (
+              <li className="text-muted-foreground">No sections.</li>
+            )}
+          </ol>
+        </div>
+      </aside>
+    </div>
+  )
+}
+
+function CrossCategoryHits({
+  hits,
+  query,
+  onJump,
+}: {
+  hits: Record<string, { category: string; slug: string; title: string; snippet: string }[]>
+  query: string
+  onJump: (cat: string, slug: string) => void
+}) {
+  const order = ['stat-tests', 'checklists', 'economics', 'submission', 'walkthroughs']
+  const keys = Object.keys(hits).sort((a, b) => {
+    const ai = order.indexOf(a)
+    const bi = order.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+  return (
+    <Card data-testid="learn-cross-hits" className="mb-4">
+      <CardHeader>
+        <CardTitle className="text-[14px]">
+          Results across all categories ({Object.values(hits).reduce((a, b) => a + b.length, 0)} for &quot;{query}&quot;)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {keys.map((cat) => (
+          <div key={cat}>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">
+              {cat.replace(/_/g, ' ').replace(/-/g, ' ')} ({hits[cat].length})
+            </div>
+            <div className="space-y-1">
+              {hits[cat].slice(0, 5).map((h) => (
+                <button
+                  key={`${cat}-${h.slug}`}
+                  data-testid={`learn-cross-hit-${h.slug}`}
+                  onClick={() => onJump(cat, h.slug)}
+                  className="w-full text-left rounded px-2 py-1.5 hover:bg-muted/60 transition-colors"
+                >
+                  <div className="text-[13px] font-medium">{h.title}</div>
+                  <div className="text-[11px] text-muted-foreground line-clamp-2">
+                    {h.snippet}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   )
