@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ExportCard } from '@/components/settings/ExportCard'
+import { ForceDesktopCard } from '@/components/settings/ForceDesktopCard'
 import { HealthLink } from '@/components/settings/HealthLink'
 import { ImportDropzone } from '@/components/settings/ImportDropzone'
 import { JournalTemplateCard } from '@/components/settings/JournalTemplateCard'
@@ -80,6 +81,9 @@ export default function SettingsPage() {
       </Card>
 
       <StorageCard health={data} />
+
+      {/* Phase M0.6 — let power users force the desktop UI on iPads / small browsers. */}
+      <ForceDesktopCard />
 
       {projectId && <JournalTemplateCard projectId={projectId} />}
 
