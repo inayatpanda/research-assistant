@@ -94,6 +94,7 @@ def _run_alembic_upgrade_head() -> tuple[bool, str]:
 from .routes.abbreviations import router as abbreviations_router
 from .routes.analyses import router as analyses_router
 from .routes.analysis_plans import router as analysis_plans_router
+from .routes.auth import router as auth_router
 from .routes.articles import router as articles_router
 from .routes.articles_table import router as articles_table_router
 from .routes.comments import router as comments_router
@@ -120,6 +121,7 @@ from .routes.notes import router as notes_router
 from .routes.peer_reviews import router as peer_reviews_router
 from .routes.plots import router as plots_router
 from .routes.power import router as power_router
+from .routes.project_members import router as project_members_router
 from .routes.projects import router as projects_router
 from .routes.prospero import router as prospero_router
 from .routes.psm import router as psm_router
@@ -217,7 +219,9 @@ async def _http_exception_handler(
 
 app.include_router(health_router)
 app.include_router(files_router)
+app.include_router(auth_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
+app.include_router(project_members_router, prefix="/api")
 app.include_router(articles_router, prefix="/api")
 # Phase 4.5 — Manuscript articles-table render endpoint.
 app.include_router(articles_table_router, prefix="/api")

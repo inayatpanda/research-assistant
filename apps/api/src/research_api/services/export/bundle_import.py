@@ -176,6 +176,34 @@ async def _do_import(
     await session.flush()
     counts["projects"] = 1
 
+    # Phase S1 — seed a project_members owner row so the importing user
+    # has explicit access under the RBAC model. We only do this if a
+    # real User row exists for ``target_user_id`` (FK constraint). In
+    # tests that exercise the import-as-arbitrary-user pathway without a
+    # users row, ``projects.user_id`` matches the importer and the
+    # legacy-fallback path in ``ProjectMemberRepository.get_role`` takes
+    # over.
+    from sqlalchemy import select as _sa_select
+
+    from ...db.models import ProjectMember, User
+
+    has_user = (
+        await session.execute(
+            _sa_select(User.id).where(User.id == target_user_id)
+        )
+    ).scalar_one_or_none()
+    if has_user is not None:
+        session.add(
+            ProjectMember(
+                id=_new_id(),
+                project_id=new_project_id,
+                user_id=target_user_id,
+                role="owner",
+                invited_by=None,
+            )
+        )
+        await session.flush()
+
     article_map: dict[str, str] = {}
     for art in bundle.get("articles") or []:
         old_id = art.get("id")
