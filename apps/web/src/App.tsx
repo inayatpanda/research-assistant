@@ -37,6 +37,9 @@ import { Navigate, Outlet, useParams } from 'react-router-dom'
 import { DeviceRouter } from '@/mobile/DeviceRouter'
 import { MobileShell } from '@/mobile/MobileShell'
 import MobileAccount from '@/mobile/pages/MobileAccount'
+import MobileChecklistDetail from '@/mobile/pages/MobileChecklistDetail'
+import MobileChecklists from '@/mobile/pages/MobileChecklists'
+import MobileEconomics from '@/mobile/pages/MobileEconomics'
 import MobileLearn from '@/mobile/pages/MobileLearn'
 import MobileLearnEntryPage from '@/mobile/pages/MobileLearnEntryPage'
 import MobileLibrary from '@/mobile/pages/MobileLibrary'
@@ -54,6 +57,7 @@ import MobileStatsPickAnalysis from '@/mobile/pages/MobileStatsPickAnalysis'
 import MobileStatsPreview from '@/mobile/pages/MobileStatsPreview'
 import MobileStatsResults from '@/mobile/pages/MobileStatsResults'
 import MobileStatsUpload from '@/mobile/pages/MobileStatsUpload'
+import MobileSubmission from '@/mobile/pages/MobileSubmission'
 import { useResolvedBackendUrl } from '@/mobile/lib/backendUrl'
 
 /**
@@ -224,6 +228,14 @@ function MobileRoutes() {
           <Route path="account" element={<MobileAccount />} />
           <Route path="settings" element={<MobileSettings />} />
           <Route path="setup-help" element={<MobileSetupHelp />} />
+          {/* Phase M5 — Mini-apps: Economics, Checklists, Submission. */}
+          <Route path="economics" element={<MobileEconomics />} />
+          <Route path="checklists" element={<MobileChecklists />} />
+          <Route
+            path="checklists/:type"
+            element={<MobileChecklistDetail />}
+          />
+          <Route path="submission" element={<MobileSubmission />} />
           {/* Catch-all under /m/* → bounce to library. */}
           <Route path="*" element={<Navigate to="/m/library" replace />} />
         </Route>

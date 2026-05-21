@@ -22,7 +22,6 @@ import {
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { Badge } from '@/components/ui/badge'
 import { useCurrentUser } from '@/hooks/useAuth'
 import { authApi } from '@/lib/api'
 
@@ -86,25 +85,22 @@ export default function MobileMore() {
           <MobileListRow
             icon={BarChart3}
             title="Economics"
-            subtitle="Coming soon"
-            static
-            trailing={<Badge variant="secondary" className="text-[10px]">M5</Badge>}
+            subtitle="ICER / QALY / NMB quick calculators"
+            onClick={() => navigate('/m/economics')}
             data-testid="mmore-economics"
           />
           <MobileListRow
             icon={CheckSquare}
             title="Checklists"
-            subtitle="Coming soon"
-            static
-            trailing={<Badge variant="secondary" className="text-[10px]">M5</Badge>}
+            subtitle="CONSORT, PRISMA, STROBE and 9 more"
+            onClick={() => navigate('/m/checklists')}
             data-testid="mmore-checklists"
           />
           <MobileListRow
             icon={FileQuestion}
             title="Submission"
-            subtitle="Coming soon"
-            static
-            trailing={<Badge variant="secondary" className="text-[10px]">M5</Badge>}
+            subtitle="Cover letter, reviewer replies, package"
+            onClick={() => navigate('/m/submission')}
             data-testid="mmore-submission"
           />
         </MobileList>

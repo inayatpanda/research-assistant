@@ -47,6 +47,18 @@ function renderAt(path: string) {
         <Routes>
           <Route path="/m/more" element={<MobileMore />} />
           <Route path="/login" element={<div data-testid="login-route">login</div>} />
+          <Route
+            path="/m/economics"
+            element={<div data-testid="m-economics-route">economics</div>}
+          />
+          <Route
+            path="/m/checklists"
+            element={<div data-testid="m-checklists-route">checklists</div>}
+          />
+          <Route
+            path="/m/submission"
+            element={<div data-testid="m-submission-route">submission</div>}
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -79,5 +91,29 @@ describe('MobileMore', () => {
     renderAt('/m/more')
     fireEvent.click(screen.getByTestId('mmore-logout'))
     await waitFor(() => expect(hoisted.logout).toHaveBeenCalled())
+  })
+
+  it('navigates to the three M5 mini-app routes on tap', async () => {
+    renderAt('/m/more')
+    fireEvent.click(screen.getByTestId('mmore-economics'))
+    await waitFor(() =>
+      expect(screen.getByTestId('m-economics-route')).toBeTruthy(),
+    )
+  })
+
+  it('routes to checklists when the Checklists row is tapped', async () => {
+    renderAt('/m/more')
+    fireEvent.click(screen.getByTestId('mmore-checklists'))
+    await waitFor(() =>
+      expect(screen.getByTestId('m-checklists-route')).toBeTruthy(),
+    )
+  })
+
+  it('routes to submission when the Submission row is tapped', async () => {
+    renderAt('/m/more')
+    fireEvent.click(screen.getByTestId('mmore-submission'))
+    await waitFor(() =>
+      expect(screen.getByTestId('m-submission-route')).toBeTruthy(),
+    )
   })
 })
