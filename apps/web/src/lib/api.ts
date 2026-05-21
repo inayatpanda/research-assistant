@@ -42,6 +42,10 @@ const API_URL = resolveApiUrl()
 export const api = axios.create({
   baseURL: API_URL,
   timeout: 30_000,
+  // Phase S1 — multi-user auth uses an httpOnly session cookie. With
+  // ``withCredentials: true``, the browser sends/receives the cookie on
+  // cross-origin requests provided CORS allow-credentials is on.
+  withCredentials: true,
 })
 
 /**
@@ -4789,5 +4793,159 @@ export const learnApi = {
   getWalkthrough: async (slug: string): Promise<LearnWalkthroughRead> => {
     const r = await api.get(`/api/learn/walkthroughs/${slug}`)
     return LearnWalkthroughReadSchema.parse(r.data)
+  },
+}
+
+// ── Phase S1 — Auth + members ────────────────────────────────────────────
+
+export const UserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  display_name: z.string(),
+  is_admin: z.boolean(),
+  created_at: z.string(),
+})
+export type User = z.infer<typeof UserSchema>
+
+export const SessionRowSchema = z.object({
+  id: z.string(),
+  user_agent: z.string().nullable(),
+  created_at: z.string(),
+  last_seen_at: z.string(),
+  expires_at: z.string(),
+})
+export type SessionRow = z.infer<typeof SessionRowSchema>
+
+export const InvitationSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  project_id: z.string(),
+  role: z.enum(['owner', 'editor', 'viewer']),
+  created_at: z.string(),
+  expires_at: z.string(),
+  accepted_at: z.string().nullable(),
+})
+export type Invitation = z.infer<typeof InvitationSchema>
+
+export const InvitationCreateResponseSchema = z.object({
+  invitation: InvitationSchema,
+  invite_url: z.string(),
+  token: z.string(),
+})
+export type InvitationCreateResponse = z.infer<typeof InvitationCreateResponseSchema>
+
+export const InvitationLandingSchema = z.object({
+  project_id: z.string(),
+  project_title: z.string(),
+  role: z.enum(['owner', 'editor', 'viewer']),
+  inviter_display_name: z.string(),
+  email: z.string(),
+})
+export type InvitationLanding = z.infer<typeof InvitationLandingSchema>
+
+export const MemberSchema = z.object({
+  user_id: z.string(),
+  email: z.string(),
+  display_name: z.string(),
+  role: z.enum(['owner', 'editor', 'viewer']),
+  created_at: z.string(),
+})
+export type Member = z.infer<typeof MemberSchema>
+
+export const LegacyDataStatusSchema = z.object({
+  has_legacy: z.boolean(),
+  legacy_user_id: z.string().nullable().optional(),
+  project_count: z.number().default(0),
+  article_count: z.number().default(0),
+  dataset_count: z.number().default(0),
+})
+export type LegacyDataStatus = z.infer<typeof LegacyDataStatusSchema>
+
+export const authApi = {
+  signup: async (
+    email: string,
+    password: string,
+    display_name: string,
+  ): Promise<User> => {
+    const r = await api.post('/api/auth/signup', { email, password, display_name })
+    return UserSchema.parse(r.data)
+  },
+  login: async (email: string, password: string): Promise<User> => {
+    const r = await api.post('/api/auth/login', { email, password })
+    return UserSchema.parse(r.data)
+  },
+  logout: async (): Promise<void> => {
+    await api.post('/api/auth/logout')
+  },
+  me: async (): Promise<User | null> => {
+    try {
+      const r = await api.get('/api/auth/me')
+      return UserSchema.parse(r.data)
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        return null
+      }
+      throw err
+    }
+  },
+  changePassword: async (old_password: string, new_password: string): Promise<User> => {
+    const r = await api.post('/api/auth/change-password', { old_password, new_password })
+    return UserSchema.parse(r.data)
+  },
+  listSessions: async (): Promise<SessionRow[]> => {
+    const r = await api.get('/api/auth/sessions')
+    return z.array(SessionRowSchema).parse(r.data)
+  },
+  revokeSession: async (sessionId: string): Promise<void> => {
+    await api.delete(`/api/auth/sessions/${sessionId}`)
+  },
+  invitationLanding: async (token: string): Promise<InvitationLanding> => {
+    const r = await api.get(`/api/auth/invitations/${token}`)
+    return InvitationLandingSchema.parse(r.data)
+  },
+  acceptInvitation: async (token: string): Promise<User> => {
+    const r = await api.post(`/api/auth/accept-invitation/${token}`)
+    return UserSchema.parse(r.data)
+  },
+  legacyDataStatus: async (): Promise<LegacyDataStatus> => {
+    const r = await api.get('/api/auth/legacy-data-status')
+    return LegacyDataStatusSchema.parse(r.data)
+  },
+  claimLegacyData: async (): Promise<LegacyDataStatus> => {
+    const r = await api.post('/api/auth/claim-legacy-data')
+    return LegacyDataStatusSchema.parse(r.data)
+  },
+}
+
+export const membersApi = {
+  list: async (projectId: string): Promise<Member[]> => {
+    const r = await api.get(`/api/projects/${projectId}/members`)
+    return z.array(MemberSchema).parse(r.data)
+  },
+  updateRole: async (
+    projectId: string,
+    userId: string,
+    role: 'owner' | 'editor' | 'viewer',
+  ): Promise<Member> => {
+    const r = await api.patch(`/api/projects/${projectId}/members/${userId}`, { role })
+    return MemberSchema.parse(r.data)
+  },
+  remove: async (projectId: string, userId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/members/${userId}`)
+  },
+  listInvitations: async (projectId: string): Promise<Invitation[]> => {
+    const r = await api.get(`/api/projects/${projectId}/invitations`)
+    return z.array(InvitationSchema).parse(r.data)
+  },
+  createInvitation: async (
+    projectId: string,
+    email: string,
+    role: 'owner' | 'editor' | 'viewer',
+  ): Promise<InvitationCreateResponse> => {
+    const r = await api.post(`/api/projects/${projectId}/invitations`, { email, role })
+    return InvitationCreateResponseSchema.parse(r.data)
+  },
+  revokeInvitation: async (projectId: string, invitationId: string): Promise<void> => {
+    await api.delete(`/api/projects/${projectId}/invitations/${invitationId}`)
   },
 }

@@ -26,6 +26,7 @@ import {
 import type { ComponentType } from 'react'
 import { Link } from 'react-router-dom'
 
+import { MembersPanel } from '@/components/auth/MembersPanel'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -224,6 +225,9 @@ export default function ProjectHomePage() {
         articles={articlesQ.data?.slice(0, 5) ?? []}
         projectId={projectId}
       />
+
+      {/* Phase S1 — per-project collaborator panel. */}
+      <MembersPanel projectId={projectId} />
     </motion.div>
   )
 }

@@ -26,6 +26,11 @@ import StatisticsPage from '@/routes/StatisticsPage'
 import SubmissionPage from '@/routes/SubmissionPage'
 import SystematicReviewPage from '@/routes/SystematicReviewPage'
 import WelcomePage from '@/routes/WelcomePage'
+import AccountPage from '@/routes/AccountPage'
+import InvitePage from '@/routes/InvitePage'
+import LoginPage from '@/routes/LoginPage'
+import SignupPage from '@/routes/SignupPage'
+import { RequireAuth } from '@/components/auth/RequireAuth'
 import { Navigate, useParams } from 'react-router-dom'
 
 /**
@@ -49,14 +54,18 @@ export default function App() {
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/" element={<AppShell />}>
+          {/* Phase S1 — public auth pages (no AppShell, no RequireAuth). */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/invite/:token" element={<InvitePage />} />
+          <Route path="/welcome" element={<WelcomePage />} />
+
+          <Route path="/" element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<DashboardPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="health" element={<HealthPage />} />
-            {/* Phase E1.4 — First-run welcome for the Electron desktop
-                shell. Reachable directly in the browser too — it's
-                informational only. */}
-            <Route path="welcome" element={<WelcomePage />} />
+            {/* Phase S1 — manage account, sessions, change password. */}
+            <Route path="account" element={<AccountPage />} />
 
             {/* Project-scoped routes — every page below sees a real
                 projectId via the <ProjectLayoutGuard> context. */}
