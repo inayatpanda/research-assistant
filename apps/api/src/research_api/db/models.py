@@ -1727,3 +1727,174 @@ class PeerReview(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+# ── Phase S1: Multi-user auth ────────────────────────────────────────────
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_email", "email", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+    __table_args__ = (
+        Index("ix_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_sessions_user_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_sessions_user_id"),
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    __table_args__ = (
+        Index("ix_invitations_token_hash", "token_hash", unique=True),
+        Index("ix_invitations_project_email", "project_id", "email"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+            name="fk_invitations_project_id",
+        ),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    invited_by: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+            name="fk_invitations_invited_by",
+        ),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accepted_by: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+            name="fk_invitations_accepted_by",
+        ),
+        nullable=True,
+    )
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index(
+            "ix_audit_events_user_action_created",
+            "user_id",
+            "action",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ── Phase S1: Project membership / RBAC (migration 0028) ────────────────
+
+
+class ProjectMember(Base):
+    __tablename__ = "project_members"
+    __table_args__ = (
+        Index(
+            "uq_project_members_project_user",
+            "project_id",
+            "user_id",
+            unique=True,
+        ),
+        Index("ix_project_members_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+            name="fk_project_members_project_id",
+        ),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+            name="fk_project_members_user_id",
+        ),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    invited_by: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+            name="fk_project_members_invited_by",
+        ),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

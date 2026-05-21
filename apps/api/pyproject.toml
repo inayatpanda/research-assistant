@@ -32,6 +32,9 @@ dependencies = [
   "Pillow>=10.0",
   "bibtexparser>=1.4,<2",
   "apscheduler>=3.10",
+  # Phase S1 — argon2id password hashing for the multi-user auth
+  # subsystem. Pure-OSS, no commercial license.
+  "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]
