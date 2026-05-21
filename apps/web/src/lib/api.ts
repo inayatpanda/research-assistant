@@ -1,39 +1,38 @@
 import axios, { AxiosError } from 'axios'
 import { z } from 'zod'
 
+import { resolveBackendUrl } from '@/mobile/lib/backendUrl'
+
 /**
  * Resolve the API base URL with the following precedence:
  *
- *   1. `window.electron.apiUrl`     — injected by the Electron preload in
+ *   1. `useBackendUrlStore.url`     — Phase M0.3 mobile-PWA override.
+ *      The user enters their tailnet URL on `/m/setup`, we stash it in
+ *      localStorage, and it wins over the Electron bridge so dev
+ *      machines running both the desktop app and a browser tab can
+ *      still target a remote backend manually.
+ *   2. `window.electron.apiUrl`     — injected by the Electron preload in
  *      Phase E1 so the renderer talks to the spawned FastAPI subprocess on
  *      its dynamically-chosen port.
- *   2. `import.meta.env.VITE_API_URL` — Vite build-time / dev-mode override
+ *   3. `import.meta.env.VITE_API_URL` — Vite build-time / dev-mode override
  *      (used by the standalone web build).
- *   3. `http://127.0.0.1:8787`       — local dev fallback that matches the
+ *   4. `http://127.0.0.1:8787`       — local dev fallback that matches the
  *      backend's default port.
  *
  * The lookup is exported (`resolveApiUrl`) so tests can assert each branch
  * of the fallback chain.
+ *
+ * NOTE: We resolve the URL *per request* via an axios interceptor so a
+ * user landing on `/m/setup`, saving a new tailnet URL, and clicking
+ * Continue takes effect immediately — no page reload required.
  */
-type ElectronBridge = {
-  apiUrl?: string | null
-  tailnetUrl?: string | null
-  platform?: string
-}
-
 function resolveApiUrl(): string {
-  if (typeof window !== 'undefined') {
-    const bridge = (window as unknown as { electron?: ElectronBridge }).electron
-    const fromElectron = bridge?.apiUrl
-    if (typeof fromElectron === 'string' && fromElectron.length > 0) {
-      return fromElectron
-    }
-  }
-  const fromEnv = (import.meta as { env?: Record<string, string | undefined> })
-    .env?.VITE_API_URL
-  if (typeof fromEnv === 'string' && fromEnv.length > 0) {
-    return fromEnv
-  }
+  // M0.3 — `resolveBackendUrl()` walks the full precedence chain
+  // (user-typed store → Electron preload → VITE_API_URL → null).
+  // We only need to add the legacy localhost default for the case
+  // where nothing else is configured (dev mode, no Electron bridge).
+  const resolved = resolveBackendUrl()
+  if (typeof resolved === 'string' && resolved.length > 0) return resolved
   return 'http://127.0.0.1:8787'
 }
 
@@ -46,6 +45,17 @@ export const api = axios.create({
   // ``withCredentials: true``, the browser sends/receives the cookie on
   // cross-origin requests provided CORS allow-credentials is on.
   withCredentials: true,
+})
+
+// Phase M0.3 — re-resolve baseURL on every request so the mobile PWA
+// picks up a new tailnet URL the instant the user saves it on
+// `/m/setup`, without needing a hard reload.
+api.interceptors.request.use((config) => {
+  const fresh = resolveApiUrl()
+  if (fresh && fresh !== config.baseURL) {
+    config.baseURL = fresh
+  }
+  return config
 })
 
 /**
