@@ -53,6 +53,13 @@ vi.mock('@/lib/api', () => {
     learnApi: {
       listStatTests: vi.fn(async () => summaries),
       getStatTest: vi.fn(async (slug: string) => details[slug]),
+      listChecklists: vi.fn(async () => []),
+      getChecklist: vi.fn(async () => null),
+      listEconomics: vi.fn(async () => []),
+      getEconomics: vi.fn(async () => null),
+      listSubmission: vi.fn(async () => []),
+      getSubmission: vi.fn(async () => null),
+      search: vi.fn(async () => []),
     },
   }
 })

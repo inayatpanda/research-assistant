@@ -4605,6 +4605,84 @@ export const LearnStatTestReadSchema = z.object({
 })
 export type LearnStatTestRead = z.infer<typeof LearnStatTestReadSchema>
 
+// --- Phase 5b — Learn hub additional categories ---
+
+export const LearnChecklistSummarySchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  reporting_standard: z.string(),
+  applies_to_study_types: z.array(z.string()),
+  version: z.string(),
+  short_blurb: z.string(),
+  worked_example_domain: z.string(),
+})
+export type LearnChecklistSummary = z.infer<typeof LearnChecklistSummarySchema>
+
+export const LearnChecklistReadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  reporting_standard: z.string(),
+  applies_to_study_types: z.array(z.string()),
+  version: z.string(),
+  official_url: z.string(),
+  worked_example_domain: z.string(),
+  related_concepts: z.array(z.string()),
+  body_md: z.string(),
+})
+export type LearnChecklistRead = z.infer<typeof LearnChecklistReadSchema>
+
+export const LearnEconomicsSummarySchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  concept_family: z.string(),
+  formula: z.string(),
+  units: z.string(),
+  short_blurb: z.string(),
+  worked_example_domain: z.string(),
+})
+export type LearnEconomicsSummary = z.infer<typeof LearnEconomicsSummarySchema>
+
+export const LearnEconomicsReadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  concept_family: z.string(),
+  formula: z.string(),
+  units: z.string(),
+  worked_example_domain: z.string(),
+  related_concepts: z.array(z.string()),
+  body_md: z.string(),
+})
+export type LearnEconomicsRead = z.infer<typeof LearnEconomicsReadSchema>
+
+export const LearnSubmissionSummarySchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  topic: z.string(),
+  topic_family: z.string(),
+  short_blurb: z.string(),
+  worked_example_domain: z.string(),
+})
+export type LearnSubmissionSummary = z.infer<typeof LearnSubmissionSummarySchema>
+
+export const LearnSubmissionReadSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  topic: z.string(),
+  topic_family: z.string(),
+  worked_example_domain: z.string(),
+  related_concepts: z.array(z.string()),
+  body_md: z.string(),
+})
+export type LearnSubmissionRead = z.infer<typeof LearnSubmissionReadSchema>
+
+export const LearnSearchHitSchema = z.object({
+  category: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  snippet: z.string(),
+})
+export type LearnSearchHit = z.infer<typeof LearnSearchHitSchema>
+
 export const learnApi = {
   listStatTests: async (): Promise<LearnStatTestSummary[]> => {
     const r = await api.get('/api/learn/stat-tests')
@@ -4613,5 +4691,33 @@ export const learnApi = {
   getStatTest: async (slug: string): Promise<LearnStatTestRead> => {
     const r = await api.get(`/api/learn/stat-tests/${slug}`)
     return LearnStatTestReadSchema.parse(r.data)
+  },
+  listChecklists: async (): Promise<LearnChecklistSummary[]> => {
+    const r = await api.get('/api/learn/checklists')
+    return z.array(LearnChecklistSummarySchema).parse(r.data)
+  },
+  getChecklist: async (slug: string): Promise<LearnChecklistRead> => {
+    const r = await api.get(`/api/learn/checklists/${slug}`)
+    return LearnChecklistReadSchema.parse(r.data)
+  },
+  listEconomics: async (): Promise<LearnEconomicsSummary[]> => {
+    const r = await api.get('/api/learn/economics')
+    return z.array(LearnEconomicsSummarySchema).parse(r.data)
+  },
+  getEconomics: async (slug: string): Promise<LearnEconomicsRead> => {
+    const r = await api.get(`/api/learn/economics/${slug}`)
+    return LearnEconomicsReadSchema.parse(r.data)
+  },
+  listSubmission: async (): Promise<LearnSubmissionSummary[]> => {
+    const r = await api.get('/api/learn/submission')
+    return z.array(LearnSubmissionSummarySchema).parse(r.data)
+  },
+  getSubmission: async (slug: string): Promise<LearnSubmissionRead> => {
+    const r = await api.get(`/api/learn/submission/${slug}`)
+    return LearnSubmissionReadSchema.parse(r.data)
+  },
+  search: async (q: string): Promise<LearnSearchHit[]> => {
+    const r = await api.get('/api/learn/search', { params: { q } })
+    return z.array(LearnSearchHitSchema).parse(r.data)
   },
 }
