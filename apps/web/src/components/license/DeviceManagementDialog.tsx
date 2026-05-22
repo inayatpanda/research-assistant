@@ -24,10 +24,20 @@ interface Props {
   onOpenChange(open: boolean): void
   devices: LicenseDevice[]
   currentSessionId?: string | null
-  /** Returns once the revocation has completed (or thrown). */
-  onRevoke(sessionId: string): Promise<void>
+  /**
+   * Returns once the revocation has completed (or thrown). Not used
+   * when ``readOnly`` is ``true``.
+   */
+  onRevoke?(sessionId: string): Promise<void>
   /** Optional explanatory copy shown above the list (e.g. "5/5 devices"). */
   description?: string
+  /**
+   * Fix-13/10: when the dialog is opened on the login page (i.e. the
+   * user does not yet have an authenticated token), the Revoke API
+   * call is impossible — hide the Revoke buttons and turn the list
+   * into an informational read-out.
+   */
+  readOnly?: boolean
 }
 
 function formatRelative(timestamp: number): string {
@@ -46,6 +56,7 @@ export function DeviceManagementDialog({
   currentSessionId,
   onRevoke,
   description,
+  readOnly = false,
 }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [errorId, setErrorId] = useState<string | null>(null)
@@ -88,29 +99,31 @@ export function DeviceManagementDialog({
                     {d.ip ? ` · ${d.ip}` : ''}
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isCurrent || busyId === d.id}
-                  onClick={async () => {
-                    setBusyId(d.id)
-                    setErrorId(null)
-                    try {
-                      await onRevoke(d.id)
-                    } catch {
-                      setErrorId(d.id)
-                    } finally {
-                      setBusyId(null)
-                    }
-                  }}
-                >
-                  {busyId === d.id ? 'Revoking…' : 'Revoke'}
-                </Button>
+                {!readOnly && onRevoke && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isCurrent || busyId === d.id}
+                    onClick={async () => {
+                      setBusyId(d.id)
+                      setErrorId(null)
+                      try {
+                        await onRevoke(d.id)
+                      } catch {
+                        setErrorId(d.id)
+                      } finally {
+                        setBusyId(null)
+                      }
+                    }}
+                  >
+                    {busyId === d.id ? 'Revoking…' : 'Revoke'}
+                  </Button>
+                )}
               </li>
             )
           })}
         </ul>
-        {errorId && (
+        {errorId && !readOnly && (
           <div className="text-[12px] text-rose-600">
             Failed to revoke that device. Please try again.
           </div>

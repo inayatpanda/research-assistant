@@ -22,6 +22,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LicenseError, licenseApi } from '@/lib/licenseApi'
 import { useLicenseStore } from '@/lib/licenseStore'
+import {
+  PASSWORD_HINT,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_PATTERN,
+  isStrongPassword,
+} from '@/lib/passwordRules'
 import { cn } from '@/lib/utils'
 
 type Mode = 'login' | 'signup'
@@ -47,11 +53,6 @@ export default function LicensePage() {
   const [deviceLimit, setDeviceLimit] = useState<{
     devices: import('@/lib/licenseApi').LicenseDevice[]
   } | null>(null)
-  const [pendingToken, setPendingToken] = useState<{
-    email: string
-    password: string
-  } | null>(null)
-
   const target = state.from ?? '/'
 
   async function submit(e?: React.FormEvent) {
@@ -65,8 +66,10 @@ export default function LicensePage() {
           setBusy(false)
           return
         }
-        if (password.length < 10 || !/\d/.test(password)) {
-          setError('Password must be at least 10 characters and include a digit.')
+        if (!isStrongPassword(password)) {
+          setError(
+            `Password must be at least ${PASSWORD_MIN_LENGTH} characters and include a digit.`,
+          )
           setBusy(false)
           return
         }
@@ -86,7 +89,6 @@ export default function LicensePage() {
       if (err instanceof LicenseError) {
         if (err.code === 'device_limit_exceeded' && err.devices) {
           setDeviceLimit({ devices: err.devices })
-          setPendingToken({ email, password })
         } else if (err.status === 401) {
           setError('Wrong email or password.')
         } else if (err.code === 'email_in_use') {
@@ -106,25 +108,13 @@ export default function LicensePage() {
     }
   }
 
-  async function handleRevoke(sessionId: string) {
-    if (!pendingToken) return
-    // We don't have a token yet — but the server's DELETE /devices/:id
-    // requires authentication. Solution: we already have the credentials,
-    // so we re-log-in (which after revocation will succeed), or call
-    // /api/devices through an admin path. The simpler path: prompt the
-    // user with the credentials they just typed by issuing a fresh login
-    // attempt now that the slot has been freed. We can't actually call
-    // DELETE without a token, so instead we use logout-all on a session
-    // we've just opened on this device. The L1a server returns a token
-    // alongside the 409 list — but only sometimes. To keep this robust,
-    // we ask the worker for a fresh login attempt (cannot happen — slot
-    // full), so we fall back to: tell the user to log in on the device
-    // they want to keep, then revoke from there. For the L1b iteration,
-    // surface this UX path: we cannot revoke without a token.
-    throw new Error(
-      'Sign in on the device you want to keep, then revoke this one from Settings → License.',
-    )
-  }
+  // Fix-13/10: We deliberately do NOT expose a Revoke button on the
+  // login-page device manager. The server's ``DELETE /devices/:id``
+  // requires the caller to hold a session token — and on this page
+  // the user is, by definition, not yet authenticated (the 409 was
+  // raised by /login). The dialog therefore renders in ``readOnly``
+  // mode and the body copy directs the user to the in-app Settings
+  // route on one of their existing devices.
 
   const banner = state.banner
 
@@ -215,13 +205,15 @@ export default function LicensePage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={mode === 'signup' ? PASSWORD_MIN_LENGTH : undefined}
+                pattern={mode === 'signup' ? PASSWORD_PATTERN : undefined}
                 autoComplete={
                   mode === 'signup' ? 'new-password' : 'current-password'
                 }
               />
               {mode === 'signup' && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  At least 10 characters with one digit.
+                  {PASSWORD_HINT}
                 </p>
               )}
             </div>
@@ -306,8 +298,12 @@ export default function LicensePage() {
           if (!open) setDeviceLimit(null)
         }}
         devices={deviceLimit?.devices ?? []}
-        description="You're already signed in on 5 devices, which is the per-account limit. Revoke one to sign in here."
-        onRevoke={handleRevoke}
+        readOnly
+        description={
+          "You're already signed in on 5 devices, which is the per-account limit. " +
+          'Open the app on one of those devices, go to Settings → License → Manage devices, ' +
+          "revoke whichever one you don't need, then come back here and try again."
+        }
       />
     </div>
   )

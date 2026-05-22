@@ -148,4 +148,42 @@ describe('LicensePage', () => {
     })
     expect(screen.getByTestId('device-row-s1')).toBeTruthy()
   })
+
+  it('Fix-13/10: device-limit dialog on /license is read-only (no Revoke button)', async () => {
+    loginMock.mockRejectedValueOnce(
+      new LicenseError('device_limit_exceeded', 'full', 409, {
+        error: 'device_limit_exceeded',
+        devices: [
+          {
+            id: 's1',
+            device_id: 'd1',
+            device_label: 'Mac Safari',
+            user_agent: 'UA',
+            ip: '1.2.3.4',
+            last_seen_at: Date.now(),
+            created_at: Date.now(),
+            expires_at: Date.now() + 1000,
+          },
+        ],
+      }),
+    )
+    renderPage()
+    fireEvent.change(screen.getByTestId('license-input-email'), {
+      target: { value: 'a@b.test' },
+    })
+    fireEvent.change(screen.getByTestId('license-input-password'), {
+      target: { value: 'longpass1234' },
+    })
+    fireEvent.click(screen.getByTestId('license-submit'))
+    await waitFor(() => {
+      expect(screen.getByTestId('device-manager-dialog')).toBeTruthy()
+    })
+    // The Revoke button must NOT appear on the public login page —
+    // the user has no token, so DELETE /devices/:id would fail.
+    expect(screen.queryByRole('button', { name: /revoke/i })).toBeNull()
+    // The dialog should explain what to do instead.
+    expect(screen.getByTestId('device-manager-dialog').textContent).toMatch(
+      /settings\s*[→>]/i,
+    )
+  })
 })
