@@ -19,6 +19,8 @@ const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
   // Cloudflare *.workers.dev
   /^https:\/\/[a-z0-9-]+\.workers\.dev$/,
+  // Cloudflare Pages preview + production subdomains for the landing site
+  /^https:\/\/[a-z0-9-]+\.pages\.dev$/,
   // Electron renderer
   /^app:\/\//,
   // Landing site placeholder; replace once the production domain is set up.
