@@ -20,6 +20,7 @@ import {
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
+import { ConfirmSheet } from '../components/ConfirmSheet'
 import { MobileHeader } from '../components/MobileHeader'
 
 const RECOMMENDATION_BADGE: Record<
@@ -65,6 +66,9 @@ export default function MobilePeerReviewDetail() {
     strengths: true,
     major_issues: true,
   })
+  // Fix-13/9: in-app confirmation replaces window.confirm (which iOS
+  // PWAs sometimes silently swallow).
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   const detail = useQuery({
     queryKey: ['peer-review', projectId, id],
@@ -171,17 +175,26 @@ export default function MobilePeerReviewDetail() {
             variant="destructive"
             className="shrink-0"
             disabled={deleteMutation.isPending}
-            onClick={() => {
-              if (window.confirm('Delete this peer review?')) {
-                deleteMutation.mutate()
-              }
-            }}
+            onClick={() => setDeleteConfirmOpen(true)}
             data-testid="mpeer-delete"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       )}
+
+      <ConfirmSheet
+        open={deleteConfirmOpen}
+        title="Delete peer review"
+        message="This permanently removes the AI critique and its source pointer. You can re-generate a new one from the same article."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          deleteMutation.mutate()
+          setDeleteConfirmOpen(false)
+        }}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   )
 }

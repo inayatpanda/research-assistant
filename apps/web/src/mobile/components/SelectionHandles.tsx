@@ -69,7 +69,20 @@ export function SelectionHandles({
   )
 
   const onPointerUp = useCallback(
-    () => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Fix-13/8: explicitly release the pointer capture that
+      // ``onPointerDown`` set. Without this, an interrupted gesture
+      // (iOS edge-swipe-back, OS gesture-cancel, page hide) leaves
+      // the element silently holding the pointer; subsequent
+      // selections never fire because the previous capture is still
+      // alive.
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }
+      } catch {
+        /* releasePointerCapture can throw if the capture was lost */
+      }
       onMoveEnd?.()
     },
     [onMoveEnd],

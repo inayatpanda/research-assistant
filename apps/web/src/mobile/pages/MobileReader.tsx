@@ -69,6 +69,7 @@ import {
 import { cn } from '@/lib/utils'
 
 import { BottomSheet } from '../components/BottomSheet'
+import { ConfirmSheet } from '../components/ConfirmSheet'
 import {
   MobilePdfReader,
   type MobilePdfReaderTestHandle,
@@ -308,7 +309,16 @@ const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
 
     // ------ Text long-press handlers (touch events, not pointer, per spec).
     function onTouchStart(e: React.TouchEvent<HTMLDivElement>) {
-      // Ignore multi-touch (pinch-zoom).
+      // Ignore multi-touch (pinch-zoom). Fix-13/7: if a second finger
+      // lands *after* a single-touch press has already started, we
+      // also need to cancel — otherwise the 500ms timer would still
+      // fire mid-pinch and pop up the selection toolbar over a
+      // zooming user.
+      if (e.touches.length > 1) {
+        clearPressTimer()
+        pressOrigin.current = null
+        return
+      }
       if (e.touches.length !== 1) {
         clearPressTimer()
         return
@@ -326,6 +336,13 @@ const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
     }
 
     function onTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+      // Fix-13/7: a second finger arrived during move (pinch-zoom).
+      // Bail out of the long-press machinery entirely.
+      if (e.touches.length > 1) {
+        clearPressTimer()
+        pressOrigin.current = null
+        return
+      }
       const origin = pressOrigin.current
       if (!origin || pressTimer.current == null) return
       const t = e.touches[0]
@@ -537,6 +554,10 @@ const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
     // ------ Note auto-save (when editing an existing highlight)
     const editNoteRef = useRef<number | null>(null)
     const [editNoteDraft, setEditNoteDraft] = useState('')
+    // Fix-13/9: replace window.confirm() with an in-app sheet. iOS PWAs
+    // can swallow confirm() entirely when the page isn't the foreground
+    // tab, leaving the user stuck.
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     useEffect(() => {
       setEditNoteDraft(editingHighlight?.user_note ?? '')
     }, [editingHighlight?.id, editingHighlight?.user_note])
@@ -912,14 +933,7 @@ const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
                 variant="ghost"
                 size="sm"
                 disabled={deleteMutation.isPending}
-                onClick={() => {
-                  if (
-                    typeof window !== 'undefined' &&
-                    !window.confirm('Delete this highlight?')
-                  )
-                    return
-                  deleteMutation.mutate(editingHighlight.id)
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 data-testid="mreader-edit-delete"
                 className="text-rose-700"
               >
@@ -928,6 +942,19 @@ const MobileReader = forwardRef<MobileReaderTestHandle, MobileReaderProps>(
             </div>
           )}
         </BottomSheet>
+
+        <ConfirmSheet
+          open={deleteConfirmOpen && !!editingHighlight}
+          title="Delete highlight"
+          message="This will remove the highlight, its note and any AI paraphrase. You can't undo this."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => {
+            if (editingHighlight) deleteMutation.mutate(editingHighlight.id)
+            setDeleteConfirmOpen(false)
+          }}
+          onCancel={() => setDeleteConfirmOpen(false)}
+        />
 
         {/* D3.6 — Overflow menu */}
         <BottomSheet
