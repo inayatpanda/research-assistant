@@ -150,6 +150,57 @@ export class Db {
       .run();
   }
 
+  /**
+   * Atomic device-limit-aware insert. The INSERT...SELECT...WHERE clause
+   * checks the active-session count in the same SQL statement; SQLite
+   * (and therefore D1) evaluates this atomically — two concurrent
+   * callers cannot both see ``< limit`` and both succeed.
+   *
+   * Returns ``true`` when the row was inserted, ``false`` when the cap
+   * was already reached and the INSERT affected zero rows.
+   */
+  async insertSessionIfUnderLimit(
+    row: SessionRow,
+    limit: number,
+  ): Promise<boolean> {
+    const res = await this.d1
+      .prepare(
+        `INSERT INTO sessions (id, account_id, jwt_id, device_id, device_label,
+           user_agent, ip, last_seen_at, created_at, expires_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         WHERE (SELECT COUNT(*) FROM sessions
+                 WHERE account_id = ? AND expires_at > ?) < ?`,
+      )
+      .bind(
+        row.id,
+        row.account_id,
+        row.jwt_id,
+        row.device_id,
+        row.device_label,
+        row.user_agent,
+        row.ip,
+        row.last_seen_at,
+        row.created_at,
+        row.expires_at,
+        row.account_id,
+        row.last_seen_at,
+        limit,
+      )
+      .run();
+    // D1's run() returns meta.changes; the FakeD1 returns a row count.
+    // Treat any truthy "rows affected" signal as success and fall back
+    // to a post-check if neither shape is exposed.
+    const meta = (res as { meta?: { changes?: number } }).meta;
+    if (meta && typeof meta.changes === "number") {
+      return meta.changes > 0;
+    }
+    const changes = (res as { changes?: number }).changes;
+    if (typeof changes === "number") return changes > 0;
+    // Last-resort: read back by jwt_id to confirm insertion.
+    const exists = await this.getSessionByJwtId(row.jwt_id);
+    return exists !== null;
+  }
+
   async getSessionByJwtId(jwt_id: string): Promise<SessionRow | null> {
     const row = await this.d1
       .prepare(`SELECT * FROM sessions WHERE jwt_id = ? LIMIT 1`)
@@ -258,6 +309,22 @@ export class Db {
     await this.d1
       .prepare(`UPDATE password_resets SET used_at = ? WHERE id = ?`)
       .bind(Date.now(), id)
+      .run();
+  }
+
+  /**
+   * Invalidate every still-unused reset token for an account. Called
+   * before issuing a new reset so the previous outstanding tokens
+   * cannot be used (Fix-13/4 — multiple "Forgot password" presses no
+   * longer leave several live tokens floating around).
+   */
+  async invalidateUnusedPasswordResets(account_id: string): Promise<void> {
+    await this.d1
+      .prepare(
+        `UPDATE password_resets SET used_at = ?
+         WHERE account_id = ? AND used_at IS NULL`,
+      )
+      .bind(Date.now(), account_id)
       .run();
   }
 

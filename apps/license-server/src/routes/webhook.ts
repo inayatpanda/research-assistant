@@ -82,7 +82,25 @@ export const webhookRoute = new Hono<AppEnv>().post("/", async (c) => {
       created_at: now,
       updated_at: now,
     };
-    await db.insertAccount(account);
+    try {
+      await db.insertAccount(account);
+    } catch (err) {
+      // Fix-13/5: race-safe path. A concurrent webhook delivery for
+      // the same buyer may have just inserted the row; re-fetch and
+      // continue with the existing account.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/UNIQUE/i.test(msg) && /email/i.test(msg)) {
+        const refreshed = await db.getAccountByEmail(email);
+        if (refreshed) {
+          account = refreshed;
+          tempPassword = null;
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
   } else {
     await db.updateAccountType(account.id, "lifetime", {
       lifetime_purchased_at: now,
@@ -90,15 +108,28 @@ export const webhookRoute = new Hono<AppEnv>().post("/", async (c) => {
     });
   }
 
-  await db.insertPurchase({
-    id: uuidv4(),
-    account_id: account.id,
-    ls_order_id: orderId,
-    amount_cents: typeof attrs.total === "number" ? attrs.total : null,
-    currency: attrs.currency ?? null,
-    raw_payload: raw,
-    created_at: now,
-  });
+  // Fix-13/5: the schema declares ls_order_id UNIQUE, but two
+  // concurrent retries of the same webhook can still race past the
+  // earlier dup-check. Catch the UNIQUE-constraint failure here and
+  // treat it as idempotent success — by the time the constraint
+  // fires, the first call has already upgraded the account.
+  try {
+    await db.insertPurchase({
+      id: uuidv4(),
+      account_id: account.id,
+      ls_order_id: orderId,
+      amount_cents: typeof attrs.total === "number" ? attrs.total : null,
+      currency: attrs.currency ?? null,
+      raw_payload: raw,
+      created_at: now,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (orderId && /UNIQUE/i.test(msg) && /ls_order_id/i.test(msg)) {
+      return c.json({ ok: true, idempotent: true });
+    }
+    throw err;
+  }
 
   const baseUrl = c.env.APP_BASE_URL ?? "https://research-assistant.dev";
   if (tempPassword) {

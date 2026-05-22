@@ -87,6 +87,42 @@ export async function createSessionForAccount(
   return { token, session };
 }
 
+/**
+ * Race-free variant of ``createSessionForAccount``. Uses an atomic
+ * INSERT...SELECT that fails (zero rows affected) when the device cap is
+ * already reached, so two concurrent callers cannot both insert past
+ * the limit. Returns ``null`` when the cap blocked the insert.
+ */
+export async function createSessionUnderLimit(
+  db: Db,
+  account: AccountRow,
+  limit: number,
+  opts: {
+    device_id?: string;
+    device_label?: string;
+    user_agent?: string;
+    ip?: string;
+  },
+): Promise<{ token: string; session: SessionRow } | null> {
+  const now = Date.now();
+  const token = generateToken(32);
+  const jwtId = await sha256Hex(token);
+  const session: SessionRow = {
+    id: uuidv4(),
+    account_id: account.id,
+    jwt_id: jwtId,
+    device_id: opts.device_id ?? uuidv4(),
+    device_label: opts.device_label ?? null,
+    user_agent: opts.user_agent ?? null,
+    ip: opts.ip ?? null,
+    last_seen_at: now,
+    created_at: now,
+    expires_at: now + SESSION_TTL_MS,
+  };
+  const ok = await db.insertSessionIfUnderLimit(session, limit);
+  return ok ? { token, session } : null;
+}
+
 export function clientIp(c: Context<AppEnv>): string {
   return (
     c.req.header("cf-connecting-ip") ??

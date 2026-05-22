@@ -53,6 +53,56 @@ describe("POST /api/login", () => {
     expect(body.error).toBe("invalid_credentials");
   });
 
+  it("rejects concurrent logins that would breach the 5-device cap", async () => {
+    // Fix-13/1 regression: two concurrent POST /api/login calls both
+    // observed active.length < 5 in the old read-then-insert code and
+    // both inserted, yielding 6 active devices. The atomic
+    // INSERT ... WHERE (SELECT COUNT < limit) means at most 5 sessions
+    // ever exist regardless of how many concurrent calls fire.
+    const h = makeHarness();
+    await signup(h, "race@example.com");
+    // Bring the account up to 4 active sessions (signup created #1, the
+    // loop adds 3 more = 4). The next *two* concurrent logins must
+    // produce exactly one success and one 409, never two successes.
+    for (let i = 0; i < 3; i++) {
+      const r = await h.fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "race@example.com",
+          password: "correct-horse-7",
+          device_label: `Device ${i + 2}`,
+        }),
+      });
+      expect(r.status).toBe(200);
+    }
+    // Two concurrent slot-grabbers.
+    const [a, b] = await Promise.all([
+      h.fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "race@example.com",
+          password: "correct-horse-7",
+          device_label: "Racer A",
+        }),
+      }),
+      h.fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "race@example.com",
+          password: "correct-horse-7",
+          device_label: "Racer B",
+        }),
+      }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
+    // Confirm the DB never went above 5.
+    expect(h.db.rows("sessions").length).toBeLessThanOrEqual(5);
+  });
+
   it("returns 409 device_limit_exceeded after 5 active sessions", async () => {
     const h = makeHarness();
     await signup(h, "carol@example.com");

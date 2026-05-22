@@ -96,4 +96,59 @@ describe("password reset", () => {
     });
     expect(again.status).toBe(400);
   });
+
+  it("Fix-13/4: re-issuing a reset invalidates the previously-issued token", async () => {
+    const h = makeHarness();
+    await h.fetch("/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "carol@example.com",
+        password: "correct-horse-7",
+        display_name: "Carol",
+      }),
+    });
+    h.mailer.sent.length = 0;
+
+    // First /forgot-password issues token #1.
+    await h.fetch("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "carol@example.com" }),
+    });
+    const t1 = decodeURIComponent(
+      h.mailer.sent[0].text.match(/token=([^\s)]+)/)![1],
+    );
+
+    // Second /forgot-password issues token #2. After Fix-13/4 the
+    // first token is marked used_at and is no longer accepted.
+    await h.fetch("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "carol@example.com" }),
+    });
+    const t2 = decodeURIComponent(
+      h.mailer.sent[1].text.match(/token=([^\s)]+)/)![1],
+    );
+    expect(t1).not.toBe(t2);
+
+    // The OLD token must now fail with token_used (the row was marked
+    // used_at by the second /forgot-password call).
+    const bad = await h.fetch("/api/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: t1, new_password: "newer-horse-99" }),
+    });
+    expect(bad.status).toBe(400);
+    const badBody = (await bad.json()) as any;
+    expect(["token_used", "invalid_token"]).toContain(badBody.error);
+
+    // The NEW token still works.
+    const good = await h.fetch("/api/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: t2, new_password: "newer-horse-99" }),
+    });
+    expect(good.status).toBe(200);
+  });
 });

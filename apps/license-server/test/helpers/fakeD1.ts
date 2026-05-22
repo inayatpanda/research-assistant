@@ -62,9 +62,13 @@ class FakeStatement {
     return { results: rows as T[] };
   }
 
-  async run(): Promise<{ success: boolean }> {
-    await this.execAndGetRows();
-    return { success: true };
+  async run(): Promise<{ success: boolean; meta: { changes: number } }> {
+    const rows = await this.execAndGetRows();
+    // ``execute()`` returns the affected-row count in the first row for
+    // conditional inserts; otherwise we treat the call as 1 change.
+    const meta = (rows[0] as { __changes__?: number } | undefined)
+      ?.__changes__;
+    return { success: true, meta: { changes: meta ?? 1 } };
   }
 
   private async execAndGetRows(): Promise<RowMap[]> {
@@ -98,6 +102,9 @@ export class FakeD1 {
 
   execute(sql: string, args: any[]): RowMap[] {
     const trimmed = sql.trim().replace(/\s+/g, " ");
+    if (trimmed.startsWith("INSERT INTO ") && /\bSELECT\b/i.test(trimmed)) {
+      return this.handleConditionalInsert(trimmed, args);
+    }
     if (trimmed.startsWith("INSERT INTO ")) {
       return this.handleInsert(trimmed, args);
     }
@@ -150,6 +157,48 @@ export class FakeD1 {
     return [];
   }
 
+  /**
+   * Supports the device-limit guard:
+   *
+   *   INSERT INTO sessions (...cols...)
+   *   SELECT ?, ?, ...
+   *   WHERE (SELECT COUNT(*) FROM sessions WHERE account_id = ? AND expires_at > ?) < ?
+   *
+   * The last three bind args are: account_id (for the count), expires_at
+   * cutoff (now), and the limit. Everything else is the new row.
+   */
+  private handleConditionalInsert(sql: string, args: any[]): RowMap[] {
+    const m = sql.match(
+      /^INSERT INTO (\w+) \(([^)]+)\) SELECT [^W]+WHERE \(SELECT COUNT\(\*\) FROM (\w+) WHERE account_id = \? AND expires_at > \?\) < \?$/i,
+    );
+    if (!m) throw new Error(`FakeD1 conditional-insert parse fail: ${sql}`);
+    const table = m[1];
+    const cols = m[2].split(",").map((s) => s.trim());
+    const rowArgs = args.slice(0, cols.length);
+    const tail = args.slice(cols.length);
+    if (tail.length !== 3) {
+      throw new Error(
+        `FakeD1 conditional-insert: expected 3 tail args, got ${tail.length}`,
+      );
+    }
+    const [acctId, cutoff, limit] = tail;
+    const count = (this.tables[table] ?? []).filter(
+      (r) => r.account_id === acctId && r.expires_at > cutoff,
+    ).length;
+    if (count >= limit) {
+      // Zero rows affected — return the changes count sentinel.
+      return [{ __changes__: 0 }];
+    }
+    // Reuse the normal INSERT machinery (including UNIQUE checks).
+    this.handleInsert(
+      `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols
+        .map(() => "?")
+        .join(", ")})`,
+      rowArgs,
+    );
+    return [{ __changes__: 1 }];
+  }
+
   private handleUpdate(sql: string, args: any[]): RowMap[] {
     // Match all the specific UPDATE statements we use.
     if (sql.startsWith("UPDATE accounts SET type = ?,")) {
@@ -175,6 +224,19 @@ export class FakeD1 {
       const [last_seen_at, id] = args;
       const row = this.tables.sessions.find((r) => r.id === id);
       if (row) row.last_seen_at = last_seen_at;
+      return [];
+    }
+    if (
+      sql.startsWith(
+        "UPDATE password_resets SET used_at = ? WHERE account_id = ? AND used_at IS NULL",
+      )
+    ) {
+      const [used_at, account_id] = args;
+      for (const row of this.tables.password_resets) {
+        if (row.account_id === account_id && row.used_at == null) {
+          row.used_at = used_at;
+        }
+      }
       return [];
     }
     if (sql.startsWith("UPDATE password_resets SET used_at = ?")) {

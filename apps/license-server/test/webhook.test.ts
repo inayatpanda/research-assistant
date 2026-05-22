@@ -79,6 +79,34 @@ describe("POST /api/webhook/lemonsqueezy", () => {
     expect(h.db.rows("accounts")).toHaveLength(0);
   });
 
+  it("Fix-13/5: concurrent deliveries of the same order produce at most one purchase + one lifetime conversion", async () => {
+    // Two simultaneous webhook calls for the same order can race past
+    // the dup-check. The UNIQUE(ls_order_id) constraint + catch in the
+    // route mean we still end up with exactly one purchase_event row
+    // and exactly one lifetime upgrade.
+    const h = makeHarness({ webhookSecret: "hook-secret" });
+    const payload = lsOrderPayload({ id: "order-race" });
+    const body = JSON.stringify(payload);
+    const sig = await hmacHex("hook-secret", body);
+    const [r1, r2] = await Promise.all([
+      h.fetch("/api/webhook/lemonsqueezy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Signature": sig },
+        body,
+      }),
+      h.fetch("/api/webhook/lemonsqueezy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Signature": sig },
+        body,
+      }),
+    ]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(h.db.rows("purchase_events")).toHaveLength(1);
+    expect(h.db.rows("accounts")).toHaveLength(1);
+    expect(h.db.rows("accounts")[0].type).toBe("lifetime");
+  });
+
   it("is idempotent on repeated deliveries of the same order id", async () => {
     const h = makeHarness({ webhookSecret: "hook-secret" });
     const payload = lsOrderPayload({ id: "order-dup" });

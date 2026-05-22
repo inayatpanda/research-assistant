@@ -21,6 +21,12 @@ export const forgotPasswordRoute = new Hono<AppEnv>().post("/", async (c) => {
   const db = getDb(c.env);
   const account = await db.getAccountByEmail(email);
   if (account && account.type !== "revoked") {
+    // Fix-13/4: nuke any previously-issued, unused reset tokens for
+    // this account so only the freshest one is valid. Without this,
+    // a user who clicks "Forgot password" twice would leave two live
+    // tokens; an attacker who only intercepts the first email could
+    // still use it for 15 minutes.
+    await db.invalidateUnusedPasswordResets(account.id);
     const token = generateToken(32);
     const token_hash = await sha256Hex(token);
     const now = Date.now();

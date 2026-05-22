@@ -36,6 +36,30 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
+/**
+ * Constant-time string compare. Always processes the longer of the two
+ * inputs (zero-padding the shorter) so attackers cannot learn the
+ * length of the secret from response timing.
+ *
+ * Used by the admin-token gate (``X-Admin-Token`` header) and anywhere
+ * else we compare an attacker-controlled string against a server
+ * secret. Pure JS, no `crypto.subtle` dependency — keeps the bundle
+ * small and works in every Workers runtime.
+ */
+export function timingSafeEqualString(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ba = enc.encode(a);
+  const bb = enc.encode(b);
+  const len = Math.max(ba.length, bb.length);
+  let diff = ba.length ^ bb.length;
+  for (let i = 0; i < len; i++) {
+    const ai = i < ba.length ? ba[i] : 0;
+    const bi = i < bb.length ? bb[i] : 0;
+    diff |= ai ^ bi;
+  }
+  return diff === 0;
+}
+
 async function pbkdf2(
   password: string,
   salt: Uint8Array,
@@ -105,6 +129,9 @@ export async function verifyHmacSha256(
   signatureHex: string,
 ): Promise<boolean> {
   if (!signatureHex || typeof signatureHex !== "string") return false;
+  // Reject anything that isn't pure hex so callers can't smuggle in
+  // garbage to short-circuit the comparison. (Fix-13/3)
+  if (!/^[0-9a-f]+$/i.test(signatureHex)) return false;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -117,11 +144,16 @@ export async function verifyHmacSha256(
   const computed = [...new Uint8Array(mac)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  // Constant-time-ish compare.
-  if (computed.length !== signatureHex.length) return false;
-  let diff = 0;
+  // Always walk the *expected* (computed) length, zero-padding the
+  // actual signature, so a length mismatch can't be detected via early
+  // bail-out timing. We fold the length delta into the diff bitmask
+  // up-front to make it impossible for the byte loop alone to declare
+  // equality. (Fix-13/3)
+  const lowered = signatureHex.toLowerCase();
+  let diff = computed.length ^ lowered.length;
   for (let i = 0; i < computed.length; i++) {
-    diff |= computed.charCodeAt(i) ^ signatureHex.charCodeAt(i);
+    const got = i < lowered.length ? lowered.charCodeAt(i) : 0;
+    diff |= computed.charCodeAt(i) ^ got;
   }
   return diff === 0;
 }

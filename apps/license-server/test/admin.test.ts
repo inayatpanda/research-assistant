@@ -47,6 +47,32 @@ describe("admin endpoints", () => {
     expect(body.account.trial_expires_at).toBeNull();
   });
 
+  it("Fix-13/2: rejects wrong tokens (timing-safe compare returns false)", async () => {
+    // Variants of the same length, longer, shorter, single-char-off,
+    // and empty must all be rejected. Each call has to terminate
+    // without leaking the secret via early bail-out.
+    const h = makeHarness({ adminToken: "the-real-admin-token" });
+    const wrongs = [
+      "tha-real-admin-token", // single char off
+      "totally-different-tok", // same length, different bytes
+      "the-real-admin-token-but-longer", // longer
+      "the-real-admin-toke", // shorter
+      "", // empty
+    ];
+    for (const w of wrongs) {
+      const r = await h.fetch("/api/admin/mint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": w },
+        body: JSON.stringify({
+          email: "x@example.com",
+          display_name: "X",
+          type: "trial",
+        }),
+      });
+      expect(r.status).toBe(403);
+    }
+  });
+
   it("/api/admin/mint rejects calls without the admin token", async () => {
     const h = makeHarness();
     const resp = await h.fetch("/api/admin/mint", {

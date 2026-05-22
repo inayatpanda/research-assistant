@@ -10,12 +10,16 @@ import {
   hashPassword,
   uuidv4,
   generateRandomPassword,
+  timingSafeEqualString,
 } from "../lib/crypto";
 import { publicAccount } from "../lib/auth";
 import { isDisplayName, isEmail, normaliseEmail } from "../lib/validation";
 
 function adminAuth(token: string | undefined, env: AppEnv["Bindings"]): boolean {
-  return !!env.ADMIN_TOKEN && !!token && token === env.ADMIN_TOKEN;
+  if (!env.ADMIN_TOKEN || !token) return false;
+  // Constant-time compare to avoid leaking the secret's prefix length
+  // via response timing (Fix-13/2).
+  return timingSafeEqualString(token, env.ADMIN_TOKEN);
 }
 
 export const adminMintRoute = new Hono<AppEnv>().post("/", async (c) => {
