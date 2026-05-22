@@ -20,9 +20,36 @@
  */
 import { openDB, type IDBPDatabase } from 'idb'
 
+import { useLicenseStore } from '@/lib/licenseStore'
+
 const DB_NAME = 'rma-learn'
 const DB_VERSION = 1
 const STORE = 'entries'
+
+/**
+ * Fix-13/6 — user-scope.
+ *
+ * On a shared device two licence accounts can sign in over each other.
+ * Without scoping, account B would see account A's cached articles +
+ * highlights from IndexedDB. We prepend a per-account scope to every
+ * cache key. ``readScope()`` reads the currently-active licence-account
+ * id; on logout (``useLicenseStore.clear()``) we call ``clearScope()``
+ * to wipe every key for that scope.
+ */
+export const PUBLIC_SCOPE = 'public'
+
+export function readScope(): string {
+  try {
+    const account = useLicenseStore.getState().account
+    return account?.id ?? PUBLIC_SCOPE
+  } catch {
+    return PUBLIC_SCOPE
+  }
+}
+
+function scopeKey(scope: string, key: string): string {
+  return `${scope}::${key}`
+}
 
 type EntryRecord = {
   key: string
@@ -54,11 +81,19 @@ export function _resetOfflineLearnForTests() {
  * Read a value from the offline store. Returns ``null`` if nothing is
  * cached for that key, or if IndexedDB isn't available (jsdom in
  * vitest sometimes fakes a partial API).
+ *
+ * The ``scope`` argument defaults to the current licence-account id
+ * so two users on the same device get isolated caches (Fix-13/6).
  */
-export async function readOfflineEntry<T>(key: string): Promise<T | null> {
+export async function readOfflineEntry<T>(
+  key: string,
+  scope: string = readScope(),
+): Promise<T | null> {
   try {
     const db = await getDb()
-    const row = (await db.get(STORE, key)) as EntryRecord | undefined
+    const row = (await db.get(STORE, scopeKey(scope, key))) as
+      | EntryRecord
+      | undefined
     if (!row) return null
     return row.data as T
   } catch {
@@ -71,12 +106,40 @@ export async function readOfflineEntry<T>(key: string): Promise<T | null> {
  * swallowed because a missing cache entry is never worse than a stale
  * one (the network fetch already succeeded by the time we get here).
  */
-export async function writeOfflineEntry<T>(key: string, data: T): Promise<void> {
+export async function writeOfflineEntry<T>(
+  key: string,
+  data: T,
+  scope: string = readScope(),
+): Promise<void> {
   try {
     const db = await getDb()
-    await db.put(STORE, { key, data, cachedAt: Date.now() })
+    await db.put(STORE, {
+      key: scopeKey(scope, key),
+      data,
+      cachedAt: Date.now(),
+    })
   } catch {
     // ignore — offline caching is best-effort
+  }
+}
+
+/**
+ * Delete every cached entry for the given scope. Called by
+ * ``useLicenseStore.clear()`` on logout so the next signed-in user
+ * never sees the previous user's articles or highlights.
+ */
+export async function clearScope(scope: string = readScope()): Promise<void> {
+  try {
+    const db = await getDb()
+    const prefix = `${scope}::`
+    const keys = (await db.getAllKeys(STORE)) as string[]
+    for (const k of keys) {
+      if (typeof k === 'string' && k.startsWith(prefix)) {
+        await db.delete(STORE, k)
+      }
+    }
+  } catch {
+    // best-effort — if the DB isn't there, there's nothing to clear
   }
 }
 
@@ -100,13 +163,14 @@ export type CacheableResult<T> = {
 export async function cacheable<T>(
   key: string,
   fetcher: () => Promise<T>,
+  scope: string = readScope(),
 ): Promise<CacheableResult<T>> {
   try {
     const data = await fetcher()
-    await writeOfflineEntry(key, data)
+    await writeOfflineEntry(key, data, scope)
     return { data, offline: false }
   } catch (err) {
-    const cached = await readOfflineEntry<T>(key)
+    const cached = await readOfflineEntry<T>(key, scope)
     if (cached != null) {
       return { data: cached, offline: true }
     }

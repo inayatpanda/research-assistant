@@ -26,17 +26,30 @@ vi.mock('idb', () => ({
       memory.set(value.key, value)
       return value.key
     },
+    getAllKeys: async (_store: string) => Array.from(memory.keys()),
+    delete: async (_store: string, key: string) => {
+      memory.delete(key)
+    },
   })),
 }))
 
 import {
   _resetOfflineLearnForTests,
   cacheable,
+  clearScope,
+  PUBLIC_SCOPE,
   readOfflineEntry,
   writeOfflineEntry,
 } from '@/mobile/lib/offlineLearn'
+import { useLicenseStore } from '@/lib/licenseStore'
 
-beforeEach(() => {
+beforeEach(async () => {
+  useLicenseStore.getState().clear()
+  // Wait for the async scope-wipe kicked off by clear() to settle
+  // before the test populates fresh data — otherwise its delete()
+  // calls would race the test writes and silently nuke them.
+  const { pendingScopeClear } = await import('@/lib/licenseStore')
+  if (pendingScopeClear) await pendingScopeClear
   memory.clear()
   _resetOfflineLearnForTests()
 })
@@ -66,5 +79,49 @@ describe('offlineLearn', () => {
       throw err
     })
     await expect(cacheable('cold:key', fetcher)).rejects.toBe(err)
+  })
+
+  describe('Fix-13/6: user-scoping', () => {
+    function fakeAccount(id: string) {
+      return {
+        id,
+        email: `${id}@b.test`,
+        display_name: id,
+        type: 'lifetime' as const,
+        trial_expires_at: null,
+        lifetime_purchased_at: Date.now(),
+        email_verified_at: null,
+      }
+    }
+
+    it('writes under different keys for different licence accounts', async () => {
+      useLicenseStore.getState().setSession('tok-a', fakeAccount('acc-a'))
+      await writeOfflineEntry('article:42', { user: 'A' })
+      useLicenseStore.getState().setSession('tok-b', fakeAccount('acc-b'))
+      // User B reads the same logical key and must NOT see user A's data.
+      expect(await readOfflineEntry('article:42')).toBeNull()
+      await writeOfflineEntry('article:42', { user: 'B' })
+      // User A's data is still there under their own scope.
+      expect(await readOfflineEntry('article:42', 'acc-a')).toEqual({
+        user: 'A',
+      })
+      expect(await readOfflineEntry('article:42', 'acc-b')).toEqual({
+        user: 'B',
+      })
+    })
+
+    it('clearScope removes only the targeted scope', async () => {
+      await writeOfflineEntry('k', { x: 1 }, 'acc-a')
+      await writeOfflineEntry('k', { y: 2 }, 'acc-b')
+      await clearScope('acc-a')
+      expect(await readOfflineEntry('k', 'acc-a')).toBeNull()
+      expect(await readOfflineEntry('k', 'acc-b')).toEqual({ y: 2 })
+    })
+
+    it('falls back to the public scope when there is no signed-in account', async () => {
+      // No useLicenseStore.setSession() above — readScope() returns PUBLIC_SCOPE.
+      await writeOfflineEntry('k', { z: 3 })
+      expect(await readOfflineEntry('k', PUBLIC_SCOPE)).toEqual({ z: 3 })
+    })
   })
 })

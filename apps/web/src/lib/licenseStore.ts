@@ -20,19 +20,54 @@ import type {
  * jsdom and SSR environments don't expose ``window.localStorage``;
  * persist would throw on first use. Fall back to an in-memory Map so
  * tests can exercise the store without monkey-patching globals.
+ *
+ * Fix-13/11 — wraps every ``getItem`` in a try/catch so a corrupt JSON
+ * payload (or a localStorage quota error) returns ``null`` instead of
+ * killing the boot. ``createJSONStorage`` will then treat the slot as
+ * empty and the store rehydrates to ``EMPTY``.
  */
 function getStableStorage(): StateStorage {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage
-  }
-  const memory = new Map<string, string>()
+  const inner: StateStorage =
+    typeof window !== 'undefined' && window.localStorage
+      ? window.localStorage
+      : (() => {
+          const memory = new Map<string, string>()
+          return {
+            getItem: (k) => memory.get(k) ?? null,
+            setItem: (k, v) => {
+              memory.set(k, v)
+            },
+            removeItem: (k) => {
+              memory.delete(k)
+            },
+          } satisfies StateStorage
+        })()
   return {
-    getItem: (k) => memory.get(k) ?? null,
+    getItem: (k) => {
+      try {
+        return inner.getItem(k)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[licenseStore] storage.getItem failed:', err)
+        return null
+      }
+    },
     setItem: (k, v) => {
-      memory.set(k, v)
+      try {
+        inner.setItem(k, v)
+      } catch (err) {
+        // Quota-exceeded etc — not fatal; the session is still usable
+        // in-memory, just not persisted across reloads.
+        // eslint-disable-next-line no-console
+        console.warn('[licenseStore] storage.setItem failed:', err)
+      }
     },
     removeItem: (k) => {
-      memory.delete(k)
+      try {
+        inner.removeItem(k)
+      } catch {
+        /* ignore */
+      }
     },
   }
 }
@@ -59,6 +94,12 @@ interface LicenseStoreActions {
   setDevices(devices: LicenseDevice[]): void
   clear(): void
 }
+
+/**
+ * Surface the in-flight scope-wipe so tests (and callers that need to
+ * wait for the cache to drain before re-rendering) can await it.
+ */
+export let pendingScopeClear: Promise<void> | null = null
 
 const EMPTY: LicenseSessionState = {
   token: null,
@@ -91,7 +132,20 @@ export const useLicenseStore = create<LicenseSessionState & LicenseStoreActions>
         set({ devices })
       },
       clear() {
+        // Capture the outgoing account id BEFORE we wipe the state so
+        // the offline-cache scope wipe targets the right slot
+        // (Fix-13/6). Best-effort: a stuck IndexedDB shouldn't block
+        // a logout. Surfaced as the module-level
+        // ``pendingScopeClear`` promise so tests can await it.
+        const outgoing = useLicenseStore.getState().account?.id ?? null
         set({ ...EMPTY })
+        if (outgoing) {
+          pendingScopeClear = import('@/mobile/lib/offlineLearn')
+            .then(({ clearScope }) => clearScope(outgoing))
+            .catch(() => {
+              /* ignore — clearing offline cache is best-effort */
+            })
+        }
       },
     }),
     {
@@ -105,6 +159,25 @@ export const useLicenseStore = create<LicenseSessionState & LicenseStoreActions>
         devices: state.devices,
         lastVerifiedAt: state.lastVerifiedAt,
       }),
+      // Fix-13/11: if the stored payload is corrupt JSON / from an
+      // older schema, zustand's persist middleware logs an error but
+      // silently leaves the in-memory state at its initial value. We
+      // make that recovery explicit: if the hydrate emits an error,
+      // discard whatever it tried to set and fall back to EMPTY.
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[licenseStore] rehydration failed, falling back to empty:',
+            error,
+          )
+          try {
+            useLicenseStore.setState({ ...EMPTY })
+          } catch {
+            /* ignore */
+          }
+        }
+      },
     },
   ),
 )
