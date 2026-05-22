@@ -53,8 +53,7 @@ async def _check_providers(container: Container) -> dict[str, ProviderStatus]:
     return out
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health(container: Container = Depends(get_container)) -> HealthResponse:
+async def _health_impl(container: Container) -> HealthResponse:
     db_ok = await _check_db(container)
     providers = await _check_providers(container)
     any_ai_ok = any(p.ok for p in providers.values())
@@ -71,3 +70,19 @@ async def health(container: Container = Depends(get_container)) -> HealthRespons
         storage_backend=container.settings.storage_backend,
         ai_providers=providers,
     )
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health(container: Container = Depends(get_container)) -> HealthResponse:
+    return await _health_impl(container)
+
+
+# Fix-E2E/7 — Mobile-shell / desktop-bridge clients ping ``/api/health``
+# (every other route lives under ``/api/*``), so expose an alias rather
+# than rewriting every caller. The non-prefixed ``/health`` route remains
+# for backwards compatibility.
+@router.get("/api/health", response_model=HealthResponse, include_in_schema=False)
+async def health_api_alias(
+    container: Container = Depends(get_container),
+) -> HealthResponse:
+    return await _health_impl(container)
