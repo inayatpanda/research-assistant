@@ -2,6 +2,7 @@ import { NavLink, Link } from 'react-router-dom'
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
+  { to: '/pricing', label: 'Pricing' },
   { to: '/install', label: 'Install' },
   { to: '/sync', label: 'Sync' },
   { to: '/docs', label: 'Docs' },
@@ -38,9 +39,17 @@ export function SiteHeader() {
             </NavLink>
           ))}
         </nav>
-        <Link to="/install" className="btn-primary !px-4 !py-2 text-xs sm:text-sm">
-          Get the app
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/login"
+            className="hidden text-sm font-medium text-ink-muted hover:text-ink sm:inline-flex sm:px-3 sm:py-2"
+          >
+            Sign in
+          </Link>
+          <Link to="/signup" className="btn-primary !px-4 !py-2 text-xs sm:text-sm">
+            Start free trial
+          </Link>
+        </div>
       </div>
     </header>
   )

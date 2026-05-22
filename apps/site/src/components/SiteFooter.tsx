@@ -7,13 +7,19 @@ export function SiteFooter() {
         <div className="md:col-span-2">
           <div className="text-base font-semibold">Research Assistant</div>
           <p className="mt-3 max-w-md text-sm text-white/70">
-            A local-first manuscript assistant for clinical research. Free, open source,
-            no telemetry, runs entirely on your laptop.
+            A local-first manuscript assistant for clinical research. Try free
+            for 30 days, then $29 once for lifetime access. Your data lives on
+            your laptop.
           </p>
         </div>
         <div>
           <div className="text-sm font-semibold text-white/90">Product</div>
           <ul className="mt-3 space-y-2 text-sm text-white/70">
+            <li>
+              <Link to="/pricing" className="hover:text-white">
+                Pricing
+              </Link>
+            </li>
             <li>
               <Link to="/install" className="hover:text-white">
                 Install
@@ -37,8 +43,23 @@ export function SiteFooter() {
           </ul>
         </div>
         <div>
-          <div className="text-sm font-semibold text-white/90">Resources</div>
+          <div className="text-sm font-semibold text-white/90">Account</div>
           <ul className="mt-3 space-y-2 text-sm text-white/70">
+            <li>
+              <Link to="/signup" className="hover:text-white">
+                Start free trial
+              </Link>
+            </li>
+            <li>
+              <Link to="/login" className="hover:text-white">
+                Sign in
+              </Link>
+            </li>
+            <li>
+              <Link to="/account" className="hover:text-white">
+                My account
+              </Link>
+            </li>
             <li>
               <a
                 href="https://github.com/TBD-OWNER/TBD-REPO"
@@ -47,16 +68,6 @@ export function SiteFooter() {
                 rel="noreferrer"
               >
                 GitHub
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://github.com/TBD-OWNER/TBD-REPO/releases"
-                className="hover:text-white"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Releases
               </a>
             </li>
             <li>
@@ -75,7 +86,7 @@ export function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="container-wide flex flex-col items-start justify-between gap-2 py-6 text-xs text-white/50 sm:flex-row sm:items-center">
           <span>© {new Date().getFullYear()} Research Assistant contributors.</span>
-          <span>Free + open source. Your data lives on your laptop.</span>
+          <span>Local-first. Your data lives on your laptop.</span>
         </div>
       </div>
     </footer>

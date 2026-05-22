@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Apple, Monitor, Terminal, Download, ShieldAlert, ExternalLink } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Apple, Monitor, Terminal, Download, ShieldAlert, ExternalLink, UserPlus } from 'lucide-react'
 import { detectOS, downloadUrlFor, type DetectedOS, type OSDetection } from '@/lib/detectOS'
+import { TRIAL_DAYS } from '@/lib/licenseApi'
 
 interface PlatformCard {
   key: DetectedOS
@@ -83,6 +85,20 @@ export default function InstallPage() {
               to open the PWA on your phone.
             </p>
           ) : null}
+          <div
+            data-testid="install-account-callout"
+            className="mt-6 inline-flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent-tint/40 px-4 py-3 text-left text-sm text-ink"
+          >
+            <UserPlus aria-hidden className="h-5 w-5 shrink-0 text-accent" />
+            <span>
+              You&rsquo;ll need an account to activate the app — sign up first
+              for a free {TRIAL_DAYS}-day trial.{' '}
+              <Link to="/signup" className="link-soft">
+                Start free trial
+              </Link>
+              .
+            </span>
+          </div>
         </header>
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
