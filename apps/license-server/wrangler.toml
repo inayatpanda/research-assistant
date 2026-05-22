@@ -1,0 +1,25 @@
+# Phase L1a — Cloudflare Worker config for the Research Assistant license
+# server. Free-tier-only (Workers + D1 + Cron). The user fills in
+# `database_id` after running `wrangler d1 create research-license`; see
+# ./README.md for the full bring-up sequence.
+name = "research-assistant-license"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Sensitive values live in Wrangler secrets, not here:
+#   wrangler secret put ADMIN_TOKEN
+#   wrangler secret put RESEND_API_KEY
+#   wrangler secret put LEMONSQUEEZY_WEBHOOK_SECRET
+
+[vars]
+ENV = "production"
+RESEND_FROM = "licenses@research-assistant.dev"
+APP_DOWNLOAD_URL = "https://research-assistant.dev/install"
+APP_BASE_URL = "https://research-assistant.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "research-license"
+database_id = "TBD-AFTER-WRANGLER-D1-CREATE"
+migrations_dir = "src/db/migrations"
