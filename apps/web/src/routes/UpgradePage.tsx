@@ -18,10 +18,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { LicenseError, licenseApi } from '@/lib/licenseApi'
+import { LEMON_SQUEEZY_CHECKOUT_URL } from '@/lib/licenseConstants'
 import { isAccountUsable, useLicenseStore } from '@/lib/licenseStore'
-
-const LEMON_SQUEEZY_CHECKOUT_URL =
-  'https://research-assistant.lemonsqueezy.com/buy/REPLACE-AFTER-LS-PRODUCT-CREATED'
 
 export default function UpgradePage() {
   const navigate = useNavigate()

@@ -13,13 +13,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LicenseError, licenseApi } from '@/lib/licenseApi'
+import { LEMON_SQUEEZY_CHECKOUT_URL } from '@/lib/licenseConstants'
 import {
   trialDaysRemaining,
   useLicenseStore,
 } from '@/lib/licenseStore'
-
-const LEMON_SQUEEZY_CHECKOUT_URL =
-  'https://research-assistant.lemonsqueezy.com/buy/REPLACE-AFTER-LS-PRODUCT-CREATED'
 
 export function LicenseStatusCard() {
   const navigate = useNavigate()

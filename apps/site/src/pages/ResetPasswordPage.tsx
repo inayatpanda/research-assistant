@@ -8,6 +8,12 @@ import { type FormEvent, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertCircle, Loader2, Lock } from 'lucide-react'
 import { humaniseError, licenseApi } from '@/lib/licenseApi'
+import {
+  PASSWORD_HINT,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_PATTERN,
+  isStrongPassword,
+} from '@/lib/passwordRules'
 
 export default function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>()
@@ -24,8 +30,10 @@ export default function ResetPasswordPage() {
       setError('Missing reset token. Request a new reset link.')
       return
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+    if (!isStrongPassword(password)) {
+      setError(
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters and include a digit.`,
+      )
       return
     }
     if (password !== confirm) {
@@ -51,9 +59,7 @@ export default function ResetPasswordPage() {
           <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
             Set a new password
           </h1>
-          <p className="mt-3 text-sm text-ink-muted">
-            Choose a strong password — at least 8 characters.
-          </p>
+          <p className="mt-3 text-sm text-ink-muted">{PASSWORD_HINT}</p>
         </header>
 
         <form
@@ -72,7 +78,8 @@ export default function ResetPasswordPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={PASSWORD_MIN_LENGTH}
+              pattern={PASSWORD_PATTERN}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
@@ -91,7 +98,8 @@ export default function ResetPasswordPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={PASSWORD_MIN_LENGTH}
+              pattern={PASSWORD_PATTERN}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"

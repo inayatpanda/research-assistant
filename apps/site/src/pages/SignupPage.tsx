@@ -24,6 +24,12 @@ import {
   saveTrialToken,
   type LicenseAccount,
 } from '@/lib/licenseApi'
+import {
+  PASSWORD_HINT,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_PATTERN,
+  isStrongPassword,
+} from '@/lib/passwordRules'
 
 interface SuccessState {
   account: LicenseAccount
@@ -43,6 +49,14 @@ export default function SignupPage() {
     setError(null)
     if (!acceptedTerms) {
       setError('Please accept the terms before continuing.')
+      return
+    }
+    if (!isStrongPassword(password)) {
+      // Match the server's validator exactly so the user doesn't
+      // round-trip a 400 only to get the same message back. (Fix-13/13)
+      setError(
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters and include a digit.`,
+      )
       return
     }
     setSubmitting(true)
@@ -141,12 +155,20 @@ export default function SignupPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={PASSWORD_MIN_LENGTH}
+              pattern={PASSWORD_PATTERN}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              placeholder="At least 8 characters"
+              placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+              aria-describedby="signup-password-hint"
             />
+            <p
+              id="signup-password-hint"
+              className="mt-1 text-xs text-ink-soft"
+            >
+              {PASSWORD_HINT}
+            </p>
           </div>
 
           <label className="flex items-start gap-2 text-xs text-ink-muted">
