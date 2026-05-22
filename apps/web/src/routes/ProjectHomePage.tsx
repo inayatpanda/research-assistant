@@ -15,10 +15,18 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   BarChart3,
+  BookOpen,
+  CheckSquare,
   ClipboardList,
+  Coins,
+  FileImage,
   FileText,
+  History,
+  Image as ImageIcon,
   Layers,
   Library as LibraryIcon,
+  MessageSquare,
+  MessageSquareWarning,
   PenLine,
   Send,
   Workflow,
@@ -100,11 +108,22 @@ const MODULES: ModuleCardSpec[] = [
     blurb: 'Power, PSM, regression, plots',
   },
   {
-    to: 'review',
-    label: 'Review',
+    // Fix-E2E/2 — was bare 'review' which redirected to /systematic-review.
+    // Now points directly at /systematic-review and the copy matches it.
+    to: 'systematic-review',
+    label: 'Systematic Review',
     icon: ClipboardList,
     stat: () => 'PRISMA + RoB',
     blurb: 'Screening, extraction, meta-analysis',
+  },
+  {
+    // Fix-E2E/2 — Phase 4.6 split Peer Review into its own page; surface it
+    // on the home grid so the user can reach the AI-critique tool.
+    to: 'peer-review',
+    label: 'Peer Review',
+    icon: MessageSquareWarning,
+    stat: () => 'AI critique',
+    blurb: 'Editor-style peer review of your draft',
   },
   {
     to: 'consort',
@@ -114,11 +133,61 @@ const MODULES: ModuleCardSpec[] = [
     blurb: 'Randomised trial reporting',
   },
   {
+    to: 'economics',
+    label: 'Economics',
+    icon: Coins,
+    stat: () => 'CHEERS-ready',
+    blurb: 'Cost-effectiveness, ICER, CEAC',
+  },
+  {
+    to: 'checklists',
+    label: 'Checklists',
+    icon: CheckSquare,
+    stat: () => 'CONSORT · PRISMA · STROBE',
+    blurb: 'Reporting checklists with progress',
+  },
+  {
     to: 'submission',
     label: 'Submission',
     icon: Send,
     stat: () => 'Cover letter + zip',
     blurb: 'Reviewer responses & package',
+  },
+  {
+    to: 'manuscript?section=frontmatter',
+    label: 'Front matter',
+    icon: FileImage,
+    stat: () => 'ICMJE',
+    blurb: 'Title page, authors, declarations',
+  },
+  {
+    // Snapshots + comments live inside Manuscript; keep tiles for IA parity.
+    to: 'manuscript',
+    label: 'Figures',
+    icon: ImageIcon,
+    stat: () => 'Reorder & caption',
+    blurb: 'Manage figures inside Manuscript',
+  },
+  {
+    to: 'manuscript',
+    label: 'Snapshots',
+    icon: History,
+    stat: () => 'Versions',
+    blurb: 'Compare and restore prior drafts',
+  },
+  {
+    to: 'manuscript',
+    label: 'Comments',
+    icon: MessageSquare,
+    stat: () => 'Threaded notes',
+    blurb: 'Per-section reviewer comments',
+  },
+  {
+    to: 'learn',
+    label: 'Learn',
+    icon: BookOpen,
+    stat: () => 'Reference library',
+    blurb: 'Stat tests, checklists, walkthroughs',
   },
 ]
 

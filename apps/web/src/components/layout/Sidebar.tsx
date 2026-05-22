@@ -9,7 +9,12 @@ import { sidebarSlide } from '@/lib/motion'
 import { useLastViewedProject } from '@/lib/projectContext'
 import { cn } from '@/lib/utils'
 
-import { isNavItemActive, navItems, resolveNavHref } from './nav-items'
+import {
+  isNavItemActive,
+  isNavItemDisabled,
+  navItems,
+  resolveNavHref,
+} from './nav-items'
 
 const SIDEBAR_COLLAPSE_KEY = 'sidebar-nav-collapsed'
 
@@ -120,10 +125,47 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 px-2 py-3">
+      <nav className="flex-1 px-2 py-3" data-testid="sidebar-nav">
+        {/* Fix-E2E/6 — empty-state hint when no project is selected. */}
+        {!collapsed && !routeProjectId && !lastViewedProjectId && (
+          <div
+            data-testid="sidebar-empty-hint"
+            className="mb-2 px-3 py-2 text-[11px] text-white/55 leading-snug"
+          >
+            Pick a project from the Dashboard to access these tools.
+          </div>
+        )}
         {navItems.map((item) => {
           const href = resolveNavHref(item, { routeProjectId, lastViewedProjectId })
           const active = isNavItemActive(item, pathname)
+          const disabled = isNavItemDisabled(item, {
+            routeProjectId,
+            lastViewedProjectId,
+          })
+          if (disabled) {
+            return (
+              <div
+                key={item.slug || 'dashboard'}
+                aria-disabled="true"
+                role="link"
+                tabIndex={-1}
+                data-testid={`sidebar-nav-disabled-${item.slug || 'dashboard'}`}
+                title={
+                  collapsed
+                    ? `${item.label} (pick a project first)`
+                    : 'Pick a project first'
+                }
+                className={cn(
+                  'group relative flex items-center h-10 rounded-md text-[14px] font-medium cursor-not-allowed select-none',
+                  'text-white/30',
+                  collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                )}
+              >
+                <item.icon className="h-[16px] w-[16px] shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </div>
+            )
+          }
           return (
             <Link
               key={item.slug || 'dashboard'}
