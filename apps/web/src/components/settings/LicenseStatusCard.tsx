@@ -31,6 +31,10 @@ export function LicenseStatusCard() {
 
   const [managerOpen, setManagerOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  // Fix-E2E/5 — when the licence server is unreachable (DNS failure, offline,
+  // dev without the worker running) surface a friendly hint instead of just
+  // logging ERR_NAME_NOT_RESOLVED to the console.
+  const [offline, setOffline] = useState(false)
 
   // Lazy-load fresh device list when card mounts.
   useEffect(() => {
@@ -38,12 +42,22 @@ export function LicenseStatusCard() {
     licenseApi
       .account(token)
       .then((res) => {
+        setOffline(false)
         setDevices(res.devices)
         // Also refresh the cached account in case server-side state moved.
         setSession(token, res.account, res.session, res.devices)
       })
-      .catch(() => {
-        /* offline is OK — fall back to whatever we cached */
+      .catch((err) => {
+        // Network-level failures (DNS/TCP/CORS) surface as LicenseError
+        // with code='network_error' and status=0. Treat as offline so the
+        // user knows we're showing cached info.
+        const isNetwork =
+          err instanceof LicenseError &&
+          (err.code === 'network_error' || err.status === 0)
+        if (isNetwork) {
+          setOffline(true)
+        }
+        /* otherwise fall back to whatever we cached, silently */
       })
   }, [token, setDevices, setSession])
 
@@ -136,6 +150,15 @@ export function LicenseStatusCard() {
           <div className="text-[14px] font-medium">{account.display_name}</div>
           <div className="text-[12px] text-muted-foreground">{account.email}</div>
         </div>
+        {offline && (
+          <div
+            data-testid="license-offline-hint"
+            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-900"
+          >
+            Could not reach the license server. Showing cached info — Log out
+            and Manage devices may not work until the connection comes back.
+          </div>
+        )}
         <div className="text-[12px] text-muted-foreground">
           {deviceCount} of 5 devices active ·{' '}
           <button
