@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom'
 
 import { useJournalTemplate } from '@/hooks/useJournalTemplates'
 
+// Fix-E2E/9 — Journal template is a per-project attribute (lives on the
+// Project row, not on the global app settings). Deep-link the chip to the
+// journal-template card on the global Settings page (where the picker
+// actually lives) and make the copy explicit so the user understands the
+// indirection. We also expose the chosen template via the URL hash so the
+// page can scroll/focus the right card.
+const SETTINGS_HREF = '/settings#journal-template'
+
 export function JournalChip({
   templateKey,
 }: {
@@ -13,11 +21,12 @@ export function JournalChip({
   if (!templateKey) {
     return (
       <Link
-        to="/settings"
+        to={SETTINGS_HREF}
         className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
-        aria-label="Select a journal template"
+        aria-label="Pick a journal template in Settings"
+        title="Edit in Settings → Journal template"
       >
-        <BookOpen className="w-3 h-3" /> No template — pick one
+        <BookOpen className="w-3 h-3" /> No template — pick in Settings
       </Link>
     )
   }
@@ -32,8 +41,8 @@ export function JournalChip({
 
   return (
     <Link
-      to="/settings"
-      title="Change journal template in Settings"
+      to={SETTINGS_HREF}
+      title="Edit in Settings → Journal template"
       className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 hover:bg-blue-100"
     >
       <BookOpen className="w-3 h-3" />

@@ -24,7 +24,9 @@ export function JournalTemplateCard({ projectId }: { projectId: string }) {
   })
 
   return (
-    <Card>
+    // Fix-E2E/9 — the Manuscript page's JournalChip deep-links here via the
+    // ``#journal-template`` URL hash so the user lands on the right card.
+    <Card id="journal-template" data-testid="settings-journal-template-card">
       <CardHeader>
         <CardTitle className="text-[15px]">Target journal template</CardTitle>
       </CardHeader>
@@ -33,9 +35,14 @@ export function JournalTemplateCard({ projectId }: { projectId: string }) {
           Picking a template tells the word-count bar what to compare against.
           Word and figure limits are advisory.
         </p>
-        <label className="block">
+        <label htmlFor="journal-template-select" className="block">
           <span className="font-medium">Template</span>
+          {/* Fix-E2E/LOW — Chrome a11y warning: form field must have an id
+              or name. */}
           <select
+            id="journal-template-select"
+            name="journal-template"
+            aria-label="Target journal template"
             value={project?.template_journal ?? ''}
             onChange={(e) => mut.mutate(e.target.value === '' ? null : e.target.value)}
             className="mt-1 block w-full rounded border border-border px-2 py-1.5 text-sm"
