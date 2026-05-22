@@ -30,7 +30,29 @@ class Settings(BaseSettings):
     # cryptographically-strong secret on first boot and persists it under data_dir.
     api_signing_secret: str = "change-me-before-deploy"
 
-    cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
+    # Fix-E2E/1 — Vite auto-falls-back to 5174/5175/… when 5173 is busy. We
+    # allow-list the 5173-5180 band on both 127.0.0.1 and localhost so login
+    # works regardless of which port Vite picks. The band is small enough not
+    # to widen the attack surface in dev, but large enough to cover the common
+    # case where the user has several dev shells open.
+    cors_origins: list[str] = [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
+        "http://127.0.0.1:5176",
+        "http://localhost:5176",
+        "http://127.0.0.1:5177",
+        "http://localhost:5177",
+        "http://127.0.0.1:5178",
+        "http://localhost:5178",
+        "http://127.0.0.1:5179",
+        "http://localhost:5179",
+        "http://127.0.0.1:5180",
+        "http://localhost:5180",
+    ]
 
     file_size_cap_mb: int = 50
     ai_timeout_s: int = 60
