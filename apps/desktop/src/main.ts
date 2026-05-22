@@ -275,6 +275,26 @@ function buildMenu() {
           label: "Tailscale setup",
           click: () => shell.openExternal("https://tailscale.com/download"),
         },
+        // L1b — quick way to jump to the licence-management view inside
+        // the app without having to dig through Settings.
+        {
+          label: "License…",
+          click: () => {
+            if (!mainWindow) return;
+            // Tell the renderer to navigate to /account (which surfaces
+            // the LicenseStatusCard via the Settings tree). If the user
+            // is unauthenticated, RequireLicense will redirect them to
+            // /license, which is the correct flow.
+            mainWindow.webContents
+              .executeJavaScript(
+                "window.location.hash = ''; window.location.pathname = '/settings';",
+              )
+              .catch(() => {
+                /* best-effort */
+              });
+            mainWindow.show();
+          },
+        },
         // D1.4 — update-status badge. When an update is sitting on
         // GitHub, the user sees a one-click way to either restart now
         // (if it's already downloaded) or be reminded what version is

@@ -24,6 +24,7 @@ import { AnimatePresence, motion, type Variants } from 'framer-motion'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { useLicenseAccount } from '@/lib/licenseStore'
 import { cn } from '@/lib/utils'
 
 import { BottomTabs } from './components/BottomTabs'
@@ -71,6 +72,8 @@ export function MobileShell() {
 function MobileShellInner() {
   const location = useLocation()
   const prevKeyRef = useRef<string>(location.key)
+  const licenseAccount = useLicenseAccount()
+  const licenseDisplayName = licenseAccount?.display_name ?? ''
   // Derive a stable per-location direction (+1 push / -1 pop) so the
   // exit animation matches the entry animation when the user taps
   // "Back".
@@ -92,6 +95,7 @@ function MobileShellInner() {
   return (
     <div
       data-testid="mobile-shell"
+      data-license-watermark={licenseDisplayName}
       className="flex min-h-[100dvh] flex-col bg-background"
     >
       <MobileHeader title={title} />

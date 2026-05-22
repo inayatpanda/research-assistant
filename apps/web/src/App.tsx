@@ -31,6 +31,11 @@ import InvitePage from '@/routes/InvitePage'
 import LoginPage from '@/routes/LoginPage'
 import SignupPage from '@/routes/SignupPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { RequireLicense } from '@/components/license/RequireLicense'
+import LicensePage from '@/routes/LicensePage'
+import UpgradePage from '@/routes/UpgradePage'
+import LicenseForgotPage from '@/routes/LicenseForgotPage'
+import LicenseResetPage from '@/routes/LicenseResetPage'
 import { Navigate, Outlet, useParams } from 'react-router-dom'
 
 // Phase M0 — mobile shell + DeviceRouter.
@@ -94,13 +99,19 @@ export default function App() {
 function DesktopRoutes() {
   return (
     <Routes>
+      {/* Phase L1b — public licence pages (no shell, no gates). */}
+      <Route path="/license" element={<LicensePage />} />
+      <Route path="/license/forgot" element={<LicenseForgotPage />} />
+      <Route path="/license/reset/:token" element={<LicenseResetPage />} />
+      <Route path="/upgrade" element={<UpgradePage />} />
+
       {/* Phase S1 — public auth pages (no AppShell, no RequireAuth). */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/welcome" element={<WelcomePage />} />
 
-      <Route path="/" element={<RequireAuth><AppShell /></RequireAuth>}>
+      <Route path="/" element={<RequireLicense><RequireAuth><AppShell /></RequireAuth></RequireLicense>}>
         <Route index element={<DashboardPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="health" element={<HealthPage />} />
@@ -177,6 +188,12 @@ function DesktopRoutes() {
 function MobileRoutes() {
   return (
     <Routes>
+      {/* Phase L1b — public licence pages (no shell, no gates). */}
+      <Route path="/license" element={<LicensePage />} />
+      <Route path="/license/forgot" element={<LicenseForgotPage />} />
+      <Route path="/license/reset/:token" element={<LicenseResetPage />} />
+      <Route path="/upgrade" element={<UpgradePage />} />
+
       {/* Auth pages — same components as desktop, viewport handles itself. */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
@@ -186,8 +203,8 @@ function MobileRoutes() {
       {/* Public mobile route — no shell, no auth gate. */}
       <Route path="/m/setup" element={<MobileSetupPage />} />
 
-      {/* Auth-gated mobile shell. */}
-      <Route path="/m" element={<MobileRequireBackend />}>
+      {/* License-gated, auth-gated mobile shell. */}
+      <Route path="/m" element={<RequireLicense><MobileRequireBackend /></RequireLicense>}>
         <Route index element={<Navigate to="/m/library" replace />} />
         <Route element={<MobileShell />}>
           <Route path="library" element={<MobileLibrary />} />

@@ -9,6 +9,7 @@ import { HealthLink } from '@/components/settings/HealthLink'
 import { ImportDropzone } from '@/components/settings/ImportDropzone'
 import { JournalTemplateCard } from '@/components/settings/JournalTemplateCard'
 import { LearnLink } from '@/components/settings/LearnLink'
+import { LicenseStatusCard } from '@/components/settings/LicenseStatusCard'
 import { StorageCard } from '@/components/settings/StorageCard'
 import { metaApi } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -79,6 +80,9 @@ export default function SettingsPage() {
             ))}
         </CardContent>
       </Card>
+
+      {/* Phase L1b — licence status, devices, upgrade. */}
+      <LicenseStatusCard />
 
       <StorageCard health={data} />
 
