@@ -1,14 +1,20 @@
 // Phase L1a — Crypto primitives running entirely on WebCrypto (no native
 // deps, free-tier Workers compatible).
 //
-// - Password hashing: PBKDF2-SHA256, 600k iterations, 16-byte random salt.
+// - Password hashing: PBKDF2-SHA256, 100k iterations, 16-byte random salt.
 //   Format: `pbkdf2$<iterations>$<base64-salt>$<base64-hash>`.
+//   Note: Cloudflare Workers' WebCrypto caps PBKDF2 iterations at 100k
+//   (anything higher throws "Pbkdf2 failed: iteration counts above
+//   100000 are not supported"). OWASP 2023 PBKDF2-SHA256 minimum is
+//   600k, but Workers doesn't allow it. 100k is the 2017 NIST floor
+//   and is what real-world Worker apps run at — acceptable trade-off
+//   pending a Workers-native KDF API.
 // - Session tokens: 32 random bytes -> base64url string. The server stores
 //   the SHA-256 of the token in `sessions.jwt_id`; the plain string only
 //   ever lives in the response body + the client.
 // - Reset tokens use the same construction.
 
-const PBKDF2_ITERATIONS = 600_000;
+const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_HASH_BYTES = 32;
 const PBKDF2_SALT_BYTES = 16;
 
