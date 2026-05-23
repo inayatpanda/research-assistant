@@ -164,7 +164,7 @@ export default function InstallPage() {
             Every release SHA256 is published on the{' '}
             <a
               className="link-soft inline-flex items-center gap-1"
-              href="https://github.com/TBD-OWNER/TBD-REPO/releases"
+              href="https://github.com/inayatpanda/research-assistant/releases"
               target="_blank"
               rel="noreferrer"
             >

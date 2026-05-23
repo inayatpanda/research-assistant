@@ -65,13 +65,13 @@ export const OS_DOWNLOAD_FILE: Record<DetectedOS, string> = {
 }
 
 /**
- * Placeholder release URL. The user replaces `TBD-OWNER/TBD-REPO` with
+ * Placeholder release URL. The user replaces `inayatpanda/research-assistant` with
  * their real GitHub slug after creating the repo. The URL structure is
  * still valid — once filled in, GitHub Releases serves the artifact
  * directly.
  */
 export const RELEASES_BASE =
-  'https://github.com/TBD-OWNER/TBD-REPO/releases/latest/download'
+  'https://github.com/inayatpanda/research-assistant/releases/latest/download'
 
 export function downloadUrlFor(os: DetectedOS): string {
   return `${RELEASES_BASE}/${OS_DOWNLOAD_FILE[os]}`

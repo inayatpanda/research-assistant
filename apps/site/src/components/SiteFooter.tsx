@@ -62,7 +62,7 @@ export function SiteFooter() {
             </li>
             <li>
               <a
-                href="https://github.com/TBD-OWNER/TBD-REPO"
+                href="https://github.com/inayatpanda/research-assistant"
                 className="hover:text-white"
                 target="_blank"
                 rel="noreferrer"
@@ -72,7 +72,7 @@ export function SiteFooter() {
             </li>
             <li>
               <a
-                href="https://github.com/TBD-OWNER/TBD-REPO/issues"
+                href="https://github.com/inayatpanda/research-assistant/issues"
                 className="hover:text-white"
                 target="_blank"
                 rel="noreferrer"

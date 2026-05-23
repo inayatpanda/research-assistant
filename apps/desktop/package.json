@@ -81,8 +81,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "TBD",
-      "repo": "TBD",
+      "owner": "inayatpanda",
+      "repo": "research-assistant",
       "releaseType": "release"
     }
   }

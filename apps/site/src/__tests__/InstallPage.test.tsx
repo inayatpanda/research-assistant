@@ -54,7 +54,7 @@ describe('InstallPage', () => {
       </MemoryRouter>,
     )
     const link = screen.getByTestId('download-win') as HTMLAnchorElement
-    expect(link.href).toContain('TBD-OWNER/TBD-REPO')
+    expect(link.href).toContain('inayatpanda/research-assistant')
     expect(link.href).toContain('Research-Assistant-Win.exe')
   })
 })

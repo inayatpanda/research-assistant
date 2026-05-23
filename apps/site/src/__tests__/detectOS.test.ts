@@ -52,7 +52,7 @@ describe('detectOS', () => {
 
   it('downloadUrlFor produces the placeholder release URL', () => {
     expect(downloadUrlFor('mac')).toBe(
-      'https://github.com/TBD-OWNER/TBD-REPO/releases/latest/download/Research-Assistant-Mac.dmg',
+      'https://github.com/inayatpanda/research-assistant/releases/latest/download/Research-Assistant-Mac.dmg',
     )
     expect(downloadUrlFor('win')).toContain('Research-Assistant-Win.exe')
     expect(downloadUrlFor('linux')).toContain('Research-Assistant-Linux.AppImage')
