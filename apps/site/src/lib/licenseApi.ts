@@ -10,7 +10,7 @@
  */
 
 export const LICENSE_BASE_URL =
-  'https://research-assistant-license.workers.dev'
+  'https://research-assistant-license.inayatpanda.workers.dev'
 
 export const TOKEN_STORAGE_KEY = 'rma.licenseSession.token'
 export const TRIAL_TOKEN_STORAGE_KEY = 'rma.licenseSession.trialToken'

@@ -8,5 +8,10 @@ name = "research-assistant"
 compatibility_date = "2026-05-21"
 pages_build_output_dir = "dist"
 
-[build]
-command = "npm run build"
+# To build automatically on git push, configure the build command via
+# Cloudflare Pages dashboard (Settings → Build & deployments) rather
+# than in this file — wrangler rejects [build] in Pages configs.
+#
+#   Build command: npm run build
+#   Build output directory: apps/site/dist
+#   Root directory: apps/site

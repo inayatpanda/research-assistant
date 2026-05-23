@@ -9,14 +9,14 @@
  *
  * API base URL precedence:
  *   1. ``import.meta.env.VITE_LICENSE_SERVER_URL`` (set at build time)
- *   2. ``https://research-assistant-license.workers.dev`` (placeholder
+ *   2. ``https://research-assistant-license.inayatpanda.workers.dev`` (placeholder
  *      until the user picks a custom domain)
  *
  * The verify call is cached client-side for up to 7 days — see
  * ``licenseStore.isLicenseFresh``.
  */
 
-const FALLBACK_BASE_URL = 'https://research-assistant-license.workers.dev'
+const FALLBACK_BASE_URL = 'https://research-assistant-license.inayatpanda.workers.dev'
 
 function envBase(): string | undefined {
   // Vite injects import.meta.env at build time. Guarded for test envs

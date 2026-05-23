@@ -21,5 +21,5 @@ APP_BASE_URL = "https://research-assistant.dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "research-license"
-database_id = "TBD-AFTER-WRANGLER-D1-CREATE"
+database_id = "39b25942-a222-47e2-93aa-13f11482a944"
 migrations_dir = "src/db/migrations"
