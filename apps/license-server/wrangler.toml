@@ -14,9 +14,12 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENV = "production"
-RESEND_FROM = "licenses@research-assistant.dev"
-APP_DOWNLOAD_URL = "https://research-assistant.dev/install"
-APP_BASE_URL = "https://research-assistant.dev"
+# Resend's free shared sender — works immediately, no DNS setup.
+# Swap to "no-reply@<your-verified-domain>" once your launch domain
+# is added + verified in the Resend dashboard.
+RESEND_FROM = "onboarding@resend.dev"
+APP_DOWNLOAD_URL = "https://research-assistant-bn5.pages.dev/install"
+APP_BASE_URL = "https://research-assistant-bn5.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
