@@ -232,8 +232,9 @@ export function FeatureShowcase() {
                     data-testid={`showcase-tab-${tab.id}`}
                     data-active={isActive}
                     className={[
-                      'group flex shrink-0 items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all',
-                      'min-w-[200px] lg:min-w-0',
+                      'group flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all',
+                      // Mobile: compact pill (icon + title only). lg+: full card with description.
+                      'min-w-0 lg:min-w-0 lg:items-start lg:gap-3 lg:px-4 lg:py-3',
                       isActive
                         ? 'border-accent/30 bg-white shadow-card lg:border-l-4 lg:border-l-accent lg:scale-[1.02]'
                         : 'border-transparent bg-white/40 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm',
@@ -242,7 +243,7 @@ export function FeatureShowcase() {
                   >
                     <span
                       className={[
-                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors',
+                        'flex h-8 w-8 lg:h-9 lg:w-9 shrink-0 items-center justify-center rounded-lg transition-colors',
                         isActive
                           ? 'bg-accent-tint text-accent'
                           : 'bg-slate-100 text-ink-soft group-hover:bg-accent-tint group-hover:text-accent',
@@ -253,13 +254,14 @@ export function FeatureShowcase() {
                     <span className="min-w-0">
                       <span
                         className={[
-                          'block text-sm font-semibold leading-tight transition-colors',
+                          'block text-[13px] lg:text-sm font-semibold leading-tight transition-colors whitespace-nowrap lg:whitespace-normal',
                           isActive ? 'text-ink' : 'text-ink-muted',
                         ].join(' ')}
                       >
                         {tab.title}
                       </span>
-                      <span className="mt-0.5 block text-xs leading-snug text-ink-soft">
+                      {/* Description only on lg+ — mobile keeps chips compact */}
+                      <span className="mt-0.5 hidden lg:block text-xs leading-snug text-ink-soft">
                         {tab.description}
                       </span>
                     </span>

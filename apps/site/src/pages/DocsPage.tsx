@@ -66,10 +66,11 @@ export default function DocsPage() {
           <article>
             <h2 className="text-xl font-semibold tracking-tight">What is this?</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-              Research Assistant started as an orthopaedic surgeon&rsquo;s personal manuscript tool — one
-              workspace for the library, reader, statistics, manuscript editor and submission package. It
-              expanded into a full clinical-research suite covering meta-analysis, peer review and reporting
-              checklists.
+              Research Assistant is a workspace for the whole research lifecycle — library, reader,
+              statistics, manuscript editor, peer review, and submission package — in one local-first app.
+              Designed primarily for clinical and medical research (RCTs, systematic reviews, observational
+              studies, meta-analyses), but the workflow generalises to most quantitative research where you
+              need to read papers, run stats, and write up findings.
             </p>
             <p className="mt-3 text-sm leading-relaxed text-ink-muted">
               It runs entirely on your laptop. Your project is a folder you can back up, hand to a co-author,

@@ -13,7 +13,7 @@
  *   4. Anything else with "Linux" → linux. (Android contains "Linux"
  *      but also "Android" — we strip mobile first.)
  *   5. Fallback → "mac" because the project is built on macOS and the
- *      author's primary audience is Mac-first orthopaedic researchers.
+ *      author's primary audience is Mac-first clinical researchers.
  */
 export type DetectedOS = 'mac' | 'win' | 'linux'
 
