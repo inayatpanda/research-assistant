@@ -8,6 +8,7 @@ from . import (
     learn,
     manuscript_sections,
     notes,
+    pathways,
     peer_reviews,
     projects,
     writing,
@@ -26,4 +27,5 @@ __all__ = [
     "writing",
     "peer_reviews",
     "learn",
+    "pathways",
 ]
