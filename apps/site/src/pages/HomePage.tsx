@@ -46,8 +46,13 @@ export default function HomePage() {
     <div>
       <AnimatedHero />
 
-      {/* Interactive auto-rotating showcase, right below the hero. */}
-      <FeatureShowcase />
+      {/* Interactive auto-rotating showcase — desktop only. On mobile the
+          7 feature deep-dive sections further down already cover the same
+          ground in a scroll-friendly format, and the showcase's
+          tab-+-screenshot layout takes too much vertical real estate. */}
+      <div className="hidden lg:block">
+        <FeatureShowcase />
+      </div>
 
       <TrustStrip />
 
