@@ -61,6 +61,24 @@ export default {
         card: '0 1px 2px rgba(15, 17, 23, 0.04), 0 4px 16px rgba(15, 17, 23, 0.06)',
         cta: '0 8px 24px rgba(37, 99, 235, 0.32)',
       },
+      keyframes: {
+        'hero-drift': {
+          '0%, 100%': {
+            transform: 'translate3d(0, 0, 0) scale(1)',
+          },
+          '50%': {
+            transform: 'translate3d(-4%, 3%, 0) scale(1.08)',
+          },
+        },
+        'gradient-pan': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+      },
+      animation: {
+        'hero-drift': 'hero-drift 18s ease-in-out infinite',
+        'gradient-pan': 'gradient-pan 12s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
