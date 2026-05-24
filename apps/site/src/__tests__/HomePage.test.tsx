@@ -66,4 +66,23 @@ describe('HomePage', () => {
     expect(screen.getByTestId('hero-primary-cta')).toBeInTheDocument()
     expect(screen.getByTestId('hero-secondary-cta')).toBeInTheDocument()
   })
+
+  it('renders the interactive feature showcase right below the hero', () => {
+    renderHome()
+    expect(screen.getByTestId('feature-showcase')).toBeInTheDocument()
+    // Seven tabs, one per app surface.
+    expect(screen.getByTestId('showcase-tab-library')).toBeInTheDocument()
+    expect(screen.getByTestId('showcase-tab-submission')).toBeInTheDocument()
+  })
+
+  it('renders the stat counter row', () => {
+    renderHome()
+    expect(screen.getByTestId('stat-counter')).toBeInTheDocument()
+  })
+
+  it('renders the home FAQ accordion', () => {
+    renderHome()
+    expect(screen.getByTestId('home-faq')).toBeInTheDocument()
+    expect(screen.getByTestId('acc-trigger-local-first')).toBeInTheDocument()
+  })
 })
