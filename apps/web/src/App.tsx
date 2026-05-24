@@ -18,6 +18,7 @@ import HealthPage from '@/routes/HealthPage'
 import LearnPage from '@/routes/LearnPage'
 import LibraryPage from '@/routes/LibraryPage'
 import ManuscriptPage from '@/routes/ManuscriptPage'
+import PathwaysPage from '@/routes/PathwaysPage'
 import PeerReviewPage from '@/routes/PeerReviewPage'
 import ProjectHomePage from '@/routes/ProjectHomePage'
 import ReaderPage from '@/routes/ReaderPage'
@@ -134,6 +135,8 @@ function DesktopRoutes() {
           <Route path="review" element={<ScopedReviewRedirect />} />
           <Route path="consort" element={<ConsortPage />} />
           <Route path="statistics" element={<StatisticsPage />} />
+          {/* F3 — guided clinical-research statistical workflows. */}
+          <Route path="pathways" element={<PathwaysPage />} />
           <Route path="economics" element={<EconomicsPage />} />
           <Route path="checklists" element={<ChecklistsPage />} />
           <Route path="submission" element={<SubmissionPage />} />

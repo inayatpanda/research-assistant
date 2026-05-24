@@ -4,6 +4,7 @@ import {
   CheckSquare,
   ClipboardList,
   Coins,
+  Compass,
   FileText,
   Layers,
   Library,
@@ -37,6 +38,9 @@ export const navItems: NavItem[] = [
   { slug: 'peer-review', label: 'Peer Review',        icon: MessageSquareWarning },
   { slug: 'systematic-review', label: 'Systematic Review', icon: ClipboardList },
   { slug: 'statistics', label: 'Statistics', icon: BarChart3 },
+  // F3 — guided clinical-research workflows. Sits between Statistics and
+  // Economics so the manual + guided stats entry points are adjacent.
+  { slug: 'pathways',   label: 'Research Pathways', icon: Compass },
   { slug: 'economics',  label: 'Economics',  icon: Coins },
   { slug: 'checklists', label: 'Checklists', icon: CheckSquare },
   { slug: 'submission', label: 'Submission', icon: Send },

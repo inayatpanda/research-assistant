@@ -4986,3 +4986,135 @@ export const membersApi = {
     await api.delete(`/api/projects/${projectId}/invitations/${invitationId}`)
   },
 }
+
+// --- F3: Research Pathways ---------------------------------------------
+
+export const PathwayKeySchema = z.enum([
+  'two-group',
+  'risk-factors',
+  'survival',
+  'diagnostic',
+  'agreement',
+])
+export type PathwayKey = z.infer<typeof PathwayKeySchema>
+
+export const PathwayProseSchema = z.object({
+  methods: z.string(),
+  results: z.string(),
+})
+export type PathwayProse = z.infer<typeof PathwayProseSchema>
+
+export const PathwayResponseSchema = z.object({
+  pathway: PathwayKeySchema,
+  result: z.record(z.string(), z.unknown()),
+  prose: PathwayProseSchema,
+})
+export type PathwayResponse = z.infer<typeof PathwayResponseSchema>
+
+export type TwoGroupPathwayRequest = { outcome: string; group: string }
+export type RiskFactorsPathwayRequest = {
+  outcome: string
+  predictors: string[]
+  confounders?: string[]
+}
+export type SurvivalPathwayRequest = {
+  time: string
+  event: string
+  strata?: string | null
+  predictors?: string[]
+}
+export type DiagnosticPathwayRequest = {
+  test: string
+  reference: string
+  pre_test_probability?: number | null
+}
+export type AgreementPathwayRequest = {
+  rater_a: string
+  rater_b: string
+  ordinal?: boolean | null
+}
+
+export type PathwayPushRequest = {
+  pathway: PathwayKey
+  target: 'methods' | 'results' | 'both'
+  methods?: string
+  results?: string
+}
+
+export const pathwaysApi = {
+  runTwoGroup: async (
+    projectId: string,
+    datasetId: string,
+    body: TwoGroupPathwayRequest,
+  ): Promise<PathwayResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/two-group`,
+      body,
+      { timeout: 60_000 },
+    )
+    return PathwayResponseSchema.parse(r.data)
+  },
+  runRiskFactors: async (
+    projectId: string,
+    datasetId: string,
+    body: RiskFactorsPathwayRequest,
+  ): Promise<PathwayResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/risk-factors`,
+      body,
+      { timeout: 120_000 },
+    )
+    return PathwayResponseSchema.parse(r.data)
+  },
+  runSurvival: async (
+    projectId: string,
+    datasetId: string,
+    body: SurvivalPathwayRequest,
+  ): Promise<PathwayResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/survival`,
+      body,
+      { timeout: 120_000 },
+    )
+    return PathwayResponseSchema.parse(r.data)
+  },
+  runDiagnostic: async (
+    projectId: string,
+    datasetId: string,
+    body: DiagnosticPathwayRequest,
+  ): Promise<PathwayResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/diagnostic`,
+      body,
+      { timeout: 60_000 },
+    )
+    return PathwayResponseSchema.parse(r.data)
+  },
+  runAgreement: async (
+    projectId: string,
+    datasetId: string,
+    body: AgreementPathwayRequest,
+  ): Promise<PathwayResponse> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/agreement`,
+      body,
+      { timeout: 60_000 },
+    )
+    return PathwayResponseSchema.parse(r.data)
+  },
+  push: async (
+    projectId: string,
+    datasetId: string,
+    body: PathwayPushRequest,
+  ): Promise<{
+    pathway: PathwayKey
+    methods: { content: string } | null
+    results: { content: string } | null
+  }> => {
+    const r = await api.post(
+      `/api/projects/${projectId}/datasets/${datasetId}/pathways/push-to-manuscript`,
+      body,
+    )
+    return r.data
+  },
+}
