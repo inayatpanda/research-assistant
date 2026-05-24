@@ -15,7 +15,7 @@ describe('App routes', () => {
   it('renders HomePage at "/"', () => {
     render(<App routerOverride="memory" initialEntries={['/']} />)
     expect(
-      screen.getByRole('heading', { level: 1, name: /write better medical research/i }),
+      screen.getByRole('heading', { level: 1, name: /local-first/i }),
     ).toBeInTheDocument()
   })
 

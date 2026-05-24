@@ -1,5 +1,6 @@
 import { Download, KeyRound, Smartphone, ExternalLink, Users, Network } from 'lucide-react'
 import { AccordionItem, Accordion } from '@/components/Accordion'
+import { ArchitectureDiagram } from '@/components/ArchitectureDiagram'
 
 const STEPS = [
   {
@@ -87,6 +88,13 @@ export default function SyncPage() {
               cloud account, no public URL, no firewall changes.
             </p>
           </header>
+
+          {/* Phase D3 — embed the same architecture diagram from the home page
+              at the top of the sync page so the picture-precedes-words flow
+              from the marketing site carries into the docs. */}
+          <div className="mt-10 rounded-2xl border border-slate-200/80 bg-white p-8 shadow-card">
+            <ArchitectureDiagram />
+          </div>
 
           <ol className="mt-12 space-y-6" data-testid="sync-steps">
             {STEPS.map(({ icon: Icon, title, body }) => (

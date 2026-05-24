@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Apple, Monitor, Terminal, Download, ShieldAlert, ExternalLink, UserPlus } from 'lucide-react'
 import { detectOS, downloadUrlFor, type DetectedOS, type OSDetection } from '@/lib/detectOS'
 import { TRIAL_DAYS } from '@/lib/licenseApi'
+import { ScreenshotFrame } from '@/components/ScreenshotFrame'
 
 interface PlatformCard {
   key: DetectedOS
@@ -100,6 +101,17 @@ export default function InstallPage() {
             </span>
           </div>
         </header>
+
+        {/* Phase D3 — drop the dashboard screenshot below the hero copy
+            so the visitor knows exactly what they'll see when they
+            launch the app. */}
+        <div className="mx-auto mt-12 max-w-4xl">
+          <ScreenshotFrame
+            src="/screenshots/dashboard.png"
+            alt="Research Assistant dashboard with three demo projects"
+            urlLabel="manuscripts.local"
+          />
+        </div>
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {PLATFORMS.map((p) => {

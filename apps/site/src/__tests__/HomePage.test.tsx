@@ -1,9 +1,11 @@
 /**
- * Phase D2 — HomePage smoke tests.
+ * Phase D3 — HomePage redesign smoke tests.
  *
- * Asserts the hero copy, primary CTA, and that all eight feature cards
- * appear. The features grid is the meat of the landing-page sell, so we
- * keep a hard assertion that every one renders.
+ * The home page is now composed from a hero, trust strip, how-it-works,
+ * seven feature sections, the architecture diagram, a pricing teaser
+ * and a closing CTA. These tests assert that all of those scaffold
+ * pieces render — they're regression bait, not behaviour tests, so
+ * they only need to confirm the structure exists.
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, it, expect } from 'vitest'
@@ -22,28 +24,46 @@ function renderHome() {
 }
 
 describe('HomePage', () => {
-  it('renders the hero headline and subtitle', () => {
+  it('renders the hero headline', () => {
     renderHome()
     expect(
-      screen.getByRole('heading', { level: 1, name: /write better medical research, faster\./i }),
+      screen.getByRole('heading', { level: 1, name: /local-first/i }),
     ).toBeInTheDocument()
-    expect(screen.getByText(/local-first manuscript assistant for clinical research/i)).toBeInTheDocument()
   })
 
-  it('renders all eight feature cards', () => {
+  it('renders the trust strip with all four signals', () => {
     renderHome()
-    const features = [
-      'Library',
-      'Reader',
-      'Manuscript editor',
-      'Statistics',
-      'Meta-analysis',
-      'Peer Review',
-      'Submission',
-      'Mobile PWA',
+    const strip = screen.getByTestId('trust-strip')
+    expect(strip).toHaveTextContent(/built by clinicians/i)
+    expect(strip).toHaveTextContent(/open source/i)
+    expect(strip).toHaveTextContent(/no telemetry/i)
+    expect(strip).toHaveTextContent(/no subscription/i)
+  })
+
+  it('renders all seven feature sections', () => {
+    renderHome()
+    const ids = [
+      'library',
+      'reader',
+      'manuscript',
+      'statistics',
+      'peer-review',
+      'submission',
+      'mobile',
     ]
-    for (const title of features) {
-      expect(screen.getByRole('heading', { level: 3, name: title })).toBeInTheDocument()
+    for (const id of ids) {
+      expect(screen.getByTestId(`feature-section-${id}`)).toBeInTheDocument()
     }
+  })
+
+  it('renders the architecture diagram', () => {
+    renderHome()
+    expect(screen.getByTestId('architecture-diagram')).toBeInTheDocument()
+  })
+
+  it('renders both primary and secondary hero CTAs', () => {
+    renderHome()
+    expect(screen.getByTestId('hero-primary-cta')).toBeInTheDocument()
+    expect(screen.getByTestId('hero-secondary-cta')).toBeInTheDocument()
   })
 })

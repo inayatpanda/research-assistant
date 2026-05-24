@@ -37,6 +37,14 @@ export default {
           tint: '#EFF6FF',
           foreground: '#FFFFFF',
         },
+        // Match apps/web's AI accent so AI-flavoured sections read as
+        // part of the same visual language (peer review, AI critique,
+        // interpretation copy).
+        ai: {
+          DEFAULT: '#7C3AED',
+          tint: 'rgba(124,58,237,0.08)',
+          ring: 'rgba(124,58,237,0.35)',
+        },
         highlight: {
           intro: '#EF4444',
           method: '#3B82F6',

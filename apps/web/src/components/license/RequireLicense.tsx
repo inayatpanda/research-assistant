@@ -23,6 +23,23 @@ import {
 
 type Status = 'checking' | 'ok' | 'revoked' | 'trial_expired' | 'unauthed'
 
+/**
+ * Dev-only build-time bypass flag.
+ *
+ * When set to "1" at Vite build/dev time (`VITE_LICENSE_BYPASS=1`), the
+ * license gate immediately passes with a stub lifetime account. This is
+ * used by the landing-site screenshot capture script in
+ * `apps/site/scripts/capture_screenshots.ts` so it can drive the real
+ * desktop UI without needing a live license server roundtrip.
+ *
+ * IMPORTANT: this flag is only read from `import.meta.env` and therefore
+ * only takes effect on builds that explicitly opt in by setting the env
+ * var. Production builds (the published desktop bundle, Cloudflare
+ * Pages) do not set it, so the gate behaves normally there.
+ */
+const LICENSE_BYPASS =
+  (import.meta.env.VITE_LICENSE_BYPASS as string | undefined) === '1'
+
 export function RequireLicense({ children }: { children: ReactNode }) {
   const location = useLocation()
   const token = useLicenseStore((s) => s.token)
@@ -35,6 +52,9 @@ export function RequireLicense({ children }: { children: ReactNode }) {
   const initialUsable = isAccountUsable(account)
 
   const [status, setStatus] = useState<Status>(() => {
+    // Dev-only: VITE_LICENSE_BYPASS=1 skips the gate entirely so the
+    // screenshot capture script can drive a fully-authenticated app.
+    if (LICENSE_BYPASS) return 'ok'
     if (!token || !account) return 'unauthed'
     if (account.type === 'revoked') return 'revoked'
     if (!initialUsable && account.type === 'trial') return 'trial_expired'
