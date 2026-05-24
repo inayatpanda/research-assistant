@@ -324,11 +324,26 @@ export const ArticleUpdateSchema = z.object({
 })
 export type ArticleUpdate = z.infer<typeof ArticleUpdateSchema>
 
+// F1 — autofill provenance returned by the upload route.
+// 'doi_match'      — Crossref resolved the PDF's DOI; trust these fields.
+// 'heuristic_only' — regex/title guess; show a "Heuristic guess" badge.
+// 'failed'         — neither path produced any usable fields.
+export const AutofillStatusSchema = z.enum(['doi_match', 'heuristic_only', 'failed'])
+export type AutofillStatus = z.infer<typeof AutofillStatusSchema>
+
+export const AutofillFieldSourceSchema = z.enum(['doi', 'heuristic', 'manual'])
+export type AutofillFieldSource = z.infer<typeof AutofillFieldSourceSchema>
+
 export const UploadResponseSchema = z.object({
   article: ArticleSchema,
   duplicate_of: ArticleSchema.nullable(),
   extraction_source: z.enum(['ai', 'crossref', 'both', 'none']),
   extraction_error: z.string().nullable(),
+  // F1 — surfaced so the Library UI can stamp a pill next to autofilled
+  // fields. ``autofilled_by`` is a map field-name → 'doi' | 'heuristic'.
+  // Default-empty when older backends respond.
+  autofill_status: AutofillStatusSchema.optional().default('failed'),
+  autofilled_by: z.record(z.string(), AutofillFieldSourceSchema).optional().default({}),
 })
 export type UploadResponse = z.infer<typeof UploadResponseSchema>
 

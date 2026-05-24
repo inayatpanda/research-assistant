@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -24,7 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { articlesApi, type Article } from '@/lib/api'
+import { articlesApi, type Article, type AutofillFieldSource } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 const FormSchema = z.object({
   title: z.string().min(1).max(1000),
@@ -74,10 +75,16 @@ function asYearOrNull(s: string): number | null {
 
 export function MetadataConfirmDialog({
   article,
+  autofilledBy,
   open,
   onOpenChange,
 }: {
   article: Article | null
+  // F1 — per-field provenance from the upload route. Fields listed here
+  // render a "DOI autofilled" / "Heuristic guess" pill that dims once the
+  // user manually edits the value (so the badge becomes informational
+  // history, not an active claim).
+  autofilledBy?: Record<string, AutofillFieldSource>
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -114,6 +121,14 @@ export function MetadataConfirmDialog({
       })
     }
   }, [article, form])
+
+  // Snapshot of the autofilled values at open time so we can detect when the
+  // user has manually overridden a field and dim the badge accordingly.
+  const baseline = useEditBaseline(article)
+
+  const currentValues = form.watch()
+  const isOverridden = (field: keyof FormValues) =>
+    baseline ? (currentValues[field] ?? '') !== (baseline[field] ?? '') : false
 
   const save = useMutation({
     mutationFn: (values: FormValues) => {
@@ -161,32 +176,65 @@ export function MetadataConfirmDialog({
           onSubmit={form.handleSubmit((v) => save.mutate(v))}
           className="space-y-3 pt-2"
         >
-          <Field label="Title" required>
+          <Field
+            label="Title"
+            required
+            autofillSource={autofilledBy?.title}
+            overridden={isOverridden('title')}
+          >
             <Input {...form.register('title')} />
           </Field>
-          <Field label="Authors (comma-separated)">
+          <Field
+            label="Authors (comma-separated)"
+            autofillSource={autofilledBy?.authors}
+            overridden={isOverridden('authors')}
+          >
             <Input {...form.register('authors')} placeholder="Jane Doe, John Smith" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Journal">
+            <Field
+              label="Journal"
+              autofillSource={autofilledBy?.journal}
+              overridden={isOverridden('journal')}
+            >
               <Input {...form.register('journal')} />
             </Field>
-            <Field label="Year">
+            <Field
+              label="Year"
+              autofillSource={autofilledBy?.year}
+              overridden={isOverridden('year')}
+            >
               <Input type="number" {...form.register('year')} />
             </Field>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Volume">
+            <Field
+              label="Volume"
+              autofillSource={autofilledBy?.volume}
+              overridden={isOverridden('volume')}
+            >
               <Input {...form.register('volume')} />
             </Field>
-            <Field label="Issue">
+            <Field
+              label="Issue"
+              autofillSource={autofilledBy?.issue}
+              overridden={isOverridden('issue')}
+            >
               <Input {...form.register('issue')} />
             </Field>
-            <Field label="Pages">
+            <Field
+              label="Pages"
+              autofillSource={autofilledBy?.pages}
+              overridden={isOverridden('pages')}
+            >
               <Input {...form.register('pages')} placeholder="100-110" />
             </Field>
           </div>
-          <Field label="DOI">
+          <Field
+            label="DOI"
+            autofillSource={autofilledBy?.doi}
+            overridden={isOverridden('doi')}
+          >
             <Input {...form.register('doi')} placeholder="10.1234/example" />
           </Field>
           <Field label="Study design">
@@ -229,18 +277,67 @@ function Field({
   label,
   children,
   required,
+  autofillSource,
+  overridden,
 }: {
   label: string
   children: React.ReactNode
   required?: boolean
+  // F1 — render a "DOI autofilled" / "Heuristic guess" pill next to the
+  // field label when this field came from the cheap autofill path. The pill
+  // dims to ``opacity-50`` once the user edits the field — the badge becomes
+  // a historical breadcrumb, not an active claim.
+  autofillSource?: AutofillFieldSource
+  overridden?: boolean
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[13px]">
-        {label}
-        {required && <span className="text-rose-500"> *</span>}
+      <Label className="text-[13px] flex items-center gap-2">
+        <span>
+          {label}
+          {required && <span className="text-rose-500"> *</span>}
+        </span>
+        {autofillSource && autofillSource !== 'manual' && (
+          <Badge
+            variant="secondary"
+            className={cn(
+              'text-[10px] font-normal',
+              autofillSource === 'doi'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-amber-50 text-amber-700',
+              overridden && 'opacity-50',
+            )}
+            data-testid={`autofill-badge-${autofillSource}`}
+          >
+            {autofillSource === 'doi' ? 'DOI autofilled' : 'Heuristic guess'}
+          </Badge>
+        )}
       </Label>
       {children}
     </div>
   )
+}
+
+// Capture the form values at the moment the dialog opens (or the article
+// changes) so we can later tell whether the user has edited any field.
+function useEditBaseline(article: Article | null): FormValues | null {
+  const [baseline, setBaseline] = useState<FormValues | null>(null)
+  useEffect(() => {
+    if (!article) {
+      setBaseline(null)
+      return
+    }
+    setBaseline({
+      title: article.title,
+      authors: article.authors.join(', '),
+      journal: article.journal ?? '',
+      year: article.year ? String(article.year) : '',
+      volume: article.volume ?? '',
+      issue: article.issue ?? '',
+      pages: article.pages ?? '',
+      doi: article.doi ?? '',
+      study_design: article.study_design ?? 'unspecified',
+    })
+  }, [article])
+  return baseline
 }

@@ -20,6 +20,7 @@ import {
   type Article,
   type ArticleFilters as Filters,
   type ArticleMetadata,
+  type AutofillFieldSource,
   type UploadResponse,
 } from '@/lib/api'
 import { pageEnter } from '@/lib/motion'
@@ -32,7 +33,13 @@ export default function LibraryPage() {
   // dialog for the head of the queue so multi-file uploads can't stack
   // dialogs invisibly on top of each other (#L2). Manual edits (from the
   // "Edit" row button) jump to the head so users see their click react.
-  const [confirmQueue, setConfirmQueue] = useState<Article[]>([])
+  // F1 — each queue entry can also carry the autofill provenance returned
+  // by the upload route, so the dialog can render per-field pills.
+  type QueueEntry = {
+    article: Article
+    autofilledBy?: Record<string, AutofillFieldSource>
+  }
+  const [confirmQueue, setConfirmQueue] = useState<QueueEntry[]>([])
   const editing = confirmQueue[0] ?? null
   const [doiPreview, setDoiPreview] = useState<ArticleMetadata | null>(null)
   const qc = useQueryClient()
@@ -60,13 +67,19 @@ export default function LibraryPage() {
     // Open metadata confirm for the newly created article so user can review
     // extraction. Append to the queue rather than replacing — when several
     // PDFs are uploaded back-to-back each one gets its own dialog turn (#L2).
-    setConfirmQueue((q) => [...q, response.article])
+    setConfirmQueue((q) => [
+      ...q,
+      { article: response.article, autofilledBy: response.autofilled_by },
+    ])
   }
 
   function openEditDialog(article: Article) {
     // Jump manual edits to the front of the queue so the user immediately
     // sees the dialog for the row they just clicked.
-    setConfirmQueue((q) => [article, ...q.filter((a) => a.id !== article.id)])
+    setConfirmQueue((q) => [
+      { article },
+      ...q.filter((entry) => entry.article.id !== article.id),
+    ])
   }
 
   function advanceQueue() {
@@ -160,7 +173,8 @@ export default function LibraryPage() {
       </section>
 
       <MetadataConfirmDialog
-        article={editing}
+        article={editing?.article ?? null}
+        autofilledBy={editing?.autofilledBy}
         open={!!editing}
         onOpenChange={(o) => {
           if (!o) advanceQueue()
